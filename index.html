@@ -274,9 +274,11 @@
   const EXPAND_THRESHOLD = 100; // Expand when height exceeds this (pixels)
 
   function adjustTextarea(){
-    // Always reset to auto to measure true content height
+    // Measure current scroll height (content height)
+    const tempHeight = input.style.height;
     input.style.height = 'auto';
     const contentHeight = input.scrollHeight;
+    input.style.height = tempHeight;
 
     const shouldExpand = contentHeight > EXPAND_THRESHOLD;
 
@@ -329,15 +331,33 @@
       });
 
     } else {
+      // Shrink back to original state
       container.classList.remove('expanded');
       expandedFixedHeight = null;
 
       // reset wrapper positioning so container returns to center
       if(fixedWrapper) fixedWrapper.style.justifyContent = 'center';
 
+      // Reset all inline styles to let CSS handle it
       container.style.height = '';
+      container.style.padding = '';
+      container.style.display = '';
+      container.style.flexDirection = '';
+      container.style.justifyContent = '';
+      
+      form.style.height = '';
+      form.style.maxHeight = '';
+      form.style.borderRadius = '';
+      form.style.padding = '';
+      form.style.flexDirection = '';
+      
+      input.style.height = '';
+      input.style.overflow = '';
+      
+      // Now set proper auto height after reset
       input.style.height = 'auto';
-      input.style.height = Math.min(contentHeight, 220) + 'px';
+      const autoHeight = Math.min(input.scrollHeight, 220);
+      input.style.height = autoHeight + 'px';
       input.scrollTop = 0;
     }
   }
