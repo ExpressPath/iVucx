@@ -274,6 +274,7 @@
   const EXPAND_THRESHOLD = 100; // Expand when height exceeds this (pixels)
   const COLLAPSE_AT_OR_BELOW_LINES = 5; // Collapse when rendered lines are 5 or fewer
   let previousLineCount = null;
+  let state = 0;
 
   function getRenderedLineCountFromContentHeight(contentHeight){
     const computed = window.getComputedStyle(input);
@@ -322,6 +323,12 @@
     input.dataset.lineCount = String(lineCount);
   }
 
+  function forceInitialSearchMode(){
+    bodyEl.classList.remove('scrolled','login-check');
+    state = 0;
+    input.placeholder = 'Search...';
+  }
+
   function collapseToInitialSearchBox(contentHeight){
     container.classList.remove('expanded');
     expandedFixedHeight = null;
@@ -338,8 +345,9 @@
     const { contentHeight, lineCount } = measureInputContent();
     updateLineCount(lineCount);
 
-    const isSearchPlaceholderVisible = input.placeholder === 'Search...' && input.value.length === 0;
-    if(isSearchPlaceholderVisible){
+    const isInputEmpty = input.value.length === 0;
+    if(isInputEmpty){
+      forceInitialSearchMode();
       collapseToInitialSearchBox(contentHeight);
       return;
     }
@@ -403,9 +411,17 @@
   adjustTextarea();
 
   window.addEventListener('resize', adjustTextarea);
-  input.addEventListener('input', ()=>{
+  let lastInputValue = input.value;
+  function syncInputChanges(){
+    if(input.value === lastInputValue) return;
+    lastInputValue = input.value;
     adjustTextarea();
+  }
+
+  ['input','keyup','change','cut','paste','compositionend'].forEach(evt=>{
+    input.addEventListener(evt, syncInputChanges);
   });
+  setInterval(syncInputChanges, 120);
 
   input.addEventListener('keydown', e=>{
 
@@ -454,7 +470,6 @@
   const THRESHOLD = 40;
 
   let wheelAccum = 0;
-  let state = 0;
   let isAnimating = false;
 
   function applyState(next){
