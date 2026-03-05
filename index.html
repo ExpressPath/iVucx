@@ -272,24 +272,35 @@
   let expandedFixedHeight = null;
   const fixedWrapper = document.querySelector('.fixed-wrapper');
   const EXPAND_THRESHOLD = 100; // Expand when height exceeds this (pixels)
-  const COLLAPSE_BELOW_LINES = 5; // Collapse when rendered lines are below this
+  const COLLAPSE_AT_OR_BELOW_LINES = 5; // Collapse when rendered lines are 5 or fewer
+  let previousLineCount = null;
 
-  function getRenderedLineCount(){
+  function getRenderedLineCountFromContentHeight(contentHeight){
     const computed = window.getComputedStyle(input);
     const lineHeight = parseFloat(computed.lineHeight) || 22.4;
-    return Math.max(1, Math.ceil(input.scrollHeight / lineHeight));
+    return Math.max(1, Math.ceil(contentHeight / lineHeight));
   }
 
-  function adjustTextarea(){
-    // Measure current scroll height (content height)
+  function measureInputContent(){
     const tempHeight = input.style.height;
     input.style.height = 'auto';
     const contentHeight = input.scrollHeight;
+    const lineCount = getRenderedLineCountFromContentHeight(contentHeight);
     input.style.height = tempHeight;
+    return { contentHeight, lineCount };
+  }
 
-    // Count rendered lines (including wrapped lines, not only '\n')
-    const lineCount = getRenderedLineCount();
-    const shouldCollapseByLineCount = lineCount < COLLAPSE_BELOW_LINES;
+  function updateLineCount(lineCount){
+    if(previousLineCount === lineCount) return;
+    previousLineCount = lineCount;
+    input.dataset.lineCount = String(lineCount);
+  }
+
+  function adjustTextarea(){
+    const { contentHeight, lineCount } = measureInputContent();
+    updateLineCount(lineCount);
+
+    const shouldCollapseByLineCount = lineCount <= COLLAPSE_AT_OR_BELOW_LINES;
     const shouldExpand = contentHeight > EXPAND_THRESHOLD && !shouldCollapseByLineCount;
 
     if(shouldExpand){
