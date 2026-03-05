@@ -64,7 +64,7 @@
     .search-container.expanded{
       max-width:100vw;
       /* height is calculated dynamically so the top never leaves the viewport */
-      padding:24px;
+      padding:0 24px 24px 24px;
       display:flex;
       flex-direction:column;
       justify-content:flex-end;
@@ -87,9 +87,10 @@
       height:100%;
       max-height:none;
       border-radius:18px;
-      padding:16px 16px;
+      padding:16px;
       align-items:stretch;
       flex-direction:column-reverse;
+      gap:8px;
     }
 
     body.mode-q .search-box{ background:#fff; }
@@ -125,6 +126,7 @@
       overflow-y:auto;
       overflow-x:hidden;
       flex-grow:1;
+      min-height:200px;
     }
 
     body.mode-q .search-input{ color:#111; }
@@ -269,7 +271,7 @@
 
   let expandedFixedHeight = null;
   const fixedWrapper = document.querySelector('.fixed-wrapper');
-  const EXPAND_THRESHOLD = 65; // Expand when height exceeds this (pixels) - roughly 3-4 lines
+  const EXPAND_THRESHOLD = 100; // Expand when height exceeds this (pixels)
 
   function adjustTextarea(){
     // Measure current scroll height (content height)
@@ -288,31 +290,39 @@
         if(fixedWrapper) fixedWrapper.style.justifyContent = 'flex-end';
 
         const viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-        const topMargin = 16; // leave a small top margin so top edge is visible
-        const bottomSafe = 16; // small bottom safe area
+        const topMargin = 16;
+        const bottomSafe = 16;
 
-        // container height must not exceed viewport minus margins
-        const maxContainerHeight = Math.max(120, Math.floor(viewportH - topMargin - bottomSafe));
-
-        // set the container height (it will grow upwards because wrapper is flex-end)
+        // container height to fill most of viewport
+        const maxContainerHeight = Math.max(200, Math.floor(viewportH - topMargin - bottomSafe));
         container.style.height = maxContainerHeight + 'px';
 
-        const formHeight = form.offsetHeight;
-        const verticalPadding = 32;
+        // Account for button (44px) + gap (8px) + padding (16px top/bottom)
+        const buttonHeight = 44;
+        const gapSize = 8;
+        const boxPadding = 32; // 16px top + 16px bottom
+        const reservedHeight = buttonHeight + gapSize + boxPadding;
 
-        const maxAvailable = maxContainerHeight - formHeight - verticalPadding;
+        // Remaining space for textarea
+        const availableHeight = maxContainerHeight - 24 - reservedHeight; // 24 is container bottom padding
 
-        expandedFixedHeight = Math.max(120, Math.min(contentHeight || 120, maxAvailable));
-
-        input.style.height = expandedFixedHeight + 'px';
+        input.style.height = availableHeight + 'px';
         input.style.overflow = 'auto';
       } else {
-        // If already expanded, ensure height respects current viewport (on resize)
+        // If already expanded, update container height on resize
         const viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
         const topMargin = 16;
         const bottomSafe = 16;
-        const maxContainerHeight = Math.max(120, Math.floor(viewportH - topMargin - bottomSafe));
+        const maxContainerHeight = Math.max(200, Math.floor(viewportH - topMargin - bottomSafe));
         container.style.height = maxContainerHeight + 'px';
+
+        const buttonHeight = 44;
+        const gapSize = 8;
+        const boxPadding = 32; // 16px top + 16px bottom
+        const reservedHeight = buttonHeight + gapSize + boxPadding;
+        const availableHeight = maxContainerHeight - 24 - reservedHeight; // 24 is container bottom padding
+
+        input.style.height = availableHeight + 'px';
       }
 
       requestAnimationFrame(()=>{
