@@ -272,7 +272,13 @@
   let expandedFixedHeight = null;
   const fixedWrapper = document.querySelector('.fixed-wrapper');
   const EXPAND_THRESHOLD = 100; // Expand when height exceeds this (pixels)
-  const COLLAPSE_LINE_COUNT = 5; // Collapse when text is 5 lines or fewer
+  const COLLAPSE_BELOW_LINES = 5; // Collapse when rendered lines are below this
+
+  function getRenderedLineCount(){
+    const computed = window.getComputedStyle(input);
+    const lineHeight = parseFloat(computed.lineHeight) || 22.4;
+    return Math.max(1, Math.ceil(input.scrollHeight / lineHeight));
+  }
 
   function adjustTextarea(){
     // Measure current scroll height (content height)
@@ -281,10 +287,10 @@
     const contentHeight = input.scrollHeight;
     input.style.height = tempHeight;
 
-    // Count lines in text
-    const lineCount = input.value.split('\n').length;
-
-    const shouldExpand = contentHeight > EXPAND_THRESHOLD && lineCount > COLLAPSE_LINE_COUNT;
+    // Count rendered lines (including wrapped lines, not only '\n')
+    const lineCount = getRenderedLineCount();
+    const shouldCollapseByLineCount = lineCount < COLLAPSE_BELOW_LINES;
+    const shouldExpand = contentHeight > EXPAND_THRESHOLD && !shouldCollapseByLineCount;
 
     if(shouldExpand){
       if(!container.classList.contains('expanded')){
