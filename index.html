@@ -260,7 +260,8 @@
     if(lineCount > 10){
       container.classList.add('expanded');
 
-      const containerHeight = container.clientHeight;
+      // keep expanded box size fixed to viewport (top always visible)
+      const containerHeight = window.innerHeight;
       const buttonHeight = form.querySelector('.send-button').offsetHeight;
       const verticalPadding = 48;
       const maxAvailable = containerHeight - buttonHeight - verticalPadding;
@@ -346,6 +347,10 @@ function applyState(next){
 }
 
 window.addEventListener('wheel', e=>{
+  // ignore mode switching when mouse is over the search box area
+  if(e.target.closest('.search-box') || e.target.closest('.search-container.expanded')){
+    return; // allow normal textarea scrolling
+  }
   if(isAnimating) return;
 
   wheelAccum += e.deltaY;
