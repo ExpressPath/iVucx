@@ -355,13 +355,16 @@
     input.scrollTop = 0;
   }
 
-  function adjustTextarea(){
+  function adjustTextarea(options = {}){
+    const { forceResetOnEmpty = false } = options;
     const { contentHeight, lineCount } = measureInputContent();
     updateLineCount(lineCount);
 
     const isInputEmpty = input.value.length === 0;
     if(isInputEmpty){
-      forceInitialSearchMode();
+      if(forceResetOnEmpty){
+        forceInitialSearchMode();
+      }
       collapseToInitialSearchBox(contentHeight);
       return;
     }
@@ -429,7 +432,7 @@
   function syncInputChanges(){
     if(input.value === lastInputValue) return;
     lastInputValue = input.value;
-    adjustTextarea();
+    adjustTextarea({ forceResetOnEmpty: true });
   }
 
   ['input','keyup','change','cut','paste','compositionend'].forEach(evt=>{
@@ -458,7 +461,7 @@
 
     input.value = '';
 
-    adjustTextarea();
+    adjustTextarea({ forceResetOnEmpty: true });
 
   });
 
