@@ -507,17 +507,22 @@
     }
 
     if(next === 2){
+      // Entering Blue Mode: save current input value and clear input
       blueModeDraft = input.value;
+      input.value = '';
       bodyEl.classList.add('login-check');
       input.placeholder = 'Search...';
       checkLogin();
     }
 
     state = next;
-    if(previousState === 2 && next !== 2 && blueModeDraft && input.value.length === 0){
+    
+    // Exiting Blue Mode: restore saved input value if it exists
+    if(previousState === 2 && next !== 2 && blueModeDraft){
       input.value = blueModeDraft;
       lastInputValue = input.value;
     }
+    
     if(next !== 2){
       adjustTextarea();
     }
