@@ -322,9 +322,27 @@
     input.dataset.lineCount = String(lineCount);
   }
 
+  function collapseToInitialSearchBox(contentHeight){
+    container.classList.remove('expanded');
+    expandedFixedHeight = null;
+
+    if(fixedWrapper) fixedWrapper.style.justifyContent = 'center';
+
+    container.style.height = '';
+    input.style.height = 'auto';
+    input.style.height = Math.min(contentHeight, 220) + 'px';
+    input.scrollTop = 0;
+  }
+
   function adjustTextarea(){
     const { contentHeight, lineCount } = measureInputContent();
     updateLineCount(lineCount);
+
+    const isSearchPlaceholderVisible = input.placeholder === 'Search...' && input.value.length === 0;
+    if(isSearchPlaceholderVisible){
+      collapseToInitialSearchBox(contentHeight);
+      return;
+    }
 
     const shouldCollapseByLineCount = isAtOrBelowLineLimit(contentHeight, COLLAPSE_AT_OR_BELOW_LINES);
     const shouldExpand = contentHeight > EXPAND_THRESHOLD && !shouldCollapseByLineCount;
@@ -378,16 +396,7 @@
       });
 
     } else {
-      container.classList.remove('expanded');
-      expandedFixedHeight = null;
-
-      // reset wrapper positioning so container returns to center
-      if(fixedWrapper) fixedWrapper.style.justifyContent = 'center';
-
-      container.style.height = '';
-      input.style.height = 'auto';
-      input.style.height = Math.min(contentHeight, 220) + 'px';
-      input.scrollTop = 0;
+      collapseToInitialSearchBox(contentHeight);
     }
   }
 
@@ -472,6 +481,7 @@
     }
 
     state = next;
+    adjustTextarea();
 
     setTimeout(()=>{
       isAnimating = false;
