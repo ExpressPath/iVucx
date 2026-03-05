@@ -35,7 +35,6 @@
       color:#111;
     }
 
-    /* 上スクロール検知時 */
     body.login-check{
       background:var(--bg-navy);
       color:#fff;
@@ -63,7 +62,7 @@
 
     .search-container.expanded{
       max-width:100vw;
-      height:100dvh;
+      /* height is calculated dynamically so the top never leaves the viewport */
       padding:24px;
       display:flex;
       flex-direction:column;
@@ -207,7 +206,7 @@
         placeholder="Search..."
         rows="1"
       ></textarea>
-      <button class="send-button" type="submit">
+      <button class="send-button" id="sendButton" type="submit">
         <svg class="icon-search" viewBox="0 0 24 24">
           <circle cx="11" cy="11" r="7"></circle>
           <line x1="20" y1="20" x2="16.5" y2="16.5"></line>
@@ -236,6 +235,7 @@
   const form = document.getElementById('searchForm');
   const input = document.getElementById('searchInput');
   const container = document.getElementById('searchContainer');
+  const sendButton = document.getElementById('sendButton');
 
   function setMode(isQ){
     if(isQ){
@@ -254,20 +254,46 @@
   qBtn.addEventListener('click',e=>{e.preventDefault();setMode(true);});
   aBtn.addEventListener('click',e=>{e.preventDefault();setMode(false);});
 
+  let expandedFixedHeight = null;
+  const fixedWrapper = document.querySelector('.fixed-wrapper');
+
   function adjustTextarea(){
     const lineCount = input.value.split('\n').length;
 
     if(lineCount > 10){
-      container.classList.add('expanded');
+      if(!container.classList.contains('expanded')){
+        container.classList.add('expanded');
 
-      // expanded box size stays fixed
-      const containerHeight = window.innerHeight;
-      const buttonHeight = form.querySelector('.send-button').offsetHeight;
-      const verticalPadding = 48;
-      const maxAvailable = containerHeight - buttonHeight - verticalPadding;
+        // anchor container to viewport bottom so top never leaves the screen
+        if(fixedWrapper) fixedWrapper.style.justifyContent = 'flex-end';
 
-      input.style.height = maxAvailable + 'px';
-      input.style.overflow = 'auto';
+        const viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        const topMargin = 16; // leave a small top margin so top edge is visible
+        const bottomSafe = 16; // small bottom safe area
+
+        // container height must not exceed viewport minus margins
+        const maxContainerHeight = Math.max(120, Math.floor(viewportH - topMargin - bottomSafe));
+
+        // set the container height (it will grow upwards because wrapper is flex-end)
+        container.style.height = maxContainerHeight + 'px';
+
+        const formHeight = form.offsetHeight;
+        const verticalPadding = 32;
+
+        const maxAvailable = maxContainerHeight - formHeight - verticalPadding;
+
+        expandedFixedHeight = Math.max(120, Math.min(input.scrollHeight || 120, maxAvailable));
+
+        input.style.height = expandedFixedHeight + 'px';
+        input.style.overflow = 'auto';
+      } else {
+        // If already expanded, ensure height respects current viewport (on resize)
+        const viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        const topMargin = 16;
+        const bottomSafe = 16;
+        const maxContainerHeight = Math.max(120, Math.floor(viewportH - topMargin - bottomSafe));
+        container.style.height = maxContainerHeight + 'px';
+      }
 
       requestAnimationFrame(()=>{
         const cursorPos = input.selectionStart;
@@ -277,6 +303,12 @@
 
     } else {
       container.classList.remove('expanded');
+      expandedFixedHeight = null;
+
+      // reset wrapper positioning so container returns to center
+      if(fixedWrapper) fixedWrapper.style.justifyContent = 'center';
+
+      container.style.height = '';
       input.style.height = 'auto';
       input.style.height = Math.min(input.scrollHeight,220) + 'px';
       input.scrollTop = 0;
@@ -284,95 +316,124 @@
   }
 
   adjustTextarea();
+
   window.addEventListener('resize', adjustTextarea);
   input.addEventListener('input', adjustTextarea);
 
   input.addEventListener('keydown', e=>{
+
     if(e.key === 'Enter' && !e.shiftKey){
       e.preventDefault();
       form.requestSubmit();
     }
+
   });
 
   form.addEventListener('submit', e=>{
+
     e.preventDefault();
+
     const v = input.value.trim();
+
     if(!v) return;
+
     alert('検索内容: ' + v);
+
     input.value = '';
+
     adjustTextarea();
+
   });
 
-  /* ===== Login Check ===== */
   async function checkLogin(){
+
     try{
-      const res = await fetch('/api/check-login', { method:'GET', credentials:'include' });
+
+      const res = await fetch('/api/check-login', {
+        method:'GET',
+        credentials:'include'
+      });
+
       console.log('Login status:', res.status);
+
     }catch(err){
+
       console.log('Login check failed (no server?)');
+
     }
+
   }
 
   const THRESHOLD = 40;
-let wheelAccum = 0;
-let state = 0; // 0=default,1=gray,2=blue
-let isAnimating = false;
 
-function applyState(next){
-  if(isAnimating || next === state) return;
-  isAnimating = true;
+  let wheelAccum = 0;
+  let state = 0;
+  let isAnimating = false;
 
-  bodyEl.classList.remove('scrolled','login-check');
+  function applyState(next){
 
-  if(next === 0){
-    // default
-    input.placeholder = 'Search...';
+    if(isAnimating || next === state) return;
+
+    isAnimating = true;
+
+    bodyEl.classList.remove('scrolled','login-check');
+
+    if(next === 0){
+      input.placeholder = 'Search...';
+    }
+
+    if(next === 1){
+      bodyEl.classList.add('scrolled');
+      input.placeholder = 'Make Puzzler - Write a summary of the puzzler';
+    }
+
+    if(next === 2){
+      bodyEl.classList.add('login-check');
+      input.placeholder = 'Search...';
+      checkLogin();
+    }
+
+    state = next;
+
+    setTimeout(()=>{
+      isAnimating = false;
+    },450);
+
   }
 
-  if(next === 1){
-    // gray
-    bodyEl.classList.add('scrolled');
-    input.placeholder = 'Make Puzzler - Write a summary of the puzzler';
-  }
+  window.addEventListener('wheel', e=>{
 
-  if(next === 2){
-    // blue
-    bodyEl.classList.add('login-check');
-    input.placeholder = 'Search...';
-    checkLogin();
-  }
+    if(e.target.closest('.search-box') || e.target.closest('.search-container.expanded')){
+      return;
+    }
 
-  state = next;
-  setTimeout(()=>{ isAnimating=false; },450);
-}
+    if(isAnimating) return;
 
-window.addEventListener('wheel', e=>{
-  // ignore mode switching when mouse is over the search box area
-  if(e.target.closest('.search-box') || e.target.closest('.search-container.expanded')){
-    return; // allow normal textarea scrolling
-  }
-  if(isAnimating) return;
+    wheelAccum += e.deltaY;
 
-  wheelAccum += e.deltaY;
+    if(wheelAccum > THRESHOLD){
 
-  if(wheelAccum > THRESHOLD){ // down scroll
-    wheelAccum = 0;
+      wheelAccum = 0;
 
-    if(state === 0) applyState(1);      // default -> gray
-    else if(state === 1) applyState(2); // gray -> blue
-    else if(state === 2) applyState(0); // blue -> default
-  }
+      if(state === 0) applyState(1);
+      else if(state === 1) applyState(2);
+      else if(state === 2) applyState(0);
 
-  if(wheelAccum < -THRESHOLD){ // up scroll
-    wheelAccum = 0;
+    }
 
-    if(state === 0) applyState(2);      // default -> blue
-    else if(state === 1) applyState(0); // gray -> default
-    else if(state === 2) applyState(1); // blue -> gray
-  }
+    if(wheelAccum < -THRESHOLD){
 
-  e.preventDefault();
-},{passive:false});
+      wheelAccum = 0;
+
+      if(state === 0) applyState(2);
+      else if(state === 1) applyState(0);
+      else if(state === 2) applyState(1);
+
+    }
+
+    e.preventDefault();
+
+  },{passive:false});
 
 </script>
 
