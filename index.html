@@ -260,14 +260,14 @@
     if(lineCount > 10){
       container.classList.add('expanded');
 
-      // keep expanded box size fixed to viewport (top always visible)
+      // expanded box size stays fixed
       const containerHeight = window.innerHeight;
       const buttonHeight = form.querySelector('.send-button').offsetHeight;
       const verticalPadding = 48;
       const maxAvailable = containerHeight - buttonHeight - verticalPadding;
 
-      input.style.height = 'auto';
-      input.style.height = Math.min(input.scrollHeight, maxAvailable) + 'px';
+      input.style.height = maxAvailable + 'px';
+      input.style.overflow = 'auto';
 
       requestAnimationFrame(()=>{
         const cursorPos = input.selectionStart;
