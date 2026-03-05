@@ -274,11 +274,9 @@
   const EXPAND_THRESHOLD = 100; // Expand when height exceeds this (pixels)
 
   function adjustTextarea(){
-    // Measure current scroll height (content height)
-    const tempHeight = input.style.height;
+    // Always measure current scroll height (content height)
     input.style.height = 'auto';
     const contentHeight = input.scrollHeight;
-    input.style.height = tempHeight;
 
     const shouldExpand = contentHeight > EXPAND_THRESHOLD;
 
@@ -331,16 +329,32 @@
       });
 
     } else {
-      container.classList.remove('expanded');
-      expandedFixedHeight = null;
+      // Collapse when content is small
+      if(container.classList.contains('expanded')){
+        container.classList.remove('expanded');
+        expandedFixedHeight = null;
 
-      // reset wrapper positioning so container returns to center
-      if(fixedWrapper) fixedWrapper.style.justifyContent = 'center';
+        // reset wrapper positioning so container returns to center
+        if(fixedWrapper) fixedWrapper.style.justifyContent = 'center';
 
-      container.style.height = '';
-      input.style.height = 'auto';
-      input.style.height = Math.min(contentHeight, 220) + 'px';
-      input.scrollTop = 0;
+        // Reset styles
+        container.style.height = '';
+        input.style.height = 'auto';
+        
+        // Recalculate height after setting auto
+        requestAnimationFrame(()=>{
+          input.style.height = 'auto';
+          const finalHeight = input.scrollHeight;
+          input.style.height = Math.min(finalHeight, 220) + 'px';
+          input.scrollTop = 0;
+        });
+      } else {
+        // Normal collapsed state - just adjust height
+        input.style.height = 'auto';
+        const finalHeight = input.scrollHeight;
+        input.style.height = Math.min(finalHeight, 220) + 'px';
+        input.scrollTop = 0;
+      }
     }
   }
 
