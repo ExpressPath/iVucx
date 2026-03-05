@@ -329,6 +329,14 @@
     input.placeholder = 'Search...';
   }
 
+  function getSingleLineInputHeight(){
+    const computed = window.getComputedStyle(input);
+    const lineHeight = parseFloat(computed.lineHeight) || 22.4;
+    const paddingTop = parseFloat(computed.paddingTop) || 0;
+    const paddingBottom = parseFloat(computed.paddingBottom) || 0;
+    return Math.ceil(lineHeight + paddingTop + paddingBottom);
+  }
+
   function collapseToInitialSearchBox(contentHeight){
     container.classList.remove('expanded');
     expandedFixedHeight = null;
@@ -336,8 +344,14 @@
     if(fixedWrapper) fixedWrapper.style.justifyContent = 'center';
 
     container.style.height = '';
-    input.style.height = 'auto';
-    input.style.height = Math.min(contentHeight, 220) + 'px';
+    if(input.value.length === 0){
+      input.style.overflow = 'hidden';
+      input.style.height = getSingleLineInputHeight() + 'px';
+    } else {
+      input.style.overflow = 'auto';
+      input.style.height = 'auto';
+      input.style.height = Math.min(contentHeight, 220) + 'px';
+    }
     input.scrollTop = 0;
   }
 
