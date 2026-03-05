@@ -283,10 +283,24 @@
 
   function measureInputContent(){
     const tempHeight = input.style.height;
+    const tempMinHeight = input.style.minHeight;
+    const tempMaxHeight = input.style.maxHeight;
+    const tempOverflow = input.style.overflow;
+
+    // Neutralize expanded-mode constraints while measuring real content lines.
+    input.style.minHeight = '0';
+    input.style.maxHeight = 'none';
+    input.style.overflow = 'hidden';
     input.style.height = 'auto';
+
     const contentHeight = input.scrollHeight;
     const lineCount = getRenderedLineCountFromContentHeight(contentHeight);
+
     input.style.height = tempHeight;
+    input.style.minHeight = tempMinHeight;
+    input.style.maxHeight = tempMaxHeight;
+    input.style.overflow = tempOverflow;
+
     return { contentHeight, lineCount };
   }
 
