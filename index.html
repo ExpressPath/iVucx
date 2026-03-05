@@ -278,7 +278,19 @@
   function getRenderedLineCountFromContentHeight(contentHeight){
     const computed = window.getComputedStyle(input);
     const lineHeight = parseFloat(computed.lineHeight) || 22.4;
-    return Math.max(1, Math.ceil(contentHeight / lineHeight));
+    const paddingTop = parseFloat(computed.paddingTop) || 0;
+    const paddingBottom = parseFloat(computed.paddingBottom) || 0;
+    const textOnlyHeight = Math.max(0, contentHeight - paddingTop - paddingBottom);
+    return Math.max(1, Math.round(textOnlyHeight / lineHeight));
+  }
+
+  function isAtOrBelowLineLimit(contentHeight, lineLimit){
+    const computed = window.getComputedStyle(input);
+    const lineHeight = parseFloat(computed.lineHeight) || 22.4;
+    const paddingTop = parseFloat(computed.paddingTop) || 0;
+    const paddingBottom = parseFloat(computed.paddingBottom) || 0;
+    const thresholdHeight = (lineHeight * lineLimit) + paddingTop + paddingBottom + 1;
+    return contentHeight <= thresholdHeight;
   }
 
   function measureInputContent(){
@@ -314,7 +326,7 @@
     const { contentHeight, lineCount } = measureInputContent();
     updateLineCount(lineCount);
 
-    const shouldCollapseByLineCount = lineCount <= COLLAPSE_AT_OR_BELOW_LINES;
+    const shouldCollapseByLineCount = isAtOrBelowLineLimit(contentHeight, COLLAPSE_AT_OR_BELOW_LINES);
     const shouldExpand = contentHeight > EXPAND_THRESHOLD && !shouldCollapseByLineCount;
 
     if(shouldExpand){
