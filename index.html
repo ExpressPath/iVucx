@@ -323,12 +323,6 @@
     input.dataset.lineCount = String(lineCount);
   }
 
-  function forceInitialSearchMode(){
-    bodyEl.classList.remove('scrolled','login-check');
-    state = 0;
-    input.placeholder = 'Search...';
-  }
-
   function getSingleLineInputHeight(){
     const computed = window.getComputedStyle(input);
     const lineHeight = parseFloat(computed.lineHeight) || 22.4;
@@ -355,16 +349,12 @@
     input.scrollTop = 0;
   }
 
-  function adjustTextarea(options = {}){
-    const { forceResetOnEmpty = false } = options;
+  function adjustTextarea(){
     const { contentHeight, lineCount } = measureInputContent();
     updateLineCount(lineCount);
 
     const isInputEmpty = input.value.length === 0;
     if(isInputEmpty){
-      if(forceResetOnEmpty){
-        forceInitialSearchMode();
-      }
       collapseToInitialSearchBox(contentHeight);
       return;
     }
@@ -432,7 +422,7 @@
   function syncInputChanges(){
     if(input.value === lastInputValue) return;
     lastInputValue = input.value;
-    adjustTextarea({ forceResetOnEmpty: true });
+    adjustTextarea();
   }
 
   ['input','keyup','change','cut','paste','compositionend'].forEach(evt=>{
@@ -461,7 +451,7 @@
 
     input.value = '';
 
-    adjustTextarea({ forceResetOnEmpty: true });
+    adjustTextarea();
 
   });
 
@@ -523,7 +513,7 @@
 
   window.addEventListener('wheel', e=>{
 
-    if(e.target.closest('.search-box') || e.target.closest('.search-container.expanded')){
+    if(e.target.closest('.search-container.expanded')){
       return;
     }
 
