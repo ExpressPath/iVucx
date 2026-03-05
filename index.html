@@ -41,6 +41,10 @@
       color:#fff;
     }
 
+    body.login-check .fixed-wrapper{
+      display:none;
+    }
+
     .fixed-wrapper{
       position:fixed;
       inset:0;
@@ -278,6 +282,7 @@
   const COLLAPSE_AT_OR_BELOW_LINES = 5; // Collapse when rendered lines are 5 or fewer
   let previousLineCount = null;
   let state = 0;
+  let blueModeDraft = '';
 
   function getRenderedLineCountFromContentHeight(contentHeight){
     const computed = window.getComputedStyle(input);
@@ -487,6 +492,7 @@
 
     if(isAnimating || next === state) return;
 
+    const previousState = state;
     isAnimating = true;
 
     bodyEl.classList.remove('scrolled','login-check');
@@ -501,13 +507,20 @@
     }
 
     if(next === 2){
+      blueModeDraft = input.value;
       bodyEl.classList.add('login-check');
       input.placeholder = 'Search...';
       checkLogin();
     }
 
     state = next;
-    adjustTextarea();
+    if(previousState === 2 && next !== 2 && blueModeDraft && input.value.length === 0){
+      input.value = blueModeDraft;
+      lastInputValue = input.value;
+    }
+    if(next !== 2){
+      adjustTextarea();
+    }
 
     setTimeout(()=>{
       isAnimating = false;
