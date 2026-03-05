@@ -48,6 +48,7 @@
       justify-content:center;
       pointer-events:none;
       padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      transition:justify-content .45s cubic-bezier(.4,0,.2,1);
     }
 
     .search-container{
@@ -56,7 +57,7 @@
       padding:16px;
       text-align:center;
       pointer-events:auto;
-      transition:max-width .45s cubic-bezier(.4,0,.2,1), height .45s cubic-bezier(.4,0,.2,1);
+      transition:max-width .45s cubic-bezier(.4,0,.2,1), height .45s cubic-bezier(.4,0,.2,1), padding .45s cubic-bezier(.4,0,.2,1);
       height:auto;
     }
 
@@ -77,7 +78,7 @@
       border-radius:28px;
       padding:12px 16px;
       background:#111;
-      transition:all .45s ease;
+      transition:all .45s cubic-bezier(.4,0,.2,1);
       max-height:calc(100vh - 160px);
     }
 
@@ -85,6 +86,8 @@
       height:100%;
       max-height:none;
       border-radius:18px;
+      padding:16px 16px;
+      align-items:flex-start;
     }
 
     body.mode-q .search-box{ background:#fff; }
@@ -111,12 +114,14 @@
       max-height:calc(100vh - 300px);
       overflow:auto;
       width:100%;
+      transition:height .45s cubic-bezier(.4,0,.2,1);
     }
 
     .search-container.expanded .search-input{
       max-height:none;
       height:100%;
-      overflow:auto;
+      overflow-y:auto;
+      overflow-x:hidden;
     }
 
     body.mode-q .search-input{ color:#111; }
@@ -256,11 +261,18 @@
 
   let expandedFixedHeight = null;
   const fixedWrapper = document.querySelector('.fixed-wrapper');
+  const EXPAND_THRESHOLD = 150; // Expand when height exceeds this (pixels)
 
   function adjustTextarea(){
-    const lineCount = input.value.split('\n').length;
+    // Measure current scroll height (content height)
+    const tempHeight = input.style.height;
+    input.style.height = 'auto';
+    const contentHeight = input.scrollHeight;
+    input.style.height = tempHeight;
 
-    if(lineCount > 10){
+    const shouldExpand = contentHeight > EXPAND_THRESHOLD;
+
+    if(shouldExpand){
       if(!container.classList.contains('expanded')){
         container.classList.add('expanded');
 
@@ -282,7 +294,7 @@
 
         const maxAvailable = maxContainerHeight - formHeight - verticalPadding;
 
-        expandedFixedHeight = Math.max(120, Math.min(input.scrollHeight || 120, maxAvailable));
+        expandedFixedHeight = Math.max(120, Math.min(contentHeight || 120, maxAvailable));
 
         input.style.height = expandedFixedHeight + 'px';
         input.style.overflow = 'auto';
@@ -296,9 +308,8 @@
       }
 
       requestAnimationFrame(()=>{
-        const cursorPos = input.selectionStart;
-        input.scrollTop = input.scrollHeight;
-        input.setSelectionRange(cursorPos, cursorPos);
+        // Always keep cursor at bottom (like command prompt)
+        input.scrollTop = input.scrollHeight - input.clientHeight;
       });
 
     } else {
@@ -310,7 +321,7 @@
 
       container.style.height = '';
       input.style.height = 'auto';
-      input.style.height = Math.min(input.scrollHeight,220) + 'px';
+      input.style.height = Math.min(contentHeight, 220) + 'px';
       input.scrollTop = 0;
     }
   }
@@ -318,7 +329,9 @@
   adjustTextarea();
 
   window.addEventListener('resize', adjustTextarea);
-  input.addEventListener('input', adjustTextarea);
+  input.addEventListener('input', ()=>{
+    adjustTextarea();
+  });
 
   input.addEventListener('keydown', e=>{
 
