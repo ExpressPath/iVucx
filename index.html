@@ -159,6 +159,61 @@
       margin-top:8px;
     }
 
+    .attachment-list{
+      display:none;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:10px;
+      text-align:left;
+    }
+
+    .attachment-list.has-files{
+      display:flex;
+    }
+
+    .attachment-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      max-width:100%;
+      padding:6px 10px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,0.25);
+      background:rgba(255,255,255,0.12);
+      color:#fff;
+      font-size:12px;
+      line-height:1.2;
+    }
+
+    body.mode-q .attachment-chip,
+    body.scrolled .attachment-chip{
+      border-color:rgba(0,0,0,0.2);
+      background:rgba(0,0,0,0.06);
+      color:#111;
+    }
+
+    .attachment-chip .name{
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      max-width:min(52vw, 320px);
+    }
+
+    .attachment-chip .meta{
+      opacity:.7;
+      white-space:nowrap;
+    }
+
+    .attachment-chip .remove{
+      border:none;
+      background:transparent;
+      color:inherit;
+      cursor:pointer;
+      font-size:14px;
+      line-height:1;
+      padding:0;
+    }
+
     body.mode-q .send-button{ background:#111; color:#fff; }
     body.login-check .send-button{ background:#fff; color:#0b1e3d; }
 
@@ -239,6 +294,7 @@
         </svg>
       </button>
     </form>
+    <div class="attachment-list" id="attachmentList" aria-live="polite"></div>
 
     <div class="button-group">
       <button class="sub-button" id="qBtn">unsolved</button>
@@ -258,6 +314,8 @@
   const input = document.getElementById('searchInput');
   const container = document.getElementById('searchContainer');
   const sendButton = document.getElementById('sendButton');
+  const attachmentList = document.getElementById('attachmentList');
+  let attachedFiles = [];
 
   function setMode(isQ){
     if(isQ){
@@ -275,6 +333,74 @@
 
   qBtn.addEventListener('click',e=>{e.preventDefault();setMode(true);});
   aBtn.addEventListener('click',e=>{e.preventDefault();setMode(false);});
+
+  function formatFileSize(bytes){
+    if(bytes < 1024) return bytes + 'B';
+    if(bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+  }
+
+  function renderAttachments(){
+    if(!attachmentList) return;
+    attachmentList.innerHTML = '';
+
+    if(attachedFiles.length === 0){
+      attachmentList.classList.remove('has-files');
+      return;
+    }
+
+    attachedFiles.forEach((file, index)=>{
+      const chip = document.createElement('div');
+      chip.className = 'attachment-chip';
+
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = file.name || 'untitled';
+
+      const meta = document.createElement('span');
+      meta.className = 'meta';
+      meta.textContent = formatFileSize(file.size || 0);
+
+      const remove = document.createElement('button');
+      remove.className = 'remove';
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.setAttribute('aria-label', 'Remove ' + (file.name || 'file'));
+      remove.addEventListener('click', ()=>{
+        attachedFiles.splice(index, 1);
+        renderAttachments();
+      });
+
+      chip.append(name, meta, remove);
+      attachmentList.appendChild(chip);
+    });
+
+    attachmentList.classList.add('has-files');
+  }
+
+  function collectClipboardFiles(clipboardData){
+    if(!clipboardData || !clipboardData.items) return [];
+    const files = [];
+
+    for(const item of clipboardData.items){
+      if(item.kind !== 'file') continue;
+      const file = item.getAsFile();
+      if(file) files.push(file);
+    }
+
+    return files;
+  }
+
+  function handlePasteFiles(e){
+    const files = collectClipboardFiles(e.clipboardData);
+    if(files.length === 0) return;
+
+    e.preventDefault();
+    attachedFiles = attachedFiles.concat(files);
+    renderAttachments();
+  }
+
+  window.addEventListener('paste', handlePasteFiles);
 
   let expandedFixedHeight = null;
   const fixedWrapper = document.querySelector('.fixed-wrapper');
@@ -452,12 +578,17 @@
     e.preventDefault();
 
     const v = input.value.trim();
+    const hasFiles = attachedFiles.length > 0;
 
-    if(!v) return;
+    if(!v && !hasFiles) return;
 
-    alert('検索内容: ' + v);
+    const attachedNames = hasFiles ? attachedFiles.map(file=>file.name).join(', ') : '';
+    const message = hasFiles ? `${v}\n\nFiles: ${attachedNames}` : v;
+    alert('検索内容: ' + message);
 
     input.value = '';
+    attachedFiles = [];
+    renderAttachments();
 
     adjustTextarea();
 
