@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>ChatGPT-style Search Box</title>
+  <title>iVucx</title>
   <style>
     :root{
       --bg-white:#ffffff;
@@ -306,6 +306,41 @@
 
     body.scrolled .hint,
     body.login-check .hint{ opacity:0; }
+
+    .selection-mode{
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+      align-items:center;
+      justify-content:center;
+      height:100vh;
+      padding:20px;
+    }
+
+    .selection-option{
+      width:100%;
+      max-width:400px;
+      padding:20px;
+      border-radius:12px;
+      background:#fff;
+      color:#111;
+      border:2px solid #ddd;
+      cursor:pointer;
+      font-size:18px;
+      font-weight:500;
+      text-align:center;
+      transition:all .2s ease;
+    }
+
+    .selection-option:hover{
+      background:#f0f0f0;
+      border-color:#999;
+      transform:translateY(-2px);
+    }
+
+    .selection-option:active{
+      transform:translateY(0);
+    }
   </style>
 </head>
 <body>
@@ -343,6 +378,13 @@
   </div>
 </div>
 
+<div class="selection-mode" id="selectionMode" style="display:none;">
+  <div class="selection-option" data-value="Lean">Lean</div>
+  <div class="selection-option" data-value="Coq">Coq</div>
+  <div class="selection-option" data-value="Isabelle">Isabelle</div>
+  <div class="selection-option" data-value="Agda">Agda</div>
+</div>
+
 <script>
   const bodyEl = document.body;
   const qBtn = document.getElementById('qBtn');
@@ -355,6 +397,10 @@
   let attachedFiles = [];
   const MAX_ATTACHMENTS = 5;
   const ATTACHMENT_ANIM_MS = 180;
+  let selectionMode = false;
+  let rememberedContent = '';
+  let rememberedFiles = [];
+  const selectionModeEl = document.getElementById('selectionMode');
 
   function setMode(isQ){
     if(isQ){
@@ -456,6 +502,45 @@
   }
 
   window.addEventListener('paste', handlePasteFiles);
+
+  function enterSelectionMode(){
+    selectionMode = true;
+    rememberedContent = input.value;
+    rememberedFiles = [...attachedFiles];
+    fixedWrapper.style.display = 'none';
+    selectionModeEl.style.display = 'flex';
+  }
+
+  function exitSelectionMode(){
+    selectionMode = false;
+    input.value = rememberedContent;
+    attachedFiles = [...rememberedFiles];
+    renderAttachments();
+    fixedWrapper.style.display = 'flex';
+    selectionModeEl.style.display = 'none';
+    adjustTextarea();
+  }
+
+  function handleSelection(choice){
+    const message = rememberedFiles.length > 0 
+      ? `${rememberedContent}\n\nSelected: ${choice}\nFiles: ${rememberedFiles.map(f=>f.name).join(', ')}`
+      : `${rememberedContent}\n\nSelected: ${choice}`;
+    alert('送信内容: ' + message);
+    
+    // Reset everything
+    input.value = '';
+    attachedFiles = [];
+    renderAttachments();
+    exitSelectionMode();
+  }
+
+  // Add click handlers for selection options
+  document.querySelectorAll('.selection-option').forEach(option => {
+    option.addEventListener('click', () => {
+      const choice = option.dataset.value;
+      handleSelection(choice);
+    });
+  });
 
   let expandedFixedHeight = null;
   const fixedWrapper = document.querySelector('.fixed-wrapper');
@@ -637,6 +722,12 @@
 
     if(!v && !hasFiles) return;
 
+    // If in scrolled mode (gray background), enter selection mode
+    if(state === 1){
+      enterSelectionMode();
+      return;
+    }
+
     const attachedNames = hasFiles ? attachedFiles.map(file=>file.name).join(', ') : '';
     const message = hasFiles ? `${v}\n\nFiles: ${attachedNames}` : v;
     alert('検索内容: ' + message);
@@ -680,6 +771,11 @@
 
     const previousState = state;
     isAnimating = true;
+
+    // Exit selection mode if changing states
+    if(selectionMode){
+      exitSelectionMode();
+    }
 
     bodyEl.classList.remove('scrolled','login-check');
 
