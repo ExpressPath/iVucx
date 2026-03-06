@@ -193,10 +193,16 @@
     }
 
     .attachment-chip .name{
+      color:rgba(255,255,255,0.78);
       overflow:hidden;
       text-overflow:ellipsis;
       white-space:nowrap;
       max-width:min(52vw, 320px);
+    }
+
+    body.mode-q .attachment-chip .name,
+    body.scrolled .attachment-chip .name{
+      color:rgba(0,0,0,0.68);
     }
 
     .attachment-chip .meta{
@@ -316,6 +322,7 @@
   const sendButton = document.getElementById('sendButton');
   const attachmentList = document.getElementById('attachmentList');
   let attachedFiles = [];
+  const MAX_ATTACHMENTS = 5;
 
   function setMode(isQ){
     if(isQ){
@@ -395,8 +402,14 @@
     const files = collectClipboardFiles(e.clipboardData);
     if(files.length === 0) return;
 
+    const availableSlots = Math.max(0, MAX_ATTACHMENTS - attachedFiles.length);
+    if(availableSlots === 0){
+      e.preventDefault();
+      return;
+    }
+
     e.preventDefault();
-    attachedFiles = attachedFiles.concat(files);
+    attachedFiles = attachedFiles.concat(files.slice(0, availableSlots));
     renderAttachments();
   }
 
