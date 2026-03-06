@@ -613,6 +613,71 @@
       gap:10px;
     }
 
+    .login-popup-loading{
+      position:relative;
+      z-index:1;
+      min-height:190px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:12px;
+      color:rgba(255,255,255,0.82);
+      opacity:0;
+      transform:translateY(4px);
+      transition:opacity .32s ease,transform .32s ease;
+      pointer-events:none;
+    }
+
+    .login-popup-main{
+      position:relative;
+      z-index:1;
+      opacity:0;
+      transform:translateY(8px);
+      filter:blur(2px);
+      transition:opacity .42s ease,transform .42s ease,filter .42s ease;
+      pointer-events:none;
+    }
+
+    .login-popup-spinner{
+      width:40px;
+      height:40px;
+      border-radius:50%;
+      border:2px solid rgba(255,255,255,0.24);
+      border-top-color:#ffffff;
+      animation:popup-spin .9s linear infinite;
+    }
+
+    .login-popup.loading .login-popup-loading{
+      opacity:1;
+      transform:translateY(0);
+      pointer-events:auto;
+    }
+
+    .login-popup.loading .login-popup-main{
+      opacity:0;
+      transform:translateY(8px);
+      filter:blur(2px);
+      pointer-events:none;
+    }
+
+    .login-popup.show-main .login-popup-loading{
+      opacity:0;
+      transform:translateY(-6px);
+      pointer-events:none;
+    }
+
+    .login-popup.show-main .login-popup-main{
+      opacity:1;
+      transform:translateY(0);
+      filter:blur(0);
+      pointer-events:auto;
+    }
+
+    @keyframes popup-spin{
+      to{ transform:rotate(360deg); }
+    }
+
     .login-popup-input{
       width:100%;
       height:48px;
@@ -734,13 +799,19 @@
   <div class="login-popup" id="loginPopup" aria-hidden="true">
     <div class="login-popup-card" role="dialog" aria-modal="true" aria-labelledby="loginPopupTitle">
       <button class="login-popup-close" id="loginPopupClose" type="button" aria-label="Close login popup">×</button>
-      <h2 class="login-popup-title" id="loginPopupTitle">Login Approval</h2>
-      <p class="login-popup-copy">Enter your email address to receive an approval link and sign in.</p>
-      <form class="login-popup-form" id="loginPopupForm">
-        <input class="login-popup-input" id="loginEmailInput" type="email" inputmode="email" autocomplete="email" required placeholder="name@example.com" />
-        <button class="login-popup-submit" type="submit">Send Approval Email</button>
-      </form>
-      <div class="login-popup-status" id="loginPopupStatus"></div>
+      <div class="login-popup-loading" id="loginPopupLoading">
+        <div class="login-popup-spinner" aria-hidden="true"></div>
+        <div id="loginLoadingText">Checking server...</div>
+      </div>
+      <div class="login-popup-main" id="loginPopupMain">
+        <h2 class="login-popup-title" id="loginPopupTitle">Login Approval</h2>
+        <p class="login-popup-copy" id="loginPopupCopy">Enter your email address to receive an approval link and sign in.</p>
+        <form class="login-popup-form" id="loginPopupForm">
+          <input class="login-popup-input" id="loginEmailInput" type="email" inputmode="email" autocomplete="email" required placeholder="name@example.com" />
+          <button class="login-popup-submit" type="submit">Send Approval Email</button>
+        </form>
+        <div class="login-popup-status" id="loginPopupStatus"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -770,6 +841,8 @@
   const loginPopupForm = document.getElementById('loginPopupForm');
   const loginEmailInput = document.getElementById('loginEmailInput');
   const loginPopupStatus = document.getElementById('loginPopupStatus');
+  const loginPopupCopy = document.getElementById('loginPopupCopy');
+  const loginLoadingText = document.getElementById('loginLoadingText');
   const withdrawBtn = document.getElementById('withdrawBtn');
   const depositBtn = document.getElementById('depositBtn');
   const editorReturnContext = readEditorReturnContext();
@@ -994,7 +1067,7 @@
     withdrawBtn.addEventListener('click', ()=>{
       if(!blueModeLoggedIn){
         loginPopupDismissed = false;
-        openLoginPopup(true);
+        showPopupMain(DEFAULT_LOGIN_COPY);
       }
     });
   }
@@ -1003,7 +1076,7 @@
     depositBtn.addEventListener('click', ()=>{
       if(!blueModeLoggedIn){
         loginPopupDismissed = false;
-        openLoginPopup(true);
+        showPopupMain(DEFAULT_LOGIN_COPY);
       }
     });
   }
@@ -1020,6 +1093,9 @@
   let blueModeCheckToken = 0;
   let loginPopupDismissed = false;
   const LOGIN_CHECK_TIMEOUT_MS = 3500;
+  const POPUP_LOADING_TEXT = 'Checking server...';
+  const DEFAULT_LOGIN_COPY = 'Enter your email address to receive an approval link and sign in.';
+  const NO_RESPONSE_COPY = 'No response from server. Please continue with email approval login.';
 
   function setPopupStatus(message){
     if(!loginPopupStatus) return;
@@ -1041,9 +1117,35 @@
     if(hidePanel) hideBlueModePanel();
     loginPopup.classList.add('is-open');
     loginPopup.setAttribute('aria-hidden', 'false');
+  }
+
+  function setPopupCopy(message){
+    if(!loginPopupCopy) return;
+    loginPopupCopy.textContent = message || DEFAULT_LOGIN_COPY;
+  }
+
+  function showPopupLoading(){
+    if(!loginPopup) return;
+    if(loginLoadingText){
+      loginLoadingText.textContent = POPUP_LOADING_TEXT;
+    }
+    openLoginPopup(true);
+    loginPopup.classList.add('loading');
+    loginPopup.classList.remove('show-main');
     setPopupStatus('');
+    setPopupCopy(DEFAULT_LOGIN_COPY);
+  }
+
+  function showPopupMain(copyMessage, statusMessage = ''){
+    if(!loginPopup) return;
+    openLoginPopup(true);
+    loginPopup.classList.remove('loading');
+    setPopupCopy(copyMessage || DEFAULT_LOGIN_COPY);
+    setPopupStatus(statusMessage);
 
     requestAnimationFrame(()=>{
+      if(!loginPopup || !loginPopup.classList.contains('is-open')) return;
+      loginPopup.classList.add('show-main');
       if(loginEmailInput){
         loginEmailInput.focus();
       }
@@ -1053,7 +1155,14 @@
   function closeLoginPopup(showPanel = true){
     if(!loginPopup) return;
     loginPopup.classList.remove('is-open');
+    loginPopup.classList.remove('loading');
+    loginPopup.classList.remove('show-main');
     loginPopup.setAttribute('aria-hidden', 'true');
+    setPopupStatus('');
+    setPopupCopy(DEFAULT_LOGIN_COPY);
+    if(loginLoadingText){
+      loginLoadingText.textContent = POPUP_LOADING_TEXT;
+    }
     if(showPanel) showBlueModePanel();
   }
 
@@ -1140,7 +1249,7 @@
       loginBtn.textContent = 'Login';
       loginBtn.addEventListener('click', ()=>{
         loginPopupDismissed = false;
-        openLoginPopup(true);
+        showPopupMain(DEFAULT_LOGIN_COPY);
       });
 
       wrap.appendChild(loginBtn);
@@ -1193,6 +1302,7 @@
   async function enterBlueMode(){
     blueModeCheckToken += 1;
     const token = blueModeCheckToken;
+    const startedAt = performance.now();
 
     blueModeLoggedIn = false;
     blueModeRewards = [];
@@ -1200,7 +1310,13 @@
     hideBlueModePanel();
     closeLoginPopup(false);
 
+    const loadingTimer = setTimeout(()=>{
+      if(state !== 2 || token !== blueModeCheckToken) return;
+      showPopupLoading();
+    }, 100);
+
     const loginResult = await checkLogin();
+    clearTimeout(loadingTimer);
     if(state !== 2 || token !== blueModeCheckToken) return;
 
     blueModeLoggedIn = loginResult.loggedIn;
@@ -1214,9 +1330,21 @@
 
     if(loginPopupDismissed){
       closeLoginPopup(true);
-    }else{
-      openLoginPopup(true);
+      return;
     }
+
+    const noResponse = loginResult.reason === 'timeout' || loginResult.reason === 'network';
+    if(noResponse){
+      const elapsed = performance.now() - startedAt;
+      if(elapsed < LOGIN_CHECK_TIMEOUT_MS){
+        await new Promise(resolve=>setTimeout(resolve, LOGIN_CHECK_TIMEOUT_MS - elapsed));
+        if(state !== 2 || token !== blueModeCheckToken) return;
+      }
+      showPopupMain(NO_RESPONSE_COPY, 'No response in 3.5 seconds.');
+      return;
+    }
+
+    showPopupMain(DEFAULT_LOGIN_COPY);
   }
 
   function restoreSummaryFromEditor(){
@@ -1460,14 +1588,17 @@
       const loggedIn = parseLoginState(payload, res.status);
       return {
         loggedIn,
-        rewards: loggedIn ? parseRewards(payload) : []
+        rewards: loggedIn ? parseRewards(payload) : [],
+        reason: loggedIn ? 'ok' : 'not_logged_in'
       };
 
     }catch(err){
       clearTimeout(timeoutId);
+      const reason = err && err.name === 'AbortError' ? 'timeout' : 'network';
       return {
         loggedIn:false,
-        rewards:[]
+        rewards:[],
+        reason
       };
     }
   }
