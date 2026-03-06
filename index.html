@@ -160,15 +160,25 @@
     }
 
     .attachment-list{
-      display:none;
+      display:flex;
       flex-wrap:wrap;
       gap:8px;
-      margin-top:10px;
+      margin-top:0;
       text-align:left;
+      overflow:hidden;
+      max-height:0;
+      opacity:0;
+      transform:translateY(-6px);
+      pointer-events:none;
+      transition:max-height .3s cubic-bezier(.4,0,.2,1),opacity .25s ease,margin-top .3s cubic-bezier(.4,0,.2,1),transform .3s cubic-bezier(.4,0,.2,1);
     }
 
     .attachment-list.has-files{
-      display:flex;
+      margin-top:10px;
+      max-height:220px;
+      opacity:1;
+      transform:translateY(0);
+      pointer-events:auto;
     }
 
     .attachment-chip{
@@ -183,6 +193,19 @@
       color:#111;
       font-size:12px;
       line-height:1.2;
+      opacity:0;
+      transform:translateY(6px) scale(.98);
+      transition:opacity .2s ease,transform .25s cubic-bezier(.22,1,.36,1);
+    }
+
+    .attachment-chip.is-visible{
+      opacity:1;
+      transform:translateY(0) scale(1);
+    }
+
+    .attachment-chip.is-removing{
+      opacity:0;
+      transform:translateY(-4px) scale(.96);
     }
 
     body.mode-q .attachment-chip{
@@ -331,6 +354,7 @@
   const attachmentList = document.getElementById('attachmentList');
   let attachedFiles = [];
   const MAX_ATTACHMENTS = 5;
+  const ATTACHMENT_ANIM_MS = 180;
 
   function setMode(isQ){
     if(isQ){
@@ -361,6 +385,7 @@
 
     if(attachedFiles.length === 0){
       attachmentList.classList.remove('has-files');
+      requestAnimationFrame(adjustTextarea);
       return;
     }
 
@@ -382,15 +407,24 @@
       remove.textContent = '×';
       remove.setAttribute('aria-label', 'Remove ' + (file.name || 'file'));
       remove.addEventListener('click', ()=>{
-        attachedFiles.splice(index, 1);
-        renderAttachments();
+        if(remove.disabled) return;
+        remove.disabled = true;
+        chip.classList.add('is-removing');
+        setTimeout(()=>{
+          attachedFiles.splice(index, 1);
+          renderAttachments();
+        }, ATTACHMENT_ANIM_MS);
       });
 
       chip.append(name, meta, remove);
       attachmentList.appendChild(chip);
+      requestAnimationFrame(()=>{
+        chip.classList.add('is-visible');
+      });
     });
 
     attachmentList.classList.add('has-files');
+    requestAnimationFrame(adjustTextarea);
   }
 
   function collectClipboardFiles(clipboardData){
