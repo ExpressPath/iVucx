@@ -178,31 +178,33 @@
       max-width:100%;
       padding:6px 10px;
       border-radius:14px;
-      border:1px solid rgba(255,255,255,0.25);
-      background:rgba(255,255,255,0.12);
+      border:1px solid rgba(255,255,255,0.18);
+      background:#111;
       color:#fff;
       font-size:12px;
       line-height:1.2;
     }
 
-    body.mode-q .attachment-chip,
+    body.mode-q .attachment-chip{
+      border-color:rgba(0,0,0,0.12);
+      background:#fff;
+      color:#111;
+    }
+
     body.scrolled .attachment-chip{
       border-color:rgba(0,0,0,0.2);
-      background:rgba(0,0,0,0.06);
+      background:rgba(255,255,255,0.6);
+      backdrop-filter:blur(8px);
       color:#111;
     }
 
     .attachment-chip .name{
-      color:rgba(255,255,255,0.78);
+      color:currentColor;
+      opacity:.78;
       overflow:hidden;
       text-overflow:ellipsis;
       white-space:nowrap;
       max-width:min(52vw, 320px);
-    }
-
-    body.mode-q .attachment-chip .name,
-    body.scrolled .attachment-chip .name{
-      color:rgba(0,0,0,0.68);
     }
 
     .attachment-chip .meta{
