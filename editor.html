@@ -103,6 +103,12 @@
       background:transparent;
       border-color:rgba(255,255,255,0.25);
       color:#f6f8fa;
+      width:34px;
+      min-width:34px;
+      padding:0;
+      border-radius:999px;
+      font-size:24px;
+      line-height:1;
     }
 
     .btn-back:hover{
@@ -257,7 +263,7 @@
 <body>
   <header class="topbar">
     <div class="left-cluster">
-      <button class="btn btn-back" id="backBtn" type="button">Back</button>
+      <button class="btn btn-back" id="backBtn" type="button" aria-label="Back to summary">×</button>
       <div class="product">iVucx Editor</div>
       <div class="lang-badge" id="langBadge">Lean</div>
       <div class="file-name" id="fileName">Main.lean</div>
@@ -299,6 +305,7 @@
   <script>
     (function(){
       const INIT_STORAGE_KEY = 'ivucxEditorInit';
+      const EDITOR_RETURN_KEY = 'ivucxEditorReturn';
       const RUNNER_STORAGE_KEY = 'ivucxRunnerEndpoint';
 
       const langBadgeEl = document.getElementById('langBadge');
@@ -315,6 +322,7 @@
         Lean: {
           monacoId: 'ivucx-lean',
           fileName: 'Main.lean',
+          extension: '.lean',
           starter: [
             'theorem hello : True := by',
             '  trivial'
@@ -323,6 +331,7 @@
         Coq: {
           monacoId: 'ivucx-coq',
           fileName: 'Main.v',
+          extension: '.v',
           starter: [
             'Theorem hello : True.',
             'Proof.',
@@ -333,6 +342,7 @@
         Isabelle: {
           monacoId: 'ivucx-isabelle',
           fileName: 'Main.thy',
+          extension: '.thy',
           starter: [
             'theory Main',
             '  imports Main',
@@ -347,6 +357,7 @@
         Agda: {
           monacoId: 'ivucx-agda',
           fileName: 'Main.agda',
+          extension: '.agda',
           starter: [
             'module Main where',
             '',
@@ -370,9 +381,10 @@
       const restoredRunner = params.get('runner') || localStorage.getItem(RUNNER_STORAGE_KEY) || '';
       runnerEndpointEl.value = restoredRunner;
 
-      const initialDraft = (typeof initPayload.draft === 'string' && initPayload.draft.trim().length > 0)
-        ? initPayload.draft
-        : selectedConfig.starter;
+      const summaryText = typeof initPayload.summary === 'string'
+        ? initPayload.summary
+        : (typeof initPayload.draft === 'string' ? initPayload.draft : '');
+      const initialDraft = '';
 
       let editorInstance = null;
       let useFallbackEditor = false;
@@ -380,10 +392,10 @@
       let running = false;
 
       setStatus('Ready');
-      setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, restoredRunner);
+      setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, restoredRunner, summaryText);
 
       backBtn.addEventListener('click', ()=>{
-        window.location.href = 'index.html';
+        handleBackNavigation();
       });
 
       runnerEndpointEl.addEventListener('change', ()=>{
@@ -395,6 +407,7 @@
       });
 
       initializeEditor(initialDraft, selectedLanguage);
+      window.addEventListener('paste', handleProofFilePaste, true);
 
       function readInitPayload(){
         try{
@@ -421,13 +434,17 @@
         statusEl.classList.toggle('error', !!isError);
       }
 
-      function setInitialOutputMessage(language, fileName, payload, runnerEndpoint){
+      function setInitialOutputMessage(language, fileName, payload, runnerEndpoint, summary){
         const files = Array.isArray(payload.attachedFileNames) ? payload.attachedFileNames : [];
         const lines = [
           'Editor initialized.',
           'Language: ' + language,
           'File: ' + fileName
         ];
+
+        if(typeof summary === 'string'){
+          lines.push('Summary is stored separately (' + summary.length + ' chars).');
+        }
 
         if(files.length > 0){
           lines.push('Attached files from previous step: ' + files.join(', '));
@@ -503,6 +520,119 @@
         return '';
       }
 
+      function handleBackNavigation(){
+        const currentCode = getEditorCode();
+        if(currentCode.length >= 30){
+          const shouldReturn = window.confirm('エディタに30文字以上の内容があります。戻るとコード編集内容は破棄されます。戻りますか？');
+          if(!shouldReturn) return;
+        }
+
+        const returnPayload = {
+          summary: summaryText,
+          proofAssistant: selectedLanguage,
+          returnedAt: new Date().toISOString()
+        };
+
+        try{
+          sessionStorage.setItem(EDITOR_RETURN_KEY, JSON.stringify(returnPayload));
+        }catch(err){
+          // Ignore storage failures and continue navigation.
+        }
+
+        window.location.href = 'index.html';
+      }
+
+      function isEditorFocused(){
+        if(useFallbackEditor){
+          return document.activeElement === fallbackEditor;
+        }
+
+        if(editorInstance && typeof editorInstance.hasTextFocus === 'function'){
+          if(editorInstance.hasTextFocus()) return true;
+        }
+
+        const active = document.activeElement;
+        return !!(active && editorMount.contains(active));
+      }
+
+      function insertCodeAtCursor(text){
+        if(useFallbackEditor){
+          const start = fallbackEditor.selectionStart ?? fallbackEditor.value.length;
+          const end = fallbackEditor.selectionEnd ?? fallbackEditor.value.length;
+          const before = fallbackEditor.value.slice(0, start);
+          const after = fallbackEditor.value.slice(end);
+          fallbackEditor.value = before + text + after;
+          const nextPos = start + text.length;
+          fallbackEditor.selectionStart = nextPos;
+          fallbackEditor.selectionEnd = nextPos;
+          fallbackEditor.focus();
+          return;
+        }
+
+        if(editorInstance && monacoRef){
+          const range = editorInstance.getSelection();
+          editorInstance.executeEdits('proof-file-paste', [{
+            range: range,
+            text: text,
+            forceMoveMarkers: true
+          }]);
+          editorInstance.pushUndoStop();
+          editorInstance.focus();
+        }
+      }
+
+      async function handleProofFilePaste(e){
+        if(!isEditorFocused()) return;
+
+        const clipboard = e.clipboardData;
+        if(!clipboard || !clipboard.items) return;
+
+        const files = [];
+        for(const item of clipboard.items){
+          if(item.kind !== 'file') continue;
+          const file = item.getAsFile();
+          if(file) files.push(file);
+        }
+
+        if(files.length === 0) return;
+
+        const expectedExt = selectedConfig.extension.toLowerCase();
+        const matchedFiles = files.filter(file=>{
+          const name = (file.name || '').toLowerCase();
+          return name.endsWith(expectedExt);
+        });
+
+        if(matchedFiles.length === 0) return;
+
+        e.preventDefault();
+
+        const chunks = [];
+        for(const file of matchedFiles){
+          try{
+            const text = await file.text();
+            chunks.push(text);
+          }catch(err){
+            // Skip unreadable files and continue.
+          }
+        }
+
+        if(chunks.length === 0){
+          setStatus('Paste failed', true);
+          outputEl.textContent = '[Paste Error]\nThe selected file could not be read from clipboard.';
+          return;
+        }
+
+        const pasted = chunks.join('\n\n');
+        const lineCount = pasted.length === 0 ? 0 : pasted.split(/\r?\n/).length;
+        if(lineCount >= 30){
+          const shouldPaste = window.confirm('貼り付け内容は ' + lineCount + ' 行です。エディタに挿入しますか？');
+          if(!shouldPaste) return;
+        }
+
+        insertCodeAtCursor(pasted);
+        setStatus('File pasted');
+      }
+
       async function runProof(){
         if(running) return;
 
@@ -527,10 +657,12 @@
           proofAssistant: selectedLanguage,
           language: selectedLanguage.toLowerCase(),
           fileName: selectedConfig.fileName,
+          summary: summaryText,
           code: getEditorCode(),
           context: {
             draftCreatedAt: initPayload.createdAt || null,
-            attachedFileNames: Array.isArray(initPayload.attachedFileNames) ? initPayload.attachedFileNames : []
+            attachedFileNames: Array.isArray(initPayload.attachedFileNames) ? initPayload.attachedFileNames : [],
+            summaryLength: summaryText.length
           }
         };
 
