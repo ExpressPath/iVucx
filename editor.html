@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>iVucx Editor</title>
+  <style>
+    :root{
+      --bg:#f6f8fa;
+      --panel:#ffffff;
+      --ink:#1f2328;
+      --muted:#656d76;
+      --line:#d0d7de;
+      --accent:#1f6feb;
+      --accent-dark:#0f4aa6;
+      --ok:#1a7f37;
+      --warn:#cf222e;
+      --header:#24292f;
+      --header-ink:#f6f8fa;
+    }
+
+    *,*::before,*::after{box-sizing:border-box}
+
+    html,body{
+      width:100%;
+      height:100%;
+      margin:0;
+      overflow:hidden;
+      font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+      background:var(--bg);
+      color:var(--ink);
+    }
+
+    body{
+      display:flex;
+      flex-direction:column;
+    }
+
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      min-height:56px;
+      padding:10px 14px;
+      background:var(--header);
+      color:var(--header-ink);
+      border-bottom:1px solid #1b1f24;
+    }
+
+    .left-cluster,
+    .right-cluster{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+    }
+
+    .product{
+      font-size:14px;
+      font-weight:650;
+      white-space:nowrap;
+    }
+
+    .lang-badge{
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.28);
+      font-size:12px;
+      font-weight:650;
+      letter-spacing:.02em;
+      white-space:nowrap;
+    }
+
+    .file-name{
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:12px;
+      color:#d0d7de;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:220px;
+    }
+
+    .btn{
+      border:1px solid transparent;
+      background:#ffffff;
+      color:#24292f;
+      border-radius:8px;
+      height:34px;
+      padding:0 12px;
+      font-size:13px;
+      font-weight:600;
+      cursor:pointer;
+      transition:background-color .2s ease,color .2s ease,border-color .2s ease,transform .12s ease;
+    }
+
+    .btn:hover{ transform:translateY(-1px); }
+    .btn:active{ transform:translateY(0); }
+    .btn:disabled{ opacity:.6; cursor:not-allowed; transform:none; }
+
+    .btn-back{
+      background:transparent;
+      border-color:rgba(255,255,255,0.25);
+      color:#f6f8fa;
+    }
+
+    .btn-back:hover{
+      background:rgba(255,255,255,0.08);
+    }
+
+    .btn-run{
+      background:var(--accent);
+      border-color:var(--accent);
+      color:#fff;
+    }
+
+    .btn-run:hover{
+      background:var(--accent-dark);
+      border-color:var(--accent-dark);
+    }
+
+    .runner-input{
+      width:min(44vw, 380px);
+      min-width:180px;
+      height:34px;
+      border-radius:8px;
+      border:1px solid rgba(255,255,255,0.25);
+      background:rgba(255,255,255,0.08);
+      color:#fff;
+      font-size:12px;
+      padding:0 10px;
+      outline:none;
+    }
+
+    .runner-input::placeholder{
+      color:#c3c9d0;
+    }
+
+    .workspace{
+      flex:1;
+      min-height:0;
+      display:grid;
+      grid-template-columns:minmax(360px, 1fr) minmax(280px, 36%);
+      gap:10px;
+      padding:10px;
+    }
+
+    .pane{
+      min-height:0;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:var(--panel);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+    }
+
+    .pane-head{
+      flex:0 0 38px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      padding:0 12px;
+      border-bottom:1px solid var(--line);
+      font-size:12px;
+      color:var(--muted);
+      background:linear-gradient(to bottom, #ffffff, #f8fafc);
+    }
+
+    .status{
+      font-weight:650;
+      color:var(--ok);
+    }
+
+    .status.error{
+      color:var(--warn);
+    }
+
+    .editor-frame{
+      flex:1;
+      min-height:0;
+      position:relative;
+      background:#fff;
+    }
+
+    #editor{
+      position:absolute;
+      inset:0;
+    }
+
+    #fallbackEditor{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      border:none;
+      outline:none;
+      resize:none;
+      padding:16px;
+      font-size:14px;
+      line-height:1.5;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      display:none;
+    }
+
+    #outputPanel{
+      flex:1;
+      margin:0;
+      min-height:0;
+      overflow:auto;
+      white-space:pre-wrap;
+      word-break:break-word;
+      padding:14px;
+      font-size:13px;
+      line-height:1.45;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      color:#24292f;
+      background:#fbfdff;
+    }
+
+    @media (max-width:1020px){
+      .workspace{
+        grid-template-columns:1fr;
+        grid-template-rows:minmax(300px, 1fr) minmax(180px, 42%);
+      }
+
+      .right-cluster{
+        width:100%;
+        justify-content:flex-end;
+      }
+    }
+
+    @media (max-width:760px){
+      .topbar{
+        flex-direction:column;
+        align-items:stretch;
+      }
+
+      .left-cluster,
+      .right-cluster{
+        width:100%;
+      }
+
+      .right-cluster{
+        justify-content:space-between;
+      }
+
+      .runner-input{
+        width:100%;
+        min-width:0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="left-cluster">
+      <button class="btn btn-back" id="backBtn" type="button">Back</button>
+      <div class="product">iVucx Editor</div>
+      <div class="lang-badge" id="langBadge">Lean</div>
+      <div class="file-name" id="fileName">Main.lean</div>
+    </div>
+    <div class="right-cluster">
+      <input
+        class="runner-input"
+        id="runnerEndpoint"
+        type="text"
+        placeholder="Runner endpoint (e.g. https://example.com/api/run)"
+        autocomplete="off"
+      />
+      <button class="btn btn-run" id="runBtn" type="button">Run</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="pane">
+      <div class="pane-head">
+        <span>Editor</span>
+        <span class="status" id="statusText">Ready</span>
+      </div>
+      <div class="editor-frame">
+        <div id="editor"></div>
+        <textarea id="fallbackEditor" spellcheck="false"></textarea>
+      </div>
+    </section>
+
+    <section class="pane">
+      <div class="pane-head">
+        <span>Server Output</span>
+        <span>Ctrl/Cmd + Enter to run</span>
+      </div>
+      <pre id="outputPanel"></pre>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script>
+    (function(){
+      const INIT_STORAGE_KEY = 'ivucxEditorInit';
+      const RUNNER_STORAGE_KEY = 'ivucxRunnerEndpoint';
+
+      const langBadgeEl = document.getElementById('langBadge');
+      const fileNameEl = document.getElementById('fileName');
+      const outputEl = document.getElementById('outputPanel');
+      const statusEl = document.getElementById('statusText');
+      const runnerEndpointEl = document.getElementById('runnerEndpoint');
+      const runBtn = document.getElementById('runBtn');
+      const backBtn = document.getElementById('backBtn');
+      const fallbackEditor = document.getElementById('fallbackEditor');
+      const editorMount = document.getElementById('editor');
+
+      const languageConfig = {
+        Lean: {
+          monacoId: 'ivucx-lean',
+          fileName: 'Main.lean',
+          starter: [
+            'theorem hello : True := by',
+            '  trivial'
+          ].join('\n')
+        },
+        Coq: {
+          monacoId: 'ivucx-coq',
+          fileName: 'Main.v',
+          starter: [
+            'Theorem hello : True.',
+            'Proof.',
+            '  exact I.',
+            'Qed.'
+          ].join('\n')
+        },
+        Isabelle: {
+          monacoId: 'ivucx-isabelle',
+          fileName: 'Main.thy',
+          starter: [
+            'theory Main',
+            '  imports Main',
+            'begin',
+            '',
+            'lemma hello: "True"',
+            '  by simp',
+            '',
+            'end'
+          ].join('\n')
+        },
+        Agda: {
+          monacoId: 'ivucx-agda',
+          fileName: 'Main.agda',
+          starter: [
+            'module Main where',
+            '',
+            'data True : Set where',
+            '  triv : True',
+            '',
+            'hello : True',
+            'hello = triv'
+          ].join('\n')
+        }
+      };
+
+      const initPayload = readInitPayload();
+      const params = new URLSearchParams(window.location.search);
+      const selectedLanguage = resolveLanguage(params.get('lang') || initPayload.proofAssistant || 'Lean');
+      const selectedConfig = languageConfig[selectedLanguage];
+
+      langBadgeEl.textContent = selectedLanguage;
+      fileNameEl.textContent = selectedConfig.fileName;
+
+      const restoredRunner = params.get('runner') || localStorage.getItem(RUNNER_STORAGE_KEY) || '';
+      runnerEndpointEl.value = restoredRunner;
+
+      const initialDraft = (typeof initPayload.draft === 'string' && initPayload.draft.trim().length > 0)
+        ? initPayload.draft
+        : selectedConfig.starter;
+
+      let editorInstance = null;
+      let useFallbackEditor = false;
+      let monacoRef = null;
+      let running = false;
+
+      setStatus('Ready');
+      setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, restoredRunner);
+
+      backBtn.addEventListener('click', ()=>{
+        window.location.href = 'index.html';
+      });
+
+      runnerEndpointEl.addEventListener('change', ()=>{
+        localStorage.setItem(RUNNER_STORAGE_KEY, runnerEndpointEl.value.trim());
+      });
+
+      runBtn.addEventListener('click', ()=>{
+        runProof();
+      });
+
+      initializeEditor(initialDraft, selectedLanguage);
+
+      function readInitPayload(){
+        try{
+          const raw = sessionStorage.getItem(INIT_STORAGE_KEY);
+          if(!raw) return {};
+          sessionStorage.removeItem(INIT_STORAGE_KEY);
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === 'object' ? parsed : {};
+        }catch(err){
+          return {};
+        }
+      }
+
+      function resolveLanguage(value){
+        const input = String(value || '').trim().toLowerCase();
+        if(input === 'coq') return 'Coq';
+        if(input === 'isabelle') return 'Isabelle';
+        if(input === 'agda') return 'Agda';
+        return 'Lean';
+      }
+
+      function setStatus(text, isError){
+        statusEl.textContent = text;
+        statusEl.classList.toggle('error', !!isError);
+      }
+
+      function setInitialOutputMessage(language, fileName, payload, runnerEndpoint){
+        const files = Array.isArray(payload.attachedFileNames) ? payload.attachedFileNames : [];
+        const lines = [
+          'Editor initialized.',
+          'Language: ' + language,
+          'File: ' + fileName
+        ];
+
+        if(files.length > 0){
+          lines.push('Attached files from previous step: ' + files.join(', '));
+        }
+
+        if(runnerEndpoint){
+          lines.push('Runner endpoint: ' + runnerEndpoint);
+        } else {
+          lines.push('Runner endpoint is empty. Set endpoint and press Run.');
+        }
+
+        lines.push('Shortcut: Ctrl/Cmd + Enter');
+        outputEl.textContent = lines.join('\n');
+      }
+
+      function initializeEditor(initialText, language){
+        if(typeof window.require !== 'function'){
+          activateFallbackEditor(initialText);
+          outputEl.textContent += '\nMonaco could not be loaded. Fallback textarea is active.';
+          return;
+        }
+
+        window.require.config({
+          paths: {
+            vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs'
+          }
+        });
+
+        window.require(['vs/editor/editor.main'], function(){
+          monacoRef = window.monaco;
+          registerCustomLanguages(monacoRef);
+          defineEditorTheme(monacoRef);
+
+          editorInstance = monacoRef.editor.create(editorMount, {
+            value: initialText,
+            language: selectedConfig.monacoId,
+            theme: 'ivucx-github-light',
+            automaticLayout: true,
+            minimap: { enabled: false },
+            smoothScrolling: true,
+            scrollBeyondLastLine: false,
+            fontFamily: 'Consolas, "Courier New", monospace',
+            fontSize: 14,
+            lineNumbersMinChars: 3,
+            tabSize: 2
+          });
+
+          editorInstance.addCommand(monacoRef.KeyMod.CtrlCmd | monacoRef.KeyCode.Enter, function(){
+            runProof();
+          });
+        }, function(){
+          activateFallbackEditor(initialText);
+          outputEl.textContent += '\nMonaco loading failed. Fallback textarea is active.';
+        });
+      }
+
+      function activateFallbackEditor(initialText){
+        useFallbackEditor = true;
+        editorMount.style.display = 'none';
+        fallbackEditor.style.display = 'block';
+        fallbackEditor.value = initialText;
+        fallbackEditor.addEventListener('keydown', function(e){
+          const isRunShortcut = (e.ctrlKey || e.metaKey) && e.key === 'Enter';
+          if(!isRunShortcut) return;
+          e.preventDefault();
+          runProof();
+        });
+      }
+
+      function getEditorCode(){
+        if(useFallbackEditor) return fallbackEditor.value;
+        if(editorInstance) return editorInstance.getValue();
+        return '';
+      }
+
+      async function runProof(){
+        if(running) return;
+
+        const endpoint = runnerEndpointEl.value.trim();
+        localStorage.setItem(RUNNER_STORAGE_KEY, endpoint);
+
+        if(!endpoint){
+          setStatus('Runner endpoint required', true);
+          outputEl.textContent = [
+            '[Configuration]',
+            'Runner endpoint is empty.',
+            'Set the endpoint URL in the top input and run again.'
+          ].join('\n');
+          return;
+        }
+
+        running = true;
+        runBtn.disabled = true;
+        setStatus('Running...');
+
+        const payload = {
+          proofAssistant: selectedLanguage,
+          language: selectedLanguage.toLowerCase(),
+          fileName: selectedConfig.fileName,
+          code: getEditorCode(),
+          context: {
+            draftCreatedAt: initPayload.createdAt || null,
+            attachedFileNames: Array.isArray(initPayload.attachedFileNames) ? initPayload.attachedFileNames : []
+          }
+        };
+
+        try{
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
+
+          const raw = await response.text();
+          if(!response.ok){
+            throw new Error('HTTP ' + response.status + ' ' + response.statusText + '\n' + raw.slice(0, 1200));
+          }
+
+          let result = null;
+          const contentType = response.headers.get('content-type') || '';
+          if(contentType.includes('application/json')){
+            try{
+              result = JSON.parse(raw);
+            }catch(err){
+              result = { stdout: raw };
+            }
+          } else {
+            result = { stdout: raw };
+          }
+
+          outputEl.textContent = formatRunResponse(result);
+          setStatus('Run completed');
+        }catch(err){
+          const msg = err && err.message ? err.message : String(err);
+          outputEl.textContent = '[Run Error]\n' + msg;
+          setStatus('Run failed', true);
+        }finally{
+          running = false;
+          runBtn.disabled = false;
+        }
+      }
+
+      function formatRunResponse(data){
+        if(typeof data === 'string') return data;
+        if(!data || typeof data !== 'object') return String(data);
+
+        const sections = [];
+
+        if(typeof data.stdout === 'string' && data.stdout.length > 0){
+          sections.push('[stdout]\n' + data.stdout);
+        }
+
+        if(typeof data.stderr === 'string' && data.stderr.length > 0){
+          sections.push('[stderr]\n' + data.stderr);
+        }
+
+        if(Array.isArray(data.diagnostics) && data.diagnostics.length > 0){
+          const diagnosticLines = data.diagnostics.map(function(item, index){
+            if(typeof item === 'string') return (index + 1) + '. ' + item;
+            const file = item.file ? item.file + ':' : '';
+            const line = item.line ? String(item.line) : '?';
+            const col = item.column ? String(item.column) : '?';
+            const message = item.message || JSON.stringify(item);
+            return (index + 1) + '. ' + file + line + ':' + col + ' ' + message;
+          });
+          sections.push('[diagnostics]\n' + diagnosticLines.join('\n'));
+        }
+
+        if(typeof data.result === 'string' && data.result.length > 0){
+          sections.push('[result]\n' + data.result);
+        }
+
+        if(sections.length === 0){
+          sections.push(JSON.stringify(data, null, 2));
+        }
+
+        return sections.join('\n\n');
+      }
+
+      function defineEditorTheme(monaco){
+        monaco.editor.defineTheme('ivucx-github-light', {
+          base: 'vs',
+          inherit: true,
+          rules: [
+            { token: 'comment', foreground: '6A737D' },
+            { token: 'keyword', foreground: 'CF222E' },
+            { token: 'number', foreground: '0550AE' },
+            { token: 'operator', foreground: '24292F' },
+            { token: 'type.identifier', foreground: '8250DF' }
+          ],
+          colors: {
+            'editor.background': '#FFFFFF',
+            'editorLineNumber.foreground': '#9AA4B2',
+            'editorLineNumber.activeForeground': '#57606A',
+            'editor.selectionBackground': '#DDEBFF',
+            'editor.inactiveSelectionBackground': '#EDF3FF',
+            'editorCursor.foreground': '#0969DA',
+            'editorIndentGuide.background1': '#EFF2F6'
+          }
+        });
+      }
+
+      function registerCustomLanguages(monaco){
+        registerLeanLanguage(monaco);
+        registerCoqLanguage(monaco);
+        registerIsabelleLanguage(monaco);
+        registerAgdaLanguage(monaco);
+      }
+
+      function registerLeanLanguage(monaco){
+        const id = languageConfig.Lean.monacoId;
+        monaco.languages.register({ id: id });
+        monaco.languages.setMonarchTokensProvider(id, {
+          keywords: [
+            'theorem','lemma','def','axiom','example','inductive','structure','namespace','open','import',
+            'where','by','match','with','if','then','else','let','in','have','show','fun','forall','exists'
+          ],
+          operators: [':=','->','=>','<-','<->','=','+','-','*','/','|',':','<','>'],
+          symbols: /[:=><!~?&|+\-*\/\\]+/,
+          tokenizer: {
+            root: [
+              { include: '@whitespace' },
+              [/[A-Z][\w']*/, 'type.identifier'],
+              [/[a-zA-Z_][\w']*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
+              [/\d+(\.\d+)?/, 'number'],
+              [/[{}()\[\]]/, '@brackets'],
+              [/@symbols/, { cases: { '@operators': 'operator', '@default': '' } }]
+            ],
+            whitespace: [
+              [/[ \t\r\n]+/, ''],
+              [/--.*$/, 'comment'],
+              [/\/-/, 'comment', '@comment']
+            ],
+            comment: [
+              [/[^-/]+/, 'comment'],
+              [/\/-/, 'comment', '@push'],
+              [/-\//, 'comment', '@pop'],
+              [/[-/]/, 'comment']
+            ]
+          }
+        });
+      }
+
+      function registerCoqLanguage(monaco){
+        const id = languageConfig.Coq.monacoId;
+        monaco.languages.register({ id: id });
+        monaco.languages.setMonarchTokensProvider(id, {
+          keywords: [
+            'Theorem','Lemma','Corollary','Proof','Qed','Defined','Fixpoint','Inductive','Definition',
+            'forall','exists','match','with','end','fun','let','in','Type','Prop','Set'
+          ],
+          operators: [':=','->','=>','<->','=','+','-','*','/','|',':','<','>'],
+          symbols: /[:=><!~?&|+\-*\/\\]+/,
+          tokenizer: {
+            root: [
+              { include: '@whitespace' },
+              [/[A-Z][\w']*/, 'type.identifier'],
+              [/[a-zA-Z_][\w']*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
+              [/\d+(\.\d+)?/, 'number'],
+              [/[{}()\[\]]/, '@brackets'],
+              [/@symbols/, { cases: { '@operators': 'operator', '@default': '' } }]
+            ],
+            whitespace: [
+              [/[ \t\r\n]+/, ''],
+              [/\(\*/, 'comment', '@comment']
+            ],
+            comment: [
+              [/[^(*]+/, 'comment'],
+              [/\(\*/, 'comment', '@push'],
+              [/\*\)/, 'comment', '@pop'],
+              [/[*()]/, 'comment']
+            ]
+          }
+        });
+      }
+
+      function registerIsabelleLanguage(monaco){
+        const id = languageConfig.Isabelle.monacoId;
+        monaco.languages.register({ id: id });
+        monaco.languages.setMonarchTokensProvider(id, {
+          keywords: [
+            'theory','imports','begin','end','lemma','theorem','proof','qed','by','assumes','shows',
+            'have','show','fixes','obtains','where','if','then','else','let','in'
+          ],
+          operators: [':=','->','=>','<->','=','+','-','*','/','|',':','<','>'],
+          symbols: /[:=><!~?&|+\-*\/\\]+/,
+          tokenizer: {
+            root: [
+              { include: '@whitespace' },
+              [/[A-Z][\w']*/, 'type.identifier'],
+              [/[a-zA-Z_][\w']*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
+              [/"([^"\\]|\\.)*"/, 'string'],
+              [/\d+(\.\d+)?/, 'number'],
+              [/[{}()\[\]]/, '@brackets'],
+              [/@symbols/, { cases: { '@operators': 'operator', '@default': '' } }]
+            ],
+            whitespace: [
+              [/[ \t\r\n]+/, ''],
+              [/\(\*/, 'comment', '@comment']
+            ],
+            comment: [
+              [/[^(*]+/, 'comment'],
+              [/\(\*/, 'comment', '@push'],
+              [/\*\)/, 'comment', '@pop'],
+              [/[*()]/, 'comment']
+            ]
+          }
+        });
+      }
+
+      function registerAgdaLanguage(monaco){
+        const id = languageConfig.Agda.monacoId;
+        monaco.languages.register({ id: id });
+        monaco.languages.setMonarchTokensProvider(id, {
+          keywords: [
+            'module','where','data','record','postulate','open','import','infix','infixl','infixr',
+            'let','in','with','forall','Set','Prop'
+          ],
+          operators: [':=','->','=>','=','+','-','*','/','|',':','<','>'],
+          symbols: /[:=><!~?&|+\-*\/\\]+/,
+          tokenizer: {
+            root: [
+              { include: '@whitespace' },
+              [/[A-Z][\w']*/, 'type.identifier'],
+              [/[a-zA-Z_][\w']*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
+              [/\d+(\.\d+)?/, 'number'],
+              [/[{}()\[\]]/, '@brackets'],
+              [/@symbols/, { cases: { '@operators': 'operator', '@default': '' } }]
+            ],
+            whitespace: [
+              [/[ \t\r\n]+/, ''],
+              [/--.*$/, 'comment'],
+              [/\{-/, 'comment', '@comment']
+            ],
+            comment: [
+              [/[^{}-]+/, 'comment'],
+              [/\{-/, 'comment', '@push'],
+              [/-\}/, 'comment', '@pop'],
+              [/[-{}]/, 'comment']
+            ]
+          }
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

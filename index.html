@@ -556,19 +556,27 @@
     adjustTextarea();
   }
 
+  function openEditor(choice){
+    const initPayload = {
+      proofAssistant: choice,
+      draft: rememberedContent || '',
+      attachedFileNames: rememberedFiles.map(file=>file.name),
+      sourceState: state,
+      createdAt: new Date().toISOString()
+    };
+
+    try{
+      sessionStorage.setItem('ivucxEditorInit', JSON.stringify(initPayload));
+    }catch(err){
+      console.warn('Failed to store editor init payload:', err);
+    }
+
+    const params = new URLSearchParams({ lang: choice });
+    window.location.href = `editor.html?${params.toString()}`;
+  }
+
   function handleSelection(choice){
-    const message = rememberedFiles.length > 0 
-      ? `${rememberedContent}\n\nSelected: ${choice}\nFiles: ${rememberedFiles.map(f=>f.name).join(', ')}`
-      : `${rememberedContent}\n\nSelected: ${choice}`;
-    alert('送信内容: ' + message);
-    
-    // Reset everything
-    input.value = '';
-    attachedFiles = [];
-    renderAttachments();
-    rememberedContent = '';
-    rememberedFiles = [];
-    exitSelectionMode(false);
+    openEditor(choice);
   }
 
   if(selectionCancel){
