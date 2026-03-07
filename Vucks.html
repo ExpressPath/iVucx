@@ -722,6 +722,185 @@
       line-height:1.35;
     }
 
+    .suggestion-pane{
+      position:fixed;
+      inset:0;
+      z-index:18;
+      pointer-events:none;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+      padding:20px 16px 140px;
+      opacity:0;
+      transform:translateY(10px);
+      transition:opacity .35s ease,transform .35s ease;
+    }
+
+    body.suggestions-open .suggestion-pane{
+      opacity:1;
+      transform:translateY(0);
+      pointer-events:auto;
+    }
+
+    .suggestion-panel{
+      width:min(920px, 100%);
+      max-height:calc(100vh - 180px);
+      max-height:calc(100dvh - 180px);
+      overflow:auto;
+      border-radius:20px;
+      border:1px solid rgba(17,17,17,0.1);
+      background:linear-gradient(180deg, #fbfcff, #f2f5fb);
+      color:#0f172a;
+      box-shadow:0 20px 44px rgba(15,23,42,0.12);
+      padding:16px 16px 12px;
+    }
+
+    body.mode-q .suggestion-panel{
+      border-color:rgba(255,255,255,0.16);
+      background:linear-gradient(180deg, #161a22, #0f131b);
+      color:#f3f6ff;
+      box-shadow:0 20px 44px rgba(0,0,0,0.45);
+    }
+
+    .suggestion-title{
+      margin:0;
+      font-size:13px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color:#4f647f;
+      font-weight:650;
+    }
+
+    body.mode-q .suggestion-title{
+      color:#98a9c7;
+    }
+
+    .suggestion-query{
+      margin:8px 0 14px;
+      font-size:20px;
+      line-height:1.25;
+      font-weight:640;
+      letter-spacing:.01em;
+      color:#0f172a;
+      word-break:break-word;
+    }
+
+    body.mode-q .suggestion-query{
+      color:#eef3ff;
+    }
+
+    .suggestion-loading{
+      min-height:120px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      color:#4f647f;
+      font-size:14px;
+    }
+
+    body.mode-q .suggestion-loading{
+      color:#aebee0;
+    }
+
+    .suggestion-loading .dot{
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:currentColor;
+      opacity:.28;
+      animation:suggest-dot 1.1s ease-in-out infinite;
+    }
+
+    .suggestion-loading .dot:nth-child(2){ animation-delay:.16s; }
+    .suggestion-loading .dot:nth-child(3){ animation-delay:.32s; }
+
+    @keyframes suggest-dot{
+      0%, 80%, 100%{ transform:translateY(0); opacity:.25; }
+      40%{ transform:translateY(-4px); opacity:.95; }
+    }
+
+    .suggestion-list{
+      list-style:none;
+      margin:0;
+      padding:0;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .suggestion-item{
+      display:flex;
+      align-items:flex-start;
+      gap:12px;
+      padding:11px 12px;
+      border-radius:12px;
+      border:1px solid rgba(15,23,42,0.08);
+      background:#ffffff;
+      color:#0f172a;
+      transition:transform .18s ease,border-color .18s ease,background-color .18s ease;
+    }
+
+    .suggestion-item:hover{
+      transform:translateX(2px);
+      border-color:rgba(37,99,235,0.28);
+      background:#f7faff;
+    }
+
+    body.mode-q .suggestion-item{
+      border-color:rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.04);
+      color:#edf2ff;
+    }
+
+    body.mode-q .suggestion-item:hover{
+      border-color:rgba(121,177,255,0.45);
+      background:rgba(87,132,209,0.14);
+    }
+
+    .suggestion-index{
+      width:24px;
+      min-width:24px;
+      height:24px;
+      border-radius:7px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#e8eefb;
+      color:#2f4b7a;
+      font-size:12px;
+      font-weight:700;
+      margin-top:1px;
+    }
+
+    body.mode-q .suggestion-index{
+      background:rgba(153,184,235,0.2);
+      color:#d9e8ff;
+    }
+
+    .suggestion-text{
+      font-size:14px;
+      line-height:1.45;
+      color:inherit;
+      word-break:break-word;
+    }
+
+    @media (max-width:700px){
+      .suggestion-pane{
+        padding:12px 10px 132px;
+      }
+
+      .suggestion-panel{
+        max-height:calc(100vh - 164px);
+        max-height:calc(100dvh - 164px);
+        border-radius:16px;
+      }
+
+      .suggestion-query{
+        font-size:18px;
+      }
+    }
+
     @media (max-width:700px){
       .blue-mode-panel{
         top:18px;
@@ -774,6 +953,14 @@
   </div>
 </div>
 
+<section class="suggestion-pane" id="suggestionPane" aria-live="polite" aria-label="Suggestion results">
+  <div class="suggestion-panel">
+    <h2 class="suggestion-title">Suggestions</h2>
+    <p class="suggestion-query" id="suggestionQuery"></p>
+    <div id="suggestionBody"></div>
+  </div>
+</section>
+
 <div class="selection-mode" id="selectionMode" style="display:none;">
   <button class="selection-cancel" id="selectionCancel" type="button" aria-label="Cancel">×</button>
   <div class="selection-option" data-value="Lean">Lean</div>
@@ -825,6 +1012,9 @@
   const container = document.getElementById('searchContainer');
   const sendButton = document.getElementById('sendButton');
   const attachmentList = document.getElementById('attachmentList');
+  const suggestionPane = document.getElementById('suggestionPane');
+  const suggestionQuery = document.getElementById('suggestionQuery');
+  const suggestionBody = document.getElementById('suggestionBody');
   const EDITOR_RETURN_KEY = 'ivucxEditorReturn';
   let attachedFiles = [];
   const MAX_ATTACHMENTS = 5;
@@ -1092,7 +1282,10 @@
   let blueModeRewards = [];
   let blueModeCheckToken = 0;
   let loginPopupDismissed = false;
+  let suggestionAbortController = null;
+  let hasSuggestionResults = false;
   const LOGIN_CHECK_TIMEOUT_MS = 3500;
+  const SUGGESTION_COUNT = 10;
   const POPUP_LOADING_TEXT = 'Checking server...';
   const DEFAULT_LOGIN_COPY = 'Enter your email address to receive an approval link and sign in.';
   const NO_RESPONSE_COPY = 'No response from server. Please continue with email approval login.';
@@ -1164,6 +1357,176 @@
       loginLoadingText.textContent = POPUP_LOADING_TEXT;
     }
     if(showPanel) showBlueModePanel();
+  }
+
+  function syncSearchDocking(){
+    if(!fixedWrapper) return;
+    if(hasSuggestionResults){
+      fixedWrapper.style.justifyContent = 'flex-end';
+      return;
+    }
+
+    if(container.classList.contains('expanded')){
+      fixedWrapper.style.justifyContent = 'flex-end';
+      return;
+    }
+
+    fixedWrapper.style.justifyContent = 'center';
+  }
+
+  function setSuggestionPaneOpen(isOpen){
+    hasSuggestionResults = isOpen;
+    bodyEl.classList.toggle('suggestions-open', isOpen);
+    syncSearchDocking();
+  }
+
+  function clearSuggestionPane(){
+    if(suggestionAbortController){
+      suggestionAbortController.abort();
+      suggestionAbortController = null;
+    }
+    if(sendButton){
+      sendButton.disabled = false;
+    }
+
+    if(suggestionBody){
+      suggestionBody.innerHTML = '';
+    }
+    if(suggestionQuery){
+      suggestionQuery.textContent = '';
+    }
+
+    setSuggestionPaneOpen(false);
+  }
+
+  function renderSuggestionLoading(query){
+    if(!suggestionBody || !suggestionQuery) return;
+    suggestionQuery.textContent = query;
+    suggestionBody.innerHTML = `
+      <div class="suggestion-loading">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span>Collecting suggestions...</span>
+      </div>
+    `;
+    setSuggestionPaneOpen(true);
+  }
+
+  function normalizeSuggestionText(item, index, query){
+    if(typeof item === 'string' && item.trim().length > 0){
+      return item.trim();
+    }
+
+    if(item && typeof item === 'object'){
+      if(typeof item.text === 'string' && item.text.trim().length > 0){
+        return item.text.trim();
+      }
+      if(typeof item.title === 'string' && item.title.trim().length > 0){
+        return item.title.trim();
+      }
+      if(typeof item.suggestion === 'string' && item.suggestion.trim().length > 0){
+        return item.suggestion.trim();
+      }
+    }
+
+    return `${query} - suggestion ${index + 1}`;
+  }
+
+  function renderSuggestionList(query, rawSuggestions){
+    if(!suggestionBody || !suggestionQuery) return;
+
+    const normalized = [];
+    const source = Array.isArray(rawSuggestions) ? rawSuggestions : [];
+    for(let i = 0; i < SUGGESTION_COUNT; i += 1){
+      normalized.push(normalizeSuggestionText(source[i], i, query));
+    }
+
+    suggestionQuery.textContent = query;
+    suggestionBody.innerHTML = '';
+
+    const list = document.createElement('ol');
+    list.className = 'suggestion-list';
+
+    normalized.forEach((text, index)=>{
+      const item = document.createElement('li');
+      item.className = 'suggestion-item';
+
+      const indexBadge = document.createElement('span');
+      indexBadge.className = 'suggestion-index';
+      indexBadge.textContent = String(index + 1);
+
+      const label = document.createElement('span');
+      label.className = 'suggestion-text';
+      label.textContent = text;
+
+      item.append(indexBadge, label);
+      list.appendChild(item);
+    });
+
+    suggestionBody.appendChild(list);
+    setSuggestionPaneOpen(true);
+  }
+
+  function renderSuggestionError(query, message){
+    renderSuggestionList(query, [message]);
+  }
+
+  async function requestSuggestions(query, fileNames){
+    if(!query) return;
+
+    if(suggestionAbortController){
+      suggestionAbortController.abort();
+      suggestionAbortController = null;
+    }
+
+    const controller = new AbortController();
+    suggestionAbortController = controller;
+    if(sendButton) sendButton.disabled = true;
+
+    renderSuggestionLoading(query);
+
+    try{
+      const payload = {
+        mode: bodyEl.classList.contains('mode-q') ? 'q' : 'a',
+        state,
+        query,
+        files: fileNames || [],
+        limit: SUGGESTION_COUNT
+      };
+
+      const res = await fetch('/api/suggest', {
+        method:'POST',
+        credentials:'include',
+        headers:{
+          'Content-Type':'application/json',
+          'Accept':'application/json'
+        },
+        body:JSON.stringify(payload),
+        signal:controller.signal
+      });
+
+      if(!res.ok){
+        throw new Error(`Suggest API failed: ${res.status}`);
+      }
+
+      const data = await res.json();
+      if(controller !== suggestionAbortController) return;
+      const suggestions = data && Array.isArray(data.suggestions) ? data.suggestions : [];
+      renderSuggestionList(query, suggestions);
+    }catch(err){
+      if(err && err.name === 'AbortError') return;
+      if(controller !== suggestionAbortController) return;
+      renderSuggestionError(query, 'Could not fetch suggestions from server.');
+    }finally{
+      if(controller === suggestionAbortController){
+        suggestionAbortController = null;
+        if(sendButton) sendButton.disabled = false;
+      }
+      if(!suggestionAbortController && controller.signal.aborted && sendButton){
+        sendButton.disabled = false;
+      }
+    }
   }
 
   function readBooleanField(payload, key){
@@ -1359,6 +1722,7 @@
     rememberedFiles = [];
     attachedFiles = [];
     renderAttachments();
+    clearSuggestionPane();
     fixedWrapper.style.removeProperty('display');
     bodyEl.classList.remove('login-check');
     bodyEl.classList.add('scrolled');
@@ -1428,7 +1792,9 @@
     container.classList.remove('expanded');
     expandedFixedHeight = null;
 
-    if(fixedWrapper) fixedWrapper.style.justifyContent = 'center';
+    if(fixedWrapper){
+      fixedWrapper.style.justifyContent = hasSuggestionResults ? 'flex-end' : 'center';
+    }
 
     container.style.height = '';
     if(input.value.length === 0){
@@ -1532,7 +1898,7 @@
 
   });
 
-  form.addEventListener('submit', e=>{
+  form.addEventListener('submit', async e=>{
 
     e.preventDefault();
 
@@ -1547,6 +1913,13 @@
       return;
     }
 
+    if(state === 0){
+      const attachedNames = hasFiles ? attachedFiles.map(file=>file.name) : [];
+      await requestSuggestions(v, attachedNames);
+      adjustTextarea();
+      return;
+    }
+
     const attachedNames = hasFiles ? attachedFiles.map(file=>file.name).join(', ') : '';
     const message = hasFiles ? `${v}\n\nFiles: ${attachedNames}` : v;
     alert('検索内容: ' + message);
@@ -1554,7 +1927,6 @@
     input.value = '';
     attachedFiles = [];
     renderAttachments();
-
     adjustTextarea();
 
   });
@@ -1643,6 +2015,10 @@
 
     state = next;
 
+    if(next !== 0){
+      clearSuggestionPane();
+    }
+
     if(previousState === 2 && next !== 2){
       exitBlueMode();
     }
@@ -1677,7 +2053,7 @@
 
   function shouldSkipScrollDetection(target){
     if(!(target instanceof Element)) return false;
-    return !!target.closest('.search-container.expanded, .login-popup-card, .blue-mode-panel');
+    return !!target.closest('.search-container.expanded, .login-popup-card, .blue-mode-panel, .suggestion-panel');
   }
 
   function handleScrollDelta(deltaY){
