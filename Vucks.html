@@ -67,6 +67,7 @@
     .search-container{
       width:100%;
       max-width:700px;
+      position:relative;
       padding:16px;
       text-align:center;
       pointer-events:auto;
@@ -338,6 +339,48 @@
       margin-top:14px;
       font-size:13px;
       opacity:.6;
+    }
+
+    .search-mode-close{
+      position:absolute;
+      right:16px;
+      bottom:calc(100% + 10px);
+      width:34px;
+      height:34px;
+      border-radius:50%;
+      border:1px solid rgba(15,23,42,0.18);
+      background:#ffffff;
+      color:#111;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      font-size:20px;
+      line-height:1;
+      cursor:pointer;
+      box-shadow:0 8px 18px rgba(15,23,42,0.12);
+      transition:background-color .2s ease,color .2s ease,transform .2s ease;
+    }
+
+    .search-mode-close:hover{
+      background:#111;
+      color:#fff;
+      transform:translateY(-1px);
+    }
+
+    body.suggestions-open .search-mode-close{
+      display:flex;
+    }
+
+    body.mode-q .search-mode-close{
+      border-color:rgba(153,184,235,0.55);
+      background:#0f141d;
+      color:#e7efff;
+      box-shadow:0 8px 18px rgba(0,0,0,0.36);
+    }
+
+    body.mode-q .search-mode-close:hover{
+      background:#e7efff;
+      color:#101826;
     }
 
     body.scrolled .hint,
@@ -1074,6 +1117,7 @@
         </svg>
       </button>
     </form>
+    <button class="search-mode-close" id="searchModeClose" type="button" aria-label="Back">×</button>
     <div class="attachment-list" id="attachmentList" aria-live="polite"></div>
 
     <div class="button-group">
@@ -1142,6 +1186,7 @@
   const input = document.getElementById('searchInput');
   const container = document.getElementById('searchContainer');
   const sendButton = document.getElementById('sendButton');
+  const searchModeClose = document.getElementById('searchModeClose');
   const attachmentList = document.getElementById('attachmentList');
   const suggestionPane = document.getElementById('suggestionPane');
   const suggestionBody = document.getElementById('suggestionBody');
@@ -1379,10 +1424,22 @@
 
   window.addEventListener('keydown', e=>{
     if(e.key !== 'Escape') return;
-    if(!loginPopup || !loginPopup.classList.contains('is-open')) return;
-    loginPopupDismissed = true;
-    closeLoginPopup(true);
+    if(loginPopup && loginPopup.classList.contains('is-open')){
+      loginPopupDismissed = true;
+      closeLoginPopup(true);
+      return;
+    }
+    if(hasSuggestionResults && state === 0){
+      e.preventDefault();
+      exitSearchMode();
+    }
   });
+
+  if(searchModeClose){
+    searchModeClose.addEventListener('click', ()=>{
+      exitSearchMode();
+    });
+  }
 
   if(withdrawBtn){
     withdrawBtn.addEventListener('click', ()=>{
@@ -1511,6 +1568,14 @@
     hasSuggestionResults = isOpen;
     bodyEl.classList.toggle('suggestions-open', isOpen);
     syncSearchDocking();
+  }
+
+  function exitSearchMode(){
+    if(!hasSuggestionResults || state !== 0) return;
+    clearSuggestionPane();
+    input.value = '';
+    lastInputValue = '';
+    adjustTextarea();
   }
 
   function clearSuggestionPane(){
@@ -2169,8 +2234,12 @@
     }
 
     if(state === 0){
+      const queryText = v;
       const attachedNames = hasFiles ? attachedFiles.map(file=>file.name) : [];
-      await requestSuggestions(v, attachedNames);
+      input.value = '';
+      lastInputValue = '';
+      adjustTextarea();
+      await requestSuggestions(queryText, attachedNames);
       adjustTextarea();
       return;
     }
@@ -2313,6 +2382,7 @@
 
   function handleScrollDelta(deltaY){
     if(isAnimating) return false;
+    if(hasSuggestionResults && state === 0) return false;
 
     wheelAccum += deltaY;
 
@@ -2333,6 +2403,10 @@
 
   window.addEventListener('wheel', e=>{
 
+    if(hasSuggestionResults && state === 0){
+      return;
+    }
+
     if(shouldSkipScrollDetection(e.target)){
       return;
     }
@@ -2350,6 +2424,7 @@
 
   window.addEventListener('touchmove', e=>{
     if(touchLastY === null || e.touches.length !== 1) return;
+    if(hasSuggestionResults && state === 0) return;
     if(shouldSkipScrollDetection(e.target)) return;
 
     const currentY = e.touches[0].clientY;
