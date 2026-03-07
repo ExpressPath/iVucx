@@ -65,24 +65,30 @@ function clamp(num, min, max) {
   return Math.max(min, Math.min(max, num));
 }
 
-function buildSuggestions(query, limit) {
+function buildSuggestions(query, offset, limit) {
   const q = query || 'your topic';
   const templates = [
-    `What is the quickest way to understand "${q}"?`,
-    `Create a beginner-to-advanced learning path for "${q}".`,
-    `List trusted sources to verify facts about "${q}".`,
-    `Compare the top 3 approaches related to "${q}".`,
-    `Summarize key risks and caveats for "${q}".`,
-    `Give practical examples where "${q}" is used in real projects.`,
-    `Suggest search keywords that find deeper results for "${q}".`,
-    `Explain "${q}" with one simple analogy and one technical analogy.`,
-    `Draft a checklist to evaluate solutions for "${q}".`,
-    `Propose next actions I can take today for "${q}".`
+    'Fast overview of "{q}" in 5 bullet points (Idea #{n}).',
+    'Beginner-to-advanced roadmap for "{q}" (Idea #{n}).',
+    'Trusted sources to validate "{q}" claims (Idea #{n}).',
+    'Top 3 competing approaches for "{q}" (Idea #{n}).',
+    'Main risks and caveats for "{q}" (Idea #{n}).',
+    'Real-world use cases of "{q}" (Idea #{n}).',
+    'High-signal search keywords for "{q}" (Idea #{n}).',
+    'Explain "{q}" with simple and technical analogies (Idea #{n}).',
+    'Evaluation checklist for "{q}" solutions (Idea #{n}).',
+    'Action plan to start "{q}" today (Idea #{n}).'
   ];
 
   const out = [];
   for (let i = 0; i < limit; i += 1) {
-    out.push(templates[i % templates.length]);
+    const absoluteIndex = offset + i;
+    const base = templates[absoluteIndex % templates.length];
+    out.push(
+      base
+        .replace(/{q}/g, q)
+        .replace(/{n}/g, String(absoluteIndex + 1))
+    );
   }
   return out;
 }
@@ -109,11 +115,13 @@ async function handleApi(req, res, pathname) {
       const query = typeof body.query === 'string' ? body.query.trim() : '';
       const mode = typeof body.mode === 'string' ? body.mode : 'a';
       const limit = clamp(Number(body.limit) || 10, 1, 10);
-      const suggestions = buildSuggestions(query, limit);
+      const offset = clamp(Number(body.offset) || 0, 0, 5000);
+      const suggestions = buildSuggestions(query, offset, limit);
 
       sendJson(res, 200, {
         mode,
         query,
+        offset,
         suggestions
       });
     } catch (err) {

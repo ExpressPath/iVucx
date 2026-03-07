@@ -48,12 +48,19 @@
     .fixed-wrapper{
       position:fixed;
       inset:0;
+      z-index:26;
       display:flex;
       align-items:center;
       justify-content:center;
       pointer-events:none;
       padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
       transition:justify-content .45s cubic-bezier(.4,0,.2,1);
+    }
+
+    body.suggestions-open .search-container{
+      max-width:min(980px, 100vw);
+      padding:0 16px calc(12px + env(safe-area-inset-bottom));
+      text-align:left;
     }
 
     .search-container{
@@ -87,6 +94,19 @@
       max-height:calc(100vh - 160px);
       max-height:calc(100dvh - 160px);
       flex-direction:row;
+    }
+
+    body.suggestions-open .search-box{
+      border-radius:22px;
+      border:1px solid rgba(15,23,42,0.14);
+      box-shadow:0 10px 30px rgba(15,23,42,0.12);
+      background:#ffffff;
+    }
+
+    body.mode-q.suggestions-open .search-box{
+      border-color:rgba(255,255,255,0.2);
+      box-shadow:0 14px 34px rgba(0,0,0,0.44);
+      background:#0f141d;
     }
 
     .search-container.expanded .search-box{
@@ -139,6 +159,15 @@
     body.mode-q .search-input{ color:#111; }
     body.scrolled .search-input{ color:#111; }
     body.login-check .search-input{ color:#fff; caret-color:#fff; }
+
+    body.suggestions-open .search-input{
+      color:#111;
+    }
+
+    body.mode-q.suggestions-open .search-input{
+      color:#eaf1ff;
+      caret-color:#eaf1ff;
+    }
 
     .send-button{
       flex:0 0 44px;
@@ -283,6 +312,12 @@
       pointer-events:none;
     }
 
+    body.suggestions-open .button-group{
+      opacity:0;
+      transform:translateY(-10px);
+      pointer-events:none;
+    }
+
     .sub-button{
       padding:10px 20px;
       border-radius:22px;
@@ -306,6 +341,11 @@
 
     body.scrolled .hint,
     body.login-check .hint{ opacity:0; }
+
+    body.suggestions-open .hint{
+      opacity:0;
+      pointer-events:none;
+    }
 
     .selection-mode{
       display:flex;
@@ -725,15 +765,15 @@
     .suggestion-pane{
       position:fixed;
       inset:0;
-      z-index:18;
+      z-index:14;
       pointer-events:none;
       display:flex;
       justify-content:center;
-      align-items:flex-start;
-      padding:20px 16px 140px;
+      align-items:stretch;
+      padding:16px 16px 122px;
       opacity:0;
-      transform:translateY(10px);
-      transition:opacity .35s ease,transform .35s ease;
+      transform:translateY(14px);
+      transition:opacity .36s ease,transform .36s cubic-bezier(.22,1,.36,1);
     }
 
     body.suggestions-open .suggestion-pane{
@@ -743,64 +783,102 @@
     }
 
     .suggestion-panel{
-      width:min(920px, 100%);
-      max-height:calc(100vh - 180px);
-      max-height:calc(100dvh - 180px);
+      width:min(980px, 100%);
+      max-height:calc(100vh - 148px);
+      max-height:calc(100dvh - 148px);
       overflow:auto;
-      border-radius:20px;
-      border:1px solid rgba(17,17,17,0.1);
-      background:linear-gradient(180deg, #fbfcff, #f2f5fb);
+      border-radius:26px;
+      border:1px solid rgba(15,23,42,0.1);
+      background:linear-gradient(180deg, rgba(251,252,255,0.96), rgba(243,246,251,0.96));
       color:#0f172a;
-      box-shadow:0 20px 44px rgba(15,23,42,0.12);
-      padding:16px 16px 12px;
+      box-shadow:0 18px 50px rgba(15,23,42,0.09);
+      padding:18px 16px 14px;
+      backdrop-filter:blur(6px);
     }
 
     body.mode-q .suggestion-panel{
-      border-color:rgba(255,255,255,0.16);
-      background:linear-gradient(180deg, #161a22, #0f131b);
+      border-color:rgba(255,255,255,0.15);
+      background:linear-gradient(180deg, rgba(20,24,34,0.92), rgba(12,15,23,0.92));
       color:#f3f6ff;
-      box-shadow:0 20px 44px rgba(0,0,0,0.45);
+      box-shadow:0 20px 52px rgba(0,0,0,0.48);
     }
 
-    .suggestion-title{
-      margin:0;
-      font-size:13px;
-      letter-spacing:.08em;
-      text-transform:uppercase;
-      color:#4f647f;
-      font-weight:650;
+    .suggestion-thread{
+      display:flex;
+      flex-direction:column;
+      gap:14px;
     }
 
-    body.mode-q .suggestion-title{
-      color:#98a9c7;
+    .chat-turn-user{
+      display:flex;
+      justify-content:flex-end;
     }
 
-    .suggestion-query{
-      margin:8px 0 14px;
-      font-size:20px;
-      line-height:1.25;
-      font-weight:640;
-      letter-spacing:.01em;
-      color:#0f172a;
+    .chat-user-bubble{
+      max-width:min(82%, 700px);
+      padding:11px 14px;
+      border-radius:18px 18px 4px 18px;
+      background:#111827;
+      color:#fff;
+      font-size:15px;
+      line-height:1.45;
       word-break:break-word;
+      box-shadow:0 10px 24px rgba(15,23,42,0.18);
     }
 
-    body.mode-q .suggestion-query{
-      color:#eef3ff;
+    body.mode-q .chat-user-bubble{
+      background:#dbe7ff;
+      color:#121a2d;
+      box-shadow:0 10px 24px rgba(0,0,0,0.3);
+    }
+
+    .chat-turn-assistant{
+      display:flex;
+      justify-content:flex-start;
+    }
+
+    .chat-assistant-card{
+      width:min(100%, 860px);
+      border-radius:18px;
+      border:1px solid rgba(15,23,42,0.11);
+      background:#ffffff;
+      padding:12px;
+      color:#111827;
+      box-shadow:0 8px 22px rgba(15,23,42,0.08);
+    }
+
+    body.mode-q .chat-assistant-card{
+      border-color:rgba(255,255,255,0.16);
+      background:rgba(255,255,255,0.04);
+      color:#eaf1ff;
+      box-shadow:none;
+    }
+
+    .chat-assistant-head{
+      font-size:12px;
+      letter-spacing:.07em;
+      text-transform:uppercase;
+      color:#52637f;
+      margin-bottom:8px;
+      font-weight:700;
+    }
+
+    body.mode-q .chat-assistant-head{
+      color:#9bb0d4;
     }
 
     .suggestion-loading{
-      min-height:120px;
+      min-height:74px;
       display:flex;
       align-items:center;
-      justify-content:center;
+      justify-content:flex-start;
       gap:10px;
       color:#4f647f;
       font-size:14px;
     }
 
     body.mode-q .suggestion-loading{
-      color:#aebee0;
+      color:#b2c4e7;
     }
 
     .suggestion-loading .dot{
@@ -838,13 +916,12 @@
       border:1px solid rgba(15,23,42,0.08);
       background:#ffffff;
       color:#0f172a;
-      transition:transform .18s ease,border-color .18s ease,background-color .18s ease;
+      transition:border-color .18s ease,background-color .18s ease;
     }
 
     .suggestion-item:hover{
-      transform:translateX(2px);
-      border-color:rgba(37,99,235,0.28);
-      background:#f7faff;
+      border-color:rgba(26,115,232,0.3);
+      background:#f8fbff;
     }
 
     body.mode-q .suggestion-item{
@@ -854,7 +931,7 @@
     }
 
     body.mode-q .suggestion-item:hover{
-      border-color:rgba(121,177,255,0.45);
+      border-color:rgba(143,185,255,0.4);
       background:rgba(87,132,209,0.14);
     }
 
@@ -885,19 +962,73 @@
       word-break:break-word;
     }
 
+    .show-more-wrap{
+      margin-top:12px;
+      display:flex;
+      justify-content:center;
+    }
+
+    .show-more-button{
+      border:1px solid #dadce0;
+      border-radius:999px;
+      height:38px;
+      min-width:152px;
+      padding:0 20px;
+      background:#fff;
+      color:#1a73e8;
+      font-size:14px;
+      font-weight:600;
+      cursor:pointer;
+      transition:background-color .2s ease,border-color .2s ease,transform .2s ease;
+    }
+
+    .show-more-button:hover{
+      background:#f8f9fa;
+      border-color:#c6c9ce;
+      transform:translateY(-1px);
+    }
+
+    .show-more-button:disabled{
+      opacity:.65;
+      cursor:wait;
+      transform:none;
+    }
+
+    body.mode-q .show-more-button{
+      border-color:rgba(153,184,235,0.5);
+      background:rgba(255,255,255,0.04);
+      color:#9fc3ff;
+    }
+
+    body.mode-q .show-more-button:hover{
+      background:rgba(133,171,241,0.14);
+      border-color:rgba(153,184,235,0.75);
+    }
+
+    .suggestion-error{
+      margin-top:8px;
+      font-size:13px;
+      color:#b42318;
+    }
+
+    body.mode-q .suggestion-error{
+      color:#ffb6b6;
+    }
+
     @media (max-width:700px){
       .suggestion-pane{
-        padding:12px 10px 132px;
+        padding:10px 10px 118px;
       }
 
       .suggestion-panel{
-        max-height:calc(100vh - 164px);
-        max-height:calc(100dvh - 164px);
-        border-radius:16px;
+        max-height:calc(100vh - 136px);
+        max-height:calc(100dvh - 136px);
+        border-radius:18px;
+        padding:12px 10px;
       }
 
-      .suggestion-query{
-        font-size:18px;
+      .chat-user-bubble{
+        max-width:92%;
       }
     }
 
@@ -955,9 +1086,7 @@
 
 <section class="suggestion-pane" id="suggestionPane" aria-live="polite" aria-label="Suggestion results">
   <div class="suggestion-panel">
-    <h2 class="suggestion-title">Suggestions</h2>
-    <p class="suggestion-query" id="suggestionQuery"></p>
-    <div id="suggestionBody"></div>
+    <div id="suggestionBody" class="suggestion-thread"></div>
   </div>
 </section>
 
@@ -1013,8 +1142,8 @@
   const sendButton = document.getElementById('sendButton');
   const attachmentList = document.getElementById('attachmentList');
   const suggestionPane = document.getElementById('suggestionPane');
-  const suggestionQuery = document.getElementById('suggestionQuery');
   const suggestionBody = document.getElementById('suggestionBody');
+  const suggestionPanel = suggestionPane ? suggestionPane.querySelector('.suggestion-panel') : null;
   const EDITOR_RETURN_KEY = 'ivucxEditorReturn';
   let attachedFiles = [];
   const MAX_ATTACHMENTS = 5;
@@ -1284,6 +1413,8 @@
   let loginPopupDismissed = false;
   let suggestionAbortController = null;
   let hasSuggestionResults = false;
+  let suggestionTurnSeq = 0;
+  let suggestionTurns = [];
   const LOGIN_CHECK_TIMEOUT_MS = 3500;
   const SUGGESTION_COUNT = 10;
   const POPUP_LOADING_TEXT = 'Checking server...';
@@ -1389,28 +1520,20 @@
       sendButton.disabled = false;
     }
 
+    suggestionTurns = [];
+
     if(suggestionBody){
       suggestionBody.innerHTML = '';
-    }
-    if(suggestionQuery){
-      suggestionQuery.textContent = '';
     }
 
     setSuggestionPaneOpen(false);
   }
 
-  function renderSuggestionLoading(query){
-    if(!suggestionBody || !suggestionQuery) return;
-    suggestionQuery.textContent = query;
-    suggestionBody.innerHTML = `
-      <div class="suggestion-loading">
-        <span class="dot"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
-        <span>Collecting suggestions...</span>
-      </div>
-    `;
-    setSuggestionPaneOpen(true);
+  function scrollSuggestionPanelToBottom(){
+    if(!suggestionPanel) return;
+    requestAnimationFrame(()=>{
+      suggestionPanel.scrollTop = suggestionPanel.scrollHeight;
+    });
   }
 
   function normalizeSuggestionText(item, index, query){
@@ -1433,47 +1556,110 @@
     return `${query} - suggestion ${index + 1}`;
   }
 
-  function renderSuggestionList(query, rawSuggestions){
-    if(!suggestionBody || !suggestionQuery) return;
-
-    const normalized = [];
+  function normalizeSuggestionBatch(rawSuggestions, query, startAt){
     const source = Array.isArray(rawSuggestions) ? rawSuggestions : [];
-    for(let i = 0; i < SUGGESTION_COUNT; i += 1){
-      normalized.push(normalizeSuggestionText(source[i], i, query));
+    const normalized = [];
+    for(let i = 0; i < source.length; i += 1){
+      normalized.push(normalizeSuggestionText(source[i], startAt + i, query));
     }
+    return normalized;
+  }
 
-    suggestionQuery.textContent = query;
+  function renderSuggestionThread(){
+    if(!suggestionBody) return;
+
     suggestionBody.innerHTML = '';
 
-    const list = document.createElement('ol');
-    list.className = 'suggestion-list';
+    if(suggestionTurns.length === 0){
+      setSuggestionPaneOpen(false);
+      return;
+    }
 
-    normalized.forEach((text, index)=>{
-      const item = document.createElement('li');
-      item.className = 'suggestion-item';
+    const thread = document.createElement('div');
+    thread.className = 'suggestion-thread';
 
-      const indexBadge = document.createElement('span');
-      indexBadge.className = 'suggestion-index';
-      indexBadge.textContent = String(index + 1);
+    suggestionTurns.forEach(turn=>{
+      const userRow = document.createElement('div');
+      userRow.className = 'chat-turn-user';
 
-      const label = document.createElement('span');
-      label.className = 'suggestion-text';
-      label.textContent = text;
+      const userBubble = document.createElement('div');
+      userBubble.className = 'chat-user-bubble';
+      userBubble.textContent = turn.query;
+      userRow.appendChild(userBubble);
+      thread.appendChild(userRow);
 
-      item.append(indexBadge, label);
-      list.appendChild(item);
+      const assistantRow = document.createElement('div');
+      assistantRow.className = 'chat-turn-assistant';
+
+      const assistantCard = document.createElement('div');
+      assistantCard.className = 'chat-assistant-card';
+
+      const head = document.createElement('div');
+      head.className = 'chat-assistant-head';
+      head.textContent = 'Suggestions';
+      assistantCard.appendChild(head);
+
+      if(turn.loading && turn.suggestions.length === 0){
+        const loading = document.createElement('div');
+        loading.className = 'suggestion-loading';
+        loading.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span><span>Collecting suggestions...</span>';
+        assistantCard.appendChild(loading);
+      }else{
+        const list = document.createElement('ol');
+        list.className = 'suggestion-list';
+
+        turn.suggestions.forEach((text, index)=>{
+          const item = document.createElement('li');
+          item.className = 'suggestion-item';
+
+          const indexBadge = document.createElement('span');
+          indexBadge.className = 'suggestion-index';
+          indexBadge.textContent = String(index + 1);
+
+          const label = document.createElement('span');
+          label.className = 'suggestion-text';
+          label.textContent = text;
+
+          item.append(indexBadge, label);
+          list.appendChild(item);
+        });
+
+        assistantCard.appendChild(list);
+      }
+
+      if(turn.error){
+        const error = document.createElement('div');
+        error.className = 'suggestion-error';
+        error.textContent = turn.error;
+        assistantCard.appendChild(error);
+      }
+
+      const canShowMore = turn.hasMore && turn.suggestions.length >= SUGGESTION_COUNT && !turn.error;
+      if(canShowMore){
+        const moreWrap = document.createElement('div');
+        moreWrap.className = 'show-more-wrap';
+
+        const moreBtn = document.createElement('button');
+        moreBtn.type = 'button';
+        moreBtn.className = 'show-more-button';
+        moreBtn.dataset.turnId = String(turn.id);
+        moreBtn.textContent = turn.loadingMore ? 'Loading...' : 'Show more';
+        moreBtn.disabled = !!turn.loadingMore;
+        moreWrap.appendChild(moreBtn);
+        assistantCard.appendChild(moreWrap);
+      }
+
+      assistantRow.appendChild(assistantCard);
+      thread.appendChild(assistantRow);
     });
 
-    suggestionBody.appendChild(list);
+    suggestionBody.appendChild(thread);
     setSuggestionPaneOpen(true);
+    scrollSuggestionPanelToBottom();
   }
 
-  function renderSuggestionError(query, message){
-    renderSuggestionList(query, [message]);
-  }
-
-  async function requestSuggestions(query, fileNames){
-    if(!query) return;
+  async function fetchSuggestionBatch(turn, append = false){
+    if(!turn) return;
 
     if(suggestionAbortController){
       suggestionAbortController.abort();
@@ -1482,17 +1668,26 @@
 
     const controller = new AbortController();
     suggestionAbortController = controller;
-    if(sendButton) sendButton.disabled = true;
 
-    renderSuggestionLoading(query);
+    const offset = append ? turn.suggestions.length : 0;
+
+    if(append){
+      turn.loadingMore = true;
+    }else{
+      turn.loading = true;
+      turn.loadingMore = false;
+      turn.error = '';
+    }
+    renderSuggestionThread();
 
     try{
       const payload = {
         mode: bodyEl.classList.contains('mode-q') ? 'q' : 'a',
         state,
-        query,
-        files: fileNames || [],
-        limit: SUGGESTION_COUNT
+        query: turn.query,
+        files: turn.files || [],
+        limit: SUGGESTION_COUNT,
+        offset
       };
 
       const res = await fetch('/api/suggest', {
@@ -1512,21 +1707,68 @@
 
       const data = await res.json();
       if(controller !== suggestionAbortController) return;
-      const suggestions = data && Array.isArray(data.suggestions) ? data.suggestions : [];
-      renderSuggestionList(query, suggestions);
+
+      const normalized = normalizeSuggestionBatch(data && data.suggestions, turn.query, offset);
+      if(append){
+        turn.suggestions = turn.suggestions.concat(normalized);
+      }else{
+        turn.suggestions = normalized;
+      }
+
+      turn.hasMore = normalized.length >= SUGGESTION_COUNT;
+      turn.error = '';
     }catch(err){
       if(err && err.name === 'AbortError') return;
       if(controller !== suggestionAbortController) return;
-      renderSuggestionError(query, 'Could not fetch suggestions from server.');
+      turn.error = 'Could not fetch suggestions from server.';
+      turn.hasMore = false;
     }finally{
       if(controller === suggestionAbortController){
         suggestionAbortController = null;
-        if(sendButton) sendButton.disabled = false;
       }
-      if(!suggestionAbortController && controller.signal.aborted && sendButton){
-        sendButton.disabled = false;
-      }
+      turn.loading = false;
+      turn.loadingMore = false;
+      if(sendButton) sendButton.disabled = false;
+      renderSuggestionThread();
     }
+  }
+
+  async function requestSuggestions(query, fileNames){
+    if(!query) return;
+
+    const turn = {
+      id: ++suggestionTurnSeq,
+      query,
+      files: Array.isArray(fileNames) ? [...fileNames] : [],
+      suggestions:[],
+      loading:true,
+      loadingMore:false,
+      hasMore:true,
+      error:''
+    };
+
+    suggestionTurns.push(turn);
+    if(sendButton) sendButton.disabled = true;
+    renderSuggestionThread();
+    await fetchSuggestionBatch(turn, false);
+  }
+
+  if(suggestionBody){
+    suggestionBody.addEventListener('click', e=>{
+      const target = e.target instanceof Element ? e.target : null;
+      if(!target) return;
+
+      const button = target.closest('.show-more-button');
+      if(!button) return;
+
+      const turnId = Number(button.dataset.turnId);
+      if(!Number.isFinite(turnId)) return;
+
+      const turn = suggestionTurns.find(entry=>entry.id === turnId);
+      if(!turn || turn.loading || turn.loadingMore || !turn.hasMore) return;
+
+      fetchSuggestionBatch(turn, true);
+    });
   }
 
   function readBooleanField(payload, key){
@@ -1815,6 +2057,17 @@
     const isInputEmpty = input.value.length === 0;
     if(isInputEmpty){
       collapseToInitialSearchBox(contentHeight);
+      return;
+    }
+
+    if(hasSuggestionResults){
+      container.classList.remove('expanded');
+      expandedFixedHeight = null;
+      if(fixedWrapper) fixedWrapper.style.justifyContent = 'flex-end';
+      container.style.height = '';
+      input.style.overflow = 'auto';
+      input.style.height = 'auto';
+      input.style.height = Math.min(contentHeight, 148) + 'px';
       return;
     }
 
