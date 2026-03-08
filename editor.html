@@ -379,6 +379,8 @@
       langBadgeEl.textContent = selectedLanguage;
       fileNameEl.textContent = selectedConfig.fileName;
 
+      updateRunnerInputVisibility(selectedLanguage);
+
       const restoredRunner = params.get('runner') || localStorage.getItem(RUNNER_STORAGE_KEY) || '';
       runnerEndpointEl.value = restoredRunner;
 
@@ -435,7 +437,10 @@
         statusEl.classList.toggle('error', !!isError);
       }
 
-      function setInitialOutputMessage(language, fileName, payload, runnerEndpoint, summary){
+      function updateRunnerInputVisibility(language){
+        const isCoq = language === 'Coq';
+        runnerEndpointEl.style.display = isCoq ? 'none' : 'block';
+      }
         const files = Array.isArray(payload.attachedFileNames) ? payload.attachedFileNames : [];
         const lines = [
           'Editor initialized.',
@@ -638,11 +643,6 @@
         setStatus('Validating Coq proof...');
         outputEl.textContent = 'jsCoqで証明を検証中...\n';
 
-        // validate only when Coq mode is selected
-        if (selectedLanguage !== 'Coq') {
-          return { status: 'skip', reason: 'Not Coq mode' };
-        }
-
         const isInScrolledMode = initPayload.sourceState === 1;
         if(!isInScrolledMode) {
           return { status: 'skip', reason: 'Not in gray mode' };
@@ -735,10 +735,13 @@
       async function runProof(){
         if(running) return;
 
-        const endpoint = runnerEndpointEl.value.trim();
-        localStorage.setItem(RUNNER_STORAGE_KEY, endpoint);
+        const isCoqMode = selectedLanguage === 'Coq';
+        const endpoint = isCoqMode ? '' : runnerEndpointEl.value.trim();
+        if (!isCoqMode) {
+          localStorage.setItem(RUNNER_STORAGE_KEY, endpoint);
+        }
 
-        if(!endpoint){
+        if(!isCoqMode && !endpoint){
           setStatus('Runner endpoint required', true);
           outputEl.textContent = [
             '[Configuration]',
@@ -753,9 +756,17 @@
         setStatus('Running...');
 
         const code = getEditorCode();
-        const isCoqMode = selectedLanguage === 'Coq';
+        const isCoqInScrolledMode = selectedLanguage === 'Coq' && initPayload.sourceState === 1;
 
         if (isCoqMode) {
+          // Coqモードの場合、jsCoqで判定のみ
+          const validation = await validateCoqProof(code);
+          running = false;
+          runBtn.disabled = false;
+          return;
+        }
+
+        if (isCoqInScrolledMode) {
           const validation = await validateCoqProof(code);
           if (validation.status !== 'allowed') {
             running = false;
