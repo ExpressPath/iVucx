@@ -441,7 +441,8 @@
         const isCoq = language === 'Coq';
         runnerEndpointEl.style.display = isCoq ? 'none' : 'block';
       }
-        const files = Array.isArray(payload.attachedFileNames) ? payload.attachedFileNames : [];
+
+      function setInitialOutputMessage(language, fileName, payload, runnerEndpoint, summary){
         const lines = [
           'Editor initialized.',
           'Language: ' + language,
