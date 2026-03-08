@@ -1093,8 +1093,15 @@
     function autoInitJsCoq() {
       if (jscoqInitGlobalPromise) return jscoqInitGlobalPromise;
       jscoqInitGlobalPromise = new Promise((resolve, reject) => {
+        const start = Date.now();
         function startJsCoq() {
           if (typeof JsCoq === 'undefined') {
+            if (Date.now() - start > 20000) {
+              const err = new Error('jsCoqスクリプトのロードに失敗しました（20秒タイムアウト）');
+              if (typeof setStatus === 'function') setStatus('jsCoqロード失敗', true);
+              reject(err);
+              return;
+            }
             setTimeout(startJsCoq, 100);
             return;
           }
@@ -1106,6 +1113,7 @@
             jscoqInstance = coq;
             resolve(coq);
           }).catch(function(err) {
+            if (typeof setStatus === 'function') setStatus('jsCoq初期化失敗', true);
             console.error('jsCoq initialization failed:', err);
             reject(err);
           });
@@ -1116,6 +1124,8 @@
     }
     // jsCoqスクリプトのロード完了後に初期化
     document.getElementById('jscoqScript').addEventListener('load', autoInitJsCoq);
+    // DOMContentLoaded後にも必ず初期化（両方で保証）
+    window.addEventListener('DOMContentLoaded', autoInitJsCoq);
   </script>
 </body>
 </html>
