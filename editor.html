@@ -259,6 +259,7 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="https://jscoq.github.io/jscoq/latest/dist/jscoq.css">
 </head>
 <body>
   <header class="topbar">
@@ -642,26 +643,26 @@
           return { status: 'skip', reason: 'Not in gray mode' };
         }
 
+        if (!jscoqInstance) {
+          setStatus('Coq validation failed', true);
+          outputEl.textContent = '[Coq Validation]\njsCoqが初期化されていません。ページをリロードしてください。';
+          return { status: 'error', proof_state: 'NN', reason: 'jsCoq not initialized' };
+        }
+
         try {
-          const validation = analyzeCoqCode(code);
-          if (!validation.isValid) {
-            setStatus('Coq validation failed', true);
-            outputEl.textContent = '[Coq Validation]\n' + validation.error;
-            return { status: 'rejected', proof_state: 'NN', reason: validation.error };
-          }
-
-          if (validation.hasError) {
-            setStatus('Coq validation failed', true);
-            outputEl.textContent = '[Coq Validation]\nコード内Coqエラーが検出されました:\n' + validation.error;
-            let proofState = validation.hasQed ? 'YN' : 'NN';
-            return { status: 'rejected', proof_state: proofState, reason: 'Coq execution error' };
-          }
-
-          if (validation.hasQed) {
+          // jsCoqでコードを実行
+          await jscoqInstance.execute(code);
+          
+          // エラーが出なかった場合、証明の終了方法をチェック
+          const trimmed = code.trim();
+          const hasQed = /\bQed\./.test(trimmed);
+          const hasAdmitted = /\bAdmitted\./.test(trimmed);
+          
+          if (hasQed) {
             setStatus('Coq proof verified (YY)');
             outputEl.textContent = '[Coq Validation Success]\n証明は Qed. で完成しています (YY状態)';
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid proved theorem' };
-          } else if (validation.hasAdmitted) {
+          } else if (hasAdmitted) {
             setStatus('Coq proof accepted (NY)');
             outputEl.textContent = '[Coq Validation Success]\n証明は Admitted. で暫定受け入れです (NY状態)';
             return { status: 'allowed', proof_state: 'NY', reason: 'Admitted by user' };
@@ -671,9 +672,13 @@
             return { status: 'rejected', proof_state: 'NN', reason: 'Proof not closed' };
           }
         } catch (err) {
-          setStatus('Coq validation error', true);
-          outputEl.textContent = '[Coq Validation Error]\n' + String(err);
-          return { status: 'error', proof_state: 'NN', reason: String(err) };
+          // jsCoq実行でエラーが出た場合、YNまたはNNとして拒否
+          setStatus('Coq validation failed', true);
+          const errorMsg = String(err);
+          outputEl.textContent = '[Coq Validation]\njsCoq実行エラー:\n' + errorMsg;
+          const hasQed = /\bQed\./.test(code.trim());
+          const proofState = hasQed ? 'YN' : 'NN';
+          return { status: 'rejected', proof_state: proofState, reason: 'Coq execution error: ' + errorMsg };
         }
       }
 
@@ -1011,6 +1016,23 @@
         });
       }
     })();
+  </script>
+  <div id="coq" style="display:none;"></div>
+  <script src="https://jscoq.github.io/jscoq/latest/dist/jscoq.js"></script>
+  <script>
+    // jsCoq initialization for Coq validation
+    let jscoqInstance = null;
+    if (typeof JsCoq !== 'undefined') {
+      JsCoq.start('#coq', {
+        base_path: 'https://jscoq.github.io/jscoq/latest/',
+        init_pkgs: ['coq'],
+        all_pkgs: ['coq']
+      }).then(function(coq) {
+        jscoqInstance = coq;
+      }).catch(function(err) {
+        console.error('jsCoq initialization failed:', err);
+      });
+    }
   </script>
 </body>
 </html>
