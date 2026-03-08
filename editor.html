@@ -633,6 +633,95 @@
         setStatus('File pasted');
       }
 
+      async function validateCoqProof(code){
+        setStatus('Validating Coq proof...');
+        outputEl.textContent = 'jsCoqで証明を検証中...\n';
+
+        const isInScrolledMode = initPayload.sourceState === 1;
+        if(!isInScrolledMode) {
+          return { status: 'skip', reason: 'Not in gray mode' };
+        }
+
+        try {
+          const validation = analyzeCoqCode(code);
+          if (!validation.isValid) {
+            setStatus('Coq validation failed', true);
+            outputEl.textContent = '[Coq Validation]\n' + validation.error;
+            return { status: 'rejected', proof_state: 'NN', reason: validation.error };
+          }
+
+          if (validation.hasError) {
+            setStatus('Coq validation failed', true);
+            outputEl.textContent = '[Coq Validation]\nコード内Coqエラーが検出されました:\n' + validation.error;
+            let proofState = validation.hasQed ? 'YN' : 'NN';
+            return { status: 'rejected', proof_state: proofState, reason: 'Coq execution error' };
+          }
+
+          if (validation.hasQed) {
+            setStatus('Coq proof verified (YY)');
+            outputEl.textContent = '[Coq Validation Success]\n証明は Qed. で完成しています (YY状態)';
+            return { status: 'allowed', proof_state: 'YY', reason: 'Valid proved theorem' };
+          } else if (validation.hasAdmitted) {
+            setStatus('Coq proof accepted (NY)');
+            outputEl.textContent = '[Coq Validation Success]\n証明は Admitted. で暫定受け入れです (NY状態)';
+            return { status: 'allowed', proof_state: 'NY', reason: 'Admitted by user' };
+          } else {
+            setStatus('Coq validation failed', true);
+            outputEl.textContent = '[Coq Validation]\n証明が Qed. または Admitted. で終わっていません';
+            return { status: 'rejected', proof_state: 'NN', reason: 'Proof not closed' };
+          }
+        } catch (err) {
+          setStatus('Coq validation error', true);
+          outputEl.textContent = '[Coq Validation Error]\n' + String(err);
+          return { status: 'error', proof_state: 'NN', reason: String(err) };
+        }
+      }
+
+      function analyzeCoqCode(code) {
+        if (!code || typeof code !== 'string') {
+          return { isValid: false, error: 'Code is empty' };
+        }
+
+        const trimmed = code.trim();
+        const lines = trimmed.split(/\r?\n/);
+        
+        let hasError = false;
+        let errorMsg = '';
+        let hasQed = false;
+        let hasAdmitted = false;
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          
+          if (line.includes('Qed.')) {
+            hasQed = true;
+          }
+          if (line.includes('Admitted.')) {
+            hasAdmitted = true;
+          }
+          
+          if (line.includes('Sorry') || line.includes('admit')) {
+            hasError = true;
+            errorMsg = 'Unsupported proof term found: ' + line;
+          }
+        }
+
+        if (!hasQed && !hasAdmitted) {
+          hasError = true;
+          if (!errorMsg) {
+            errorMsg = 'Proof must end with Qed. or Admitted.';
+          }
+        }
+
+        return {
+          isValid: hasQed || hasAdmitted,
+          hasError: hasError,
+          error: errorMsg,
+          hasQed: hasQed,
+          hasAdmitted: hasAdmitted
+        };
+      }
+
       async function runProof(){
         if(running) return;
 
@@ -653,18 +742,34 @@
         runBtn.disabled = true;
         setStatus('Running...');
 
+        const code = getEditorCode();
+        const isCoqInScrolledMode = selectedLanguage === 'Coq' && initPayload.sourceState === 1;
+
+        if (isCoqInScrolledMode) {
+          const validation = await validateCoqProof(code);
+          if (validation.status !== 'allowed') {
+            running = false;
+            runBtn.disabled = false;
+            return;
+          }
+        }
+
         const payload = {
           proofAssistant: selectedLanguage,
           language: selectedLanguage.toLowerCase(),
           fileName: selectedConfig.fileName,
           summary: summaryText,
-          code: getEditorCode(),
+          code: code,
           context: {
             draftCreatedAt: initPayload.createdAt || null,
             attachedFileNames: Array.isArray(initPayload.attachedFileNames) ? initPayload.attachedFileNames : [],
             summaryLength: summaryText.length
           }
         };
+
+        if (isCoqInScrolledMode) {
+          payload.proof_state = 'YY';
+        }
 
         try{
           const response = await fetch(endpoint, {
