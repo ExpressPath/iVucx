@@ -404,13 +404,16 @@
       // Coqの場合はjsCoq初期化完了までRunボタンを無効化
       if(selectedLanguage === 'Coq') {
         runBtn.disabled = true;
-        jscoqInitPromise = waitJsCoqReady().then(()=>{
-          jscoqReady = true;
-          runBtn.disabled = false;
-        }).catch(()=>{
-          setStatus('jsCoq初期化失敗', true);
-          runBtn.disabled = true;
-        });
+        // グローバル初期化Promiseを利用
+        jscoqInitPromise = (typeof autoInitJsCoq === 'function' ? autoInitJsCoq() : Promise.reject())
+          .then(()=>{
+            jscoqReady = true;
+            runBtn.disabled = false;
+          })
+          .catch(()=>{
+            setStatus('jsCoq初期化失敗', true);
+            runBtn.disabled = true;
+          });
       }
 
       backBtn.addEventListener('click', ()=>{
