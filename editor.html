@@ -453,9 +453,7 @@
           lines.push('Summary is stored separately (' + summary.length + ' chars).');
         }
 
-        if(files.length > 0){
-          lines.push('Attached files from previous step: ' + files.join(', '));
-        }
+        // files変数は未定義のため削除
 
         if(runnerEndpoint){
           lines.push('Runner endpoint: ' + runnerEndpoint);
