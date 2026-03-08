@@ -1,0 +1,17 @@
+{
+  "name": "ivucx",
+  "version": "1.0.0",
+  "description": "iVucx - Interactive Proof Assistant Editor",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'No build step required'",
+    "start": "vercel dev"
+  },
+  "keywords": ["proof-assistant", "coq", "lean", "isabelle", "agda"],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
