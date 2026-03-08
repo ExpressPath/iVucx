@@ -1085,7 +1085,7 @@
     })();
   </script>
   <div id="coq" style="display:none;"></div>
-  <script src="https://jscoq.github.io/jscoq/3.0.0/dist/jscoq.js"></script>
+  <script id="jscoqScript" src="https://jscoq.github.io/jscoq/3.0.0/dist/jscoq.js" defer></script>
   <script>
     // jsCoq initialization for Coq validation（自動化＆Promise管理）
     let jscoqInstance = null;
@@ -1114,8 +1114,8 @@
       });
       return jscoqInitGlobalPromise;
     }
-    // ページロード時に自動初期化
-    window.addEventListener('DOMContentLoaded', autoInitJsCoq);
+    // jsCoqスクリプトのロード完了後に初期化
+    document.getElementById('jscoqScript').addEventListener('load', autoInitJsCoq);
   </script>
 </body>
 </html>
