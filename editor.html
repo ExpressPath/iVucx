@@ -389,13 +389,29 @@
         : (typeof initPayload.draft === 'string' ? initPayload.draft : '');
       const initialDraft = '';
 
+
       let editorInstance = null;
       let useFallbackEditor = false;
       let monacoRef = null;
       let running = false;
+      let jscoqReady = false;
+      let jscoqInitPromise = null;
+
 
       setStatus('Ready');
       setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, restoredRunner, summaryText);
+
+      // Coqの場合はjsCoq初期化完了までRunボタンを無効化
+      if(selectedLanguage === 'Coq') {
+        runBtn.disabled = true;
+        jscoqInitPromise = waitJsCoqReady().then(()=>{
+          jscoqReady = true;
+          runBtn.disabled = false;
+        }).catch(()=>{
+          setStatus('jsCoq初期化失敗', true);
+          runBtn.disabled = true;
+        });
+      }
 
       backBtn.addEventListener('click', ()=>{
         handleBackNavigation();
@@ -638,6 +654,20 @@
         setStatus('File pasted');
       }
 
+
+      async function waitJsCoqReady(timeoutMs = 10000) {
+        // jscoqInstanceがセットされるまで待つ
+        return new Promise((resolve, reject) => {
+          const start = Date.now();
+          function check() {
+            if(jscoqInstance) return resolve();
+            if(Date.now() - start > timeoutMs) return reject(new Error('jsCoq初期化タイムアウト'));
+            setTimeout(check, 100);
+          }
+          check();
+        });
+      }
+
       async function validateCoqProof(code){
         setStatus('Validating Coq proof...');
         outputEl.textContent = 'jsCoqで証明を検証中...\n';
@@ -645,6 +675,17 @@
         const isInScrolledMode = initPayload.sourceState === 1;
         if(!isInScrolledMode) {
           return { status: 'skip', reason: 'Not in gray mode' };
+        }
+
+        // jsCoq初期化を確実に待つ
+        try {
+          if(!jscoqInstance) {
+            await waitJsCoqReady();
+          }
+        } catch(e) {
+          setStatus('Coq validation failed', true);
+          outputEl.textContent = '[Coq Validation]\njsCoqが初期化されていません（タイムアウト）。ページをリロードしてください。';
+          return { status: 'error', proof_state: 'NN', reason: 'jsCoq not initialized' };
         }
 
         if (!jscoqInstance) {
@@ -656,12 +697,10 @@
         try {
           // jsCoqでコードを実行
           await jscoqInstance.execute(code);
-          
           // エラーが出なかった場合、証明の終了方法をチェック
           const trimmed = code.trim();
           const hasQed = /\bQed\./.test(trimmed);
           const hasAdmitted = /\bAdmitted\./.test(trimmed);
-          
           if (hasQed) {
             setStatus('Coq proof verified (YY)');
             outputEl.textContent = '[Coq Validation Success]\n証明は Qed. で完成しています (YY状態)';
@@ -676,7 +715,6 @@
             return { status: 'rejected', proof_state: 'NN', reason: 'Proof not closed' };
           }
         } catch (err) {
-          // jsCoq実行でエラーが出た場合、YNまたはNNとして拒否
           setStatus('Coq validation failed', true);
           const errorMsg = String(err);
           outputEl.textContent = '[Coq Validation]\njsCoq実行エラー:\n' + errorMsg;
@@ -758,6 +796,17 @@
         const isCoqInScrolledMode = selectedLanguage === 'Coq' && initPayload.sourceState === 1;
 
         if (isCoqMode) {
+          // jsCoq初期化を確実に待つ
+          if(jscoqInitPromise) {
+            try { await jscoqInitPromise; } catch(e) {}
+          }
+          if(!jscoqReady) {
+            setStatus('jsCoq未初期化', true);
+            outputEl.textContent = '[Coq Validation]\njsCoqが初期化されていません。ページをリロードしてください。';
+            running = false;
+            runBtn.disabled = false;
+            return;
+          }
           // Coqモードの場合、jsCoqで判定のみ
           const validation = await validateCoqProof(code);
           running = false;
