@@ -1084,25 +1084,35 @@
   <div id="coq" style="display:none;"></div>
   <script src="https://jscoq.github.io/jscoq/3.0.0/dist/jscoq.js"></script>
   <script>
-    // jsCoq initialization for Coq validation
+    // jsCoq initialization for Coq validation（自動化＆Promise管理）
     let jscoqInstance = null;
-    try {
-      if (typeof JsCoq !== 'undefined') {
-        JsCoq.start('#coq', {
-          base_path: 'https://jscoq.github.io/jscoq/3.0.0/',
-          init_pkgs: ['coq'],
-          all_pkgs: ['coq']
-        }).then(function(coq) {
-          jscoqInstance = coq;
-        }).catch(function(err) {
-          console.error('jsCoq initialization failed:', err);
-        });
-      } else {
-        console.error('JsCoq is not loaded');
-      }
-    } catch (e) {
-      console.error('Error initializing jsCoq:', e);
+    let jscoqInitGlobalPromise = null;
+    function autoInitJsCoq() {
+      if (jscoqInitGlobalPromise) return jscoqInitGlobalPromise;
+      jscoqInitGlobalPromise = new Promise((resolve, reject) => {
+        function startJsCoq() {
+          if (typeof JsCoq === 'undefined') {
+            setTimeout(startJsCoq, 100);
+            return;
+          }
+          JsCoq.start('#coq', {
+            base_path: 'https://jscoq.github.io/jscoq/3.0.0/',
+            init_pkgs: ['coq'],
+            all_pkgs: ['coq']
+          }).then(function(coq) {
+            jscoqInstance = coq;
+            resolve(coq);
+          }).catch(function(err) {
+            console.error('jsCoq initialization failed:', err);
+            reject(err);
+          });
+        }
+        startJsCoq();
+      });
+      return jscoqInitGlobalPromise;
     }
+    // ページロード時に自動初期化
+    window.addEventListener('DOMContentLoaded', autoInitJsCoq);
   </script>
 </body>
 </html>
