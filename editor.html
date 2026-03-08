@@ -730,7 +730,6 @@
           error: errorMsg,
           hasQed: hasQed,
           hasAdmitted: hasAdmitted
-        };
       }
 
       async function runProof(){
@@ -1035,20 +1034,26 @@
     })();
   </script>
   <div id="coq" style="display:none;"></div>
-  <script src="https://jscoq.github.io/jscoq/latest/dist/jscoq.js"></script>
+  <script src="https://jscoq.github.io/jscoq/3.0.0/dist/jscoq.js"></script>
   <script>
     // jsCoq initialization for Coq validation
     let jscoqInstance = null;
-    if (typeof JsCoq !== 'undefined') {
-      JsCoq.start('#coq', {
-        base_path: 'https://jscoq.github.io/jscoq/latest/',
-        init_pkgs: ['coq'],
-        all_pkgs: ['coq']
-      }).then(function(coq) {
-        jscoqInstance = coq;
-      }).catch(function(err) {
-        console.error('jsCoq initialization failed:', err);
-      });
+    try {
+      if (typeof JsCoq !== 'undefined') {
+        JsCoq.start('#coq', {
+          base_path: 'https://jscoq.github.io/jscoq/3.0.0/',
+          init_pkgs: ['coq'],
+          all_pkgs: ['coq']
+        }).then(function(coq) {
+          jscoqInstance = coq;
+        }).catch(function(err) {
+          console.error('jsCoq initialization failed:', err);
+        });
+      } else {
+        console.error('JsCoq is not loaded');
+      }
+    } catch (e) {
+      console.error('Error initializing jsCoq:', e);
     }
   </script>
 </body>
