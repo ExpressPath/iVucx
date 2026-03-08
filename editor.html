@@ -638,6 +638,11 @@
         setStatus('Validating Coq proof...');
         outputEl.textContent = 'jsCoqで証明を検証中...\n';
 
+        // validate only when Coq mode is selected
+        if (selectedLanguage !== 'Coq') {
+          return { status: 'skip', reason: 'Not Coq mode' };
+        }
+
         const isInScrolledMode = initPayload.sourceState === 1;
         if(!isInScrolledMode) {
           return { status: 'skip', reason: 'Not in gray mode' };
@@ -748,9 +753,9 @@
         setStatus('Running...');
 
         const code = getEditorCode();
-        const isCoqInScrolledMode = selectedLanguage === 'Coq' && initPayload.sourceState === 1;
+        const isCoqMode = selectedLanguage === 'Coq';
 
-        if (isCoqInScrolledMode) {
+        if (isCoqMode) {
           const validation = await validateCoqProof(code);
           if (validation.status !== 'allowed') {
             running = false;
