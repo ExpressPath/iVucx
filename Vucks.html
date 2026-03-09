@@ -1351,7 +1351,8 @@
     const initPayload = {
       proofAssistant: choice,
       summary: rememberedContent || '',
-      draft: rememberedContent || '',
+      draft: '',
+      keepSummaryBackground: true,
       attachedFileNames: rememberedFiles.map(file=>file.name),
       sourceState: state,
       createdAt: new Date().toISOString()

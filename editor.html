@@ -400,9 +400,11 @@
       const summaryText = typeof initPayload.summary === 'string'
         ? initPayload.summary
         : (typeof initPayload.draft === 'string' ? initPayload.draft : '');
-      const initialDraft = typeof initPayload.draft === 'string'
-        ? initPayload.draft
-        : summaryText;
+      const initialDraft = initPayload.keepSummaryBackground
+        ? ''
+        : (typeof initPayload.draft === 'string'
+          ? initPayload.draft
+          : summaryText);
 
 
       let editorInstance = null;
@@ -777,12 +779,12 @@
           }
           if (closure.proofState === 'NY') {
             setStatus('Coq proof accepted (NY)');
-            outputEl.textContent = '[Coq Validation Success]\n証明は Admitted. で暫定受け入れです (NY状態)';
-            return { status: 'allowed', proof_state: 'NY', reason: 'Admitted by user' };
+            outputEl.textContent = '[Coq Validation Success]\n証明は ' + closure.closer + ' で暫定受け入れです (NY状態)';
+            return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
           }
 
           setStatus('Coq validation failed', true);
-          outputEl.textContent = '[Coq Validation]\n証明が Qed. または Admitted. で終わっていません';
+          outputEl.textContent = '[Coq Validation]\n証明が Qed. / Defined. / Admitted. / Conjecture で終わっていません';
           return { status: 'rejected', proof_state: 'NN', reason: 'Proof not closed' };
         } catch (err) {
           setStatus('Coq validation failed', true);
@@ -806,6 +808,9 @@
         if(/Admitted\.\s*$/.test(normalized)){
           return { proofState: 'NY', closer: 'Admitted.' };
         }
+        if(isConjectureTail(normalized)){
+          return { proofState: 'NY', closer: 'Conjecture.' };
+        }
         if(/Defined\.\s*$/.test(normalized)){
           return { proofState: 'YY', closer: 'Defined.' };
         }
@@ -813,7 +818,20 @@
           return { proofState: 'YY', closer: 'Qed.' };
         }
 
-        return { proofState: 'NN', reason: '証明は最後を Qed. か Admitted. で閉じてください。' };
+        return { proofState: 'NN', reason: '証明は最後を Qed. / Defined. / Admitted. / Conjecture で閉じてください。' };
+      }
+
+      function isConjectureTail(normalized){
+        const matches = Array.from(normalized.matchAll(/\bConjecture\b/g));
+        if(matches.length === 0) return false;
+        const last = matches[matches.length - 1];
+        const idx = typeof last.index === 'number' ? last.index : -1;
+        if(idx < 0) return false;
+        const tail = normalized.slice(idx).trim();
+        if(!tail.endsWith('.')) return false;
+        const dotCount = (tail.match(/\./g) || []).length;
+        if(dotCount !== 1) return false;
+        return true;
       }
 
       function stripCoqCommentsAndStrings(input){
