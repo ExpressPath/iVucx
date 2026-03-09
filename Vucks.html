@@ -1360,7 +1360,7 @@
     try{
       sessionStorage.setItem('ivucxEditorInit', JSON.stringify(initPayload));
     }catch(err){
-      console.warn('Failed to store editor init payload:', err);
+      // ignore storage failure
     }
 
     const params = new URLSearchParams({ lang: choice });
@@ -1632,6 +1632,17 @@
     return normalized;
   }
 
+  function buildSuggestionTurnKey(query, fileNames){
+    const normalizedQuery = String(query || '').trim().toLowerCase();
+    const normalizedFiles = Array.isArray(fileNames)
+      ? fileNames
+          .map(name=>String(name || '').trim().toLowerCase())
+          .filter(Boolean)
+          .sort()
+      : [];
+    return normalizedQuery + '||' + normalizedFiles.join('|');
+  }
+
   function renderSuggestionThread(){
     if(!suggestionBody) return;
 
@@ -1802,11 +1813,21 @@
 
   async function requestSuggestions(query, fileNames){
     if(!query) return;
+    const turnKey = buildSuggestionTurnKey(query, fileNames);
+    const alreadyShown = suggestionTurns.some(turn=>{
+      if(typeof turn.key === 'string') return turn.key === turnKey;
+      return buildSuggestionTurnKey(turn.query, turn.files) === turnKey;
+    });
+    if(alreadyShown){
+      renderSuggestionThread();
+      return;
+    }
 
     const turn = {
       id: ++suggestionTurnSeq,
       query,
       files: Array.isArray(fileNames) ? [...fileNames] : [],
+      key: turnKey,
       suggestions:[],
       loading:true,
       loadingMore:false,
