@@ -410,6 +410,7 @@
       let running = false;
       let jscoqReady = false;
       let jscoqInitPromise = null;
+      let jscoqInitError = '';
 
 
       setStatus('Ready');
@@ -515,10 +516,12 @@
             return autoInitJsCoq();
           })
           .then(()=>{
+            jscoqInitError = '';
             jscoqReady = true;
             runBtn.disabled = false;
           })
-          .catch(()=>{
+          .catch((err)=>{
+            jscoqInitError = err && err.message ? err.message : String(err);
             setStatus('jsCoq初期化失敗', true);
             runBtn.disabled = true;
           });
@@ -907,7 +910,7 @@
           }
           if(!jscoqReady) {
             setStatus('jsCoq未初期化', true);
-            outputEl.textContent = '[Coq Validation]\njsCoqの初期化に失敗しました。しばらく待って再実行してください。';
+            outputEl.textContent = '[Coq Validation]\njsCoqの初期化に失敗しました。\n詳細: ' + (jscoqInitError || '(unknown)');
             running = false;
             runBtn.disabled = false;
             return;
@@ -1190,11 +1193,13 @@
   <script>
     // jsCoq initialization for Coq validation（自動化＆Promise管理）
     const JSCOQ_VERSION = '0.17.1';
-    const JSCOQ_BASE_URL = 'https://cdn.jsdelivr.net/npm/jscoq@' + JSCOQ_VERSION + '/';
-    const JSCOQ_MODULE_URLS = [
-      JSCOQ_BASE_URL + 'jscoq.js',
-      'https://unpkg.com/jscoq@' + JSCOQ_VERSION + '/jscoq.js'
-    ];
+    const hasHttpOrigin = !!(window.location && window.location.origin && window.location.origin !== 'null');
+    const PROXY_BASE = hasHttpOrigin ? new URL('/api/jscoq/', window.location.origin).toString() : null;
+    const CDN_BASE = 'https://cdn.jsdelivr.net/npm/jscoq@' + JSCOQ_VERSION + '/';
+    const JSCOQ_BASE_URL = PROXY_BASE || CDN_BASE;
+    const JSCOQ_MODULE_URLS = PROXY_BASE
+      ? [PROXY_BASE + 'jscoq.js', CDN_BASE + 'jscoq.js', 'https://unpkg.com/jscoq@' + JSCOQ_VERSION + '/jscoq.js']
+      : [CDN_BASE + 'jscoq.js', 'https://unpkg.com/jscoq@' + JSCOQ_VERSION + '/jscoq.js'];
 
     let jscoqInstance = null;
     let jscoqManager = null;

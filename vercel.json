@@ -3,6 +3,10 @@
   "outputDirectory": ".",
   "routes": [
     {
+      "src": "/api/jscoq/(.*)",
+      "dest": "/api/jscoq-proxy.js?path=$1"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/$1"
     },
