@@ -501,7 +501,11 @@
         });
       }
 
-      function initializeCoqRuntime(){
+      function initializeCoqRuntime(forceRetry = false){
+        if(jscoqInitPromise && !forceRetry){
+          return jscoqInitPromise;
+        }
+        jscoqReady = false;
         runBtn.disabled = true;
         jscoqInitPromise = waitForAutoInitJsCoq()
           .then(()=>{
@@ -518,6 +522,7 @@
             setStatus('jsCoq初期化失敗', true);
             runBtn.disabled = true;
           });
+        return jscoqInitPromise;
       }
 
       function setInitialOutputMessage(language, fileName, payload, runnerEndpoint, summary){
@@ -759,8 +764,7 @@
 
         try {
           // 実行ごとに環境をリセットして前回の定義を残さない。
-          await jscoqInstance.execute('Reset Initial.');
-          await jscoqInstance.execute(code);
+          await jscoqInstance.execute('Reset Initial.\n' + code);
 
           if (closure.proofState === 'YY') {
             setStatus('Coq proof verified (YY)');
@@ -894,9 +898,16 @@
           if(jscoqInitPromise) {
             try { await jscoqInitPromise; } catch(e) {}
           }
+          if(!jscoqReady){
+            try{
+              await initializeCoqRuntime(true);
+            }catch(e){
+              // handled by initializeCoqRuntime status update
+            }
+          }
           if(!jscoqReady) {
             setStatus('jsCoq未初期化', true);
-            outputEl.textContent = '[Coq Validation]\njsCoqが初期化されていません。ページをリロードしてください。';
+            outputEl.textContent = '[Coq Validation]\njsCoqの初期化に失敗しました。しばらく待って再実行してください。';
             running = false;
             runBtn.disabled = false;
             return;
@@ -1176,49 +1187,157 @@
     })();
   </script>
   <div id="coq" aria-hidden="true"></div>
-  <script id="jscoqScript" src="https://jscoq.github.io/jscoq/3.0.0/dist/jscoq.js" defer></script>
   <script>
     // jsCoq initialization for Coq validation（自動化＆Promise管理）
+    const JSCOQ_VERSION = '0.17.1';
+    const JSCOQ_BASE_URL = 'https://cdn.jsdelivr.net/npm/jscoq@' + JSCOQ_VERSION + '/';
+    const JSCOQ_MODULE_URLS = [
+      JSCOQ_BASE_URL + 'jscoq.js',
+      'https://unpkg.com/jscoq@' + JSCOQ_VERSION + '/jscoq.js'
+    ];
+
     let jscoqInstance = null;
+    let jscoqManager = null;
     let jscoqInitGlobalPromise = null;
-    function autoInitJsCoq() {
-      if (!window.__ivucxNeedsJsCoq) return Promise.resolve(null);
+    let jscoqModulePromise = null;
+
+    async function autoInitJsCoq() {
+      if (!window.__ivucxNeedsJsCoq) return null;
       if (jscoqInitGlobalPromise) return jscoqInitGlobalPromise;
-      jscoqInitGlobalPromise = new Promise((resolve, reject) => {
-        const start = Date.now();
-        function startJsCoq() {
-          if (typeof JsCoq === 'undefined') {
-            if (Date.now() - start > 20000) {
-              const err = new Error('jsCoqスクリプトのロードに失敗しました（20秒タイムアウト）');
-              if (typeof setStatus === 'function') setStatus('jsCoqロード失敗', true);
-              reject(err);
-              return;
-            }
-            setTimeout(startJsCoq, 100);
-            return;
-          }
-          JsCoq.start('#coq', {
-            base_path: 'https://jscoq.github.io/jscoq/3.0.0/',
-            init_pkgs: ['coq'],
-            all_pkgs: ['coq']
-          }).then(function(coq) {
-            jscoqInstance = coq;
-            resolve(coq);
-          }).catch(function(err) {
-            if (typeof setStatus === 'function') setStatus('jsCoq初期化失敗', true);
-            console.error('jsCoq initialization failed:', err);
-            reject(err);
-          });
+
+      jscoqInitGlobalPromise = (async () => {
+        const mod = await loadJsCoqModule();
+        const JsCoqApi = mod && mod.JsCoq;
+        if (!JsCoqApi || typeof JsCoqApi.start !== 'function') {
+          throw new Error('JsCoq.start が見つかりません');
         }
-        startJsCoq();
+
+        jscoqManager = await JsCoqApi.start(['coq'], {
+          base_path: JSCOQ_BASE_URL,
+          prelaunch: true,
+          show: false,
+          focus: false,
+          replace: false,
+          prelude: true,
+          implicit_libs: true,
+          init_pkgs: ['init'],
+          all_pkgs: ['coq']
+        });
+
+        await waitForManagerReady(jscoqManager);
+        jscoqInstance = createJsCoqExecutor(jscoqManager);
+        return jscoqInstance;
+      })().catch((err) => {
+        jscoqInitGlobalPromise = null;
+        throw err;
       });
+
       return jscoqInitGlobalPromise;
     }
+
+    async function loadJsCoqModule() {
+      if (jscoqModulePromise) return jscoqModulePromise;
+
+      jscoqModulePromise = (async () => {
+        let lastError = null;
+        for (const url of JSCOQ_MODULE_URLS) {
+          try {
+            return await import(url);
+          } catch (err) {
+            lastError = err;
+          }
+        }
+        throw lastError || new Error('jsCoqモジュールを読み込めませんでした');
+      })();
+
+      return jscoqModulePromise;
+    }
+
+    async function waitForManagerReady(manager, timeoutMs = 45000) {
+      const start = Date.now();
+      while (true) {
+        const sid = manager && manager.doc && manager.doc.sentences && manager.doc.sentences[0] && manager.doc.sentences[0].coq_sid;
+        const snippetReady = !!(manager && manager.provider && Array.isArray(manager.provider.snippets) && manager.provider.snippets.length > 0);
+        if (sid && snippetReady) return sid;
+        if (Date.now() - start > timeoutMs) {
+          throw new Error('jsCoq manager ready timeout');
+        }
+        await sleep(100);
+      }
+    }
+
+    function createJsCoqExecutor(manager) {
+      return {
+        execute: async function(code) {
+          manager.provider.load(String(code || ''), 'Main.v', true);
+          manager.provider.focus();
+
+          const started = Date.now();
+          while (true) {
+            const advanced = manager.goNext(false);
+            await waitForManagerIdle(manager, started);
+
+            if (manager.error && manager.error.length > 0) {
+              throw new Error(extractCoqError(manager));
+            }
+
+            if (!advanced) break;
+          }
+
+          return true;
+        }
+      };
+    }
+
+    async function waitForManagerIdle(manager, startedAt, timeoutMs = 45000) {
+      while (true) {
+        if (manager.error && manager.error.length > 0) return;
+
+        const hasBusy = !!(manager.doc && Array.isArray(manager.doc.sentences) && manager.doc.sentences.some((stm) => {
+          if (!stm || !stm.phase) return false;
+          return stm.phase === 'pending' || stm.phase === 'adding' || stm.phase === 'added' || stm.phase === 'processing';
+        }));
+
+        if (!hasBusy) return;
+        if (Date.now() - startedAt > timeoutMs) {
+          throw new Error('jsCoq execution timeout');
+        }
+        await sleep(60);
+      }
+    }
+
+    function extractCoqError(manager) {
+      try {
+        const stm = manager.error && manager.error[0];
+        if (!stm) return 'Coq validation error';
+
+        const feedback = Array.isArray(stm.feedback)
+          ? stm.feedback.find((item) => item && item.level === 'Error')
+          : null;
+
+        if (feedback && manager.pprint && typeof manager.pprint.pp2Text === 'function') {
+          const text = manager.pprint.pp2Text(feedback.msg);
+          if (text) return text;
+        }
+
+        if (feedback && feedback.msg) {
+          return JSON.stringify(feedback.msg);
+        }
+      } catch (err) {
+        // fall through to generic message
+      }
+
+      return 'Coq validation error';
+    }
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
     if (window.__ivucxNeedsJsCoq) {
-      // jsCoqスクリプトのロード完了後に初期化
-      document.getElementById('jscoqScript').addEventListener('load', autoInitJsCoq);
-      // DOMContentLoaded後にも必ず初期化（両方で保証）
-      window.addEventListener('DOMContentLoaded', autoInitJsCoq);
+      autoInitJsCoq().catch((err) => {
+        console.error('jsCoq initialization failed:', err);
+      });
     }
   </script>
 </body>
