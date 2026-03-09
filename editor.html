@@ -388,6 +388,7 @@
       const selectedLanguage = resolveLanguage(params.get('lang') || initPayload.proofAssistant || 'Lean');
       const selectedConfig = languageConfig[selectedLanguage];
       window.__ivucxNeedsJsCoq = selectedLanguage === 'Coq';
+      window.__ivucxNeedsLean4 = selectedLanguage === 'Lean';
 
       langBadgeEl.textContent = selectedLanguage;
       fileNameEl.textContent = selectedConfig.fileName;
@@ -414,6 +415,9 @@
       let jscoqReady = false;
       let jscoqInitPromise = null;
       let jscoqInitError = '';
+      let lean4Ready = false;
+      let lean4InitPromise = null;
+      let lean4InitError = '';
 
 
       setStatus('Ready');
@@ -422,6 +426,9 @@
       // Coqの場合はjsCoq初期化完了までRunボタンを無効化
       if(selectedLanguage === 'Coq') {
         initializeCoqRuntime();
+      }
+      if(selectedLanguage === 'Lean') {
+        initializeLeanRuntime();
       }
 
       backBtn.addEventListener('click', ()=>{
@@ -482,8 +489,8 @@
       }
 
       function updateRunnerInputVisibility(language){
-        const isCoq = language === 'Coq';
-        runnerEndpointEl.style.display = isCoq ? 'none' : 'block';
+        const isLocalValidationMode = language === 'Coq' || language === 'Lean';
+        runnerEndpointEl.style.display = isLocalValidationMode ? 'none' : 'block';
       }
 
       function waitForAutoInitJsCoq(timeoutMs = 20000){
@@ -531,6 +538,51 @@
         return jscoqInitPromise;
       }
 
+      function waitForAutoInitLean4(timeoutMs = 20000){
+        if(typeof autoInitLean4 === 'function') return Promise.resolve();
+        return new Promise((resolve, reject)=>{
+          const started = Date.now();
+          function check(){
+            if(typeof autoInitLean4 === 'function'){
+              resolve();
+              return;
+            }
+            if(Date.now() - started > timeoutMs){
+              reject(new Error('autoInitLean4 is not available'));
+              return;
+            }
+            setTimeout(check, 50);
+          }
+          check();
+        });
+      }
+
+      function initializeLeanRuntime(forceRetry = false){
+        if(lean4InitPromise && !forceRetry){
+          return lean4InitPromise;
+        }
+        lean4Ready = false;
+        runBtn.disabled = true;
+        lean4InitPromise = waitForAutoInitLean4()
+          .then(()=>{
+            if(typeof autoInitLean4 !== 'function'){
+              throw new Error('autoInitLean4 is not defined');
+            }
+            return autoInitLean4();
+          })
+          .then(()=>{
+            lean4InitError = '';
+            lean4Ready = true;
+            runBtn.disabled = false;
+          })
+          .catch((err)=>{
+            lean4InitError = err && err.message ? err.message : String(err);
+            setStatus('Lean 4初期化失敗', true);
+            runBtn.disabled = true;
+          });
+        return lean4InitPromise;
+      }
+
       function setInitialOutputMessage(language, fileName, payload, runnerEndpoint, summary){
         const lines = [
           'Editor initialized.',
@@ -544,7 +596,9 @@
 
         // files変数は未定義のため削除
 
-        if(runnerEndpoint){
+        if(language === 'Coq' || language === 'Lean'){
+          lines.push('Local runtime validation mode is enabled.');
+        } else if(runnerEndpoint){
           lines.push('Runner endpoint: ' + runnerEndpoint);
         } else {
           lines.push('Runner endpoint is empty. Set endpoint and press Run.');
@@ -795,6 +849,172 @@
         }
       }
 
+      async function waitLean4Ready(timeoutMs = 15000){
+        return new Promise((resolve, reject)=>{
+          const start = Date.now();
+          function check(){
+            if(lean4Instance) return resolve();
+            if(Date.now() - start > timeoutMs) return reject(new Error('Lean 4 initialization timeout'));
+            setTimeout(check, 100);
+          }
+          check();
+        });
+      }
+
+      async function validateLeanProof(code){
+        setStatus('Validating Lean 4 proof...');
+        outputEl.textContent = 'Lean 4で証明を検証中...\n';
+
+        try{
+          if(!lean4Instance){
+            await waitLean4Ready();
+          }
+        }catch(err){
+          setStatus('Lean validation failed', true);
+          outputEl.textContent = '[Lean Validation]\nLean 4が初期化されていません（タイムアウト）。';
+          return { status: 'error', proof_state: 'NN', reason: 'Lean 4 not initialized' };
+        }
+
+        if(!lean4Instance){
+          setStatus('Lean validation failed', true);
+          outputEl.textContent = '[Lean Validation]\nLean 4が初期化されていません。';
+          return { status: 'error', proof_state: 'NN', reason: 'Lean 4 not initialized' };
+        }
+
+        try{
+          const diagnostics = await lean4Instance.execute(code);
+          const errors = Array.isArray(diagnostics)
+            ? diagnostics.filter((item)=>item && Number(item.severity || 0) === 1)
+            : [];
+
+          if(errors.length > 0){
+            const first = errors[0] || {};
+            const range = first.range || {};
+            const start = range.start || {};
+            const line = Number.isFinite(start.line) ? String(start.line + 1) : '?';
+            const col = Number.isFinite(start.character) ? String(start.character + 1) : '?';
+            const msg = first.message || 'Lean 4 reported an error';
+            setStatus('Lean validation failed', true);
+            outputEl.textContent = '[Lean Validation]\n' + line + ':' + col + ' ' + msg;
+            return { status: 'rejected', proof_state: 'NN', reason: msg };
+          }
+
+          const closure = analyzeLeanClosure(code);
+          if(closure.proofState === 'NN'){
+            setStatus('Lean validation failed', true);
+            outputEl.textContent = '[Lean Validation]\n' + (closure.reason || 'Code is empty');
+            return { status: 'rejected', proof_state: 'NN', reason: closure.reason || 'Lean code is empty' };
+          }
+          if(closure.proofState === 'NY'){
+            setStatus('Lean proof accepted (NY)');
+            outputEl.textContent = '[Lean Validation Success]\n証明は ' + closure.closer + ' を含むため暫定受け入れです (NY状態)';
+            return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
+          }
+
+          setStatus('Lean proof verified (YY)');
+          outputEl.textContent = '[Lean Validation Success]\nLean 4でエラーなく検証できました (YY状態)';
+          return { status: 'allowed', proof_state: 'YY', reason: 'Lean 4 verified' };
+        }catch(err){
+          const errorMsg = err && err.message ? err.message : String(err);
+          setStatus('Lean validation failed', true);
+          outputEl.textContent = '[Lean Validation]\nLean 4実行エラー:\n' + errorMsg;
+          return { status: 'error', proof_state: 'NN', reason: 'Lean 4 execution error: ' + errorMsg };
+        }
+      }
+
+      function analyzeLeanClosure(code){
+        if(!code || typeof code !== 'string'){
+          return { proofState: 'NN', closer: '', reason: 'Code is empty' };
+        }
+
+        const normalized = stripLeanCommentsAndStrings(code).trim();
+        if(!normalized){
+          return { proofState: 'NN', closer: '', reason: 'Code is empty' };
+        }
+
+        if(/\b(sorry|admit)\b/.test(normalized)){
+          return { proofState: 'NY', closer: 'sorry/admit' };
+        }
+
+        if(/(^|\n)\s*(axiom|constant)\b/.test(normalized)){
+          return { proofState: 'NY', closer: 'axiom/constant' };
+        }
+
+        return { proofState: 'YY', closer: 'Lean checked' };
+      }
+
+      function stripLeanCommentsAndStrings(input){
+        let output = '';
+        let i = 0;
+        let blockCommentDepth = 0;
+        let inString = false;
+        let inLineComment = false;
+
+        while(i < input.length){
+          const ch = input[i];
+          const next = input[i + 1];
+
+          if(inString){
+            if(ch === '\\'){
+              i += 2;
+              continue;
+            }
+            if(ch === '"'){
+              inString = false;
+            }
+            i += 1;
+            continue;
+          }
+
+          if(inLineComment){
+            if(ch === '\n' || ch === '\r'){
+              inLineComment = false;
+              output += ch;
+            }
+            i += 1;
+            continue;
+          }
+
+          if(blockCommentDepth > 0){
+            if(ch === '/' && next === '-'){
+              blockCommentDepth += 1;
+              i += 2;
+              continue;
+            }
+            if(ch === '-' && next === '/'){
+              blockCommentDepth -= 1;
+              i += 2;
+              continue;
+            }
+            i += 1;
+            continue;
+          }
+
+          if(ch === '-' && next === '-'){
+            inLineComment = true;
+            i += 2;
+            continue;
+          }
+
+          if(ch === '/' && next === '-'){
+            blockCommentDepth = 1;
+            i += 2;
+            continue;
+          }
+
+          if(ch === '"'){
+            inString = true;
+            i += 1;
+            continue;
+          }
+
+          output += ch;
+          i += 1;
+        }
+
+        return output;
+      }
+
       function analyzeCoqClosure(code) {
         if(!code || typeof code !== 'string'){
           return { proofState: 'NN', reason: 'Code is empty' };
@@ -893,12 +1113,14 @@
         if(running) return;
 
         const isCoqMode = selectedLanguage === 'Coq';
-        const endpoint = isCoqMode ? '' : runnerEndpointEl.value.trim();
-        if (!isCoqMode) {
+        const isLeanMode = selectedLanguage === 'Lean';
+        const isLocalValidationMode = isCoqMode || isLeanMode;
+        const endpoint = isLocalValidationMode ? '' : runnerEndpointEl.value.trim();
+        if (!isLocalValidationMode) {
           safeStorageSet(localStorage, RUNNER_STORAGE_KEY, endpoint);
         }
 
-        if(!isCoqMode && !endpoint){
+        if(!isLocalValidationMode && !endpoint){
           setStatus('Runner endpoint required', true);
           outputEl.textContent = [
             '[Configuration]',
@@ -935,7 +1157,32 @@
             return;
           }
           // Coqモードの場合、jsCoqで判定のみ
-          const validation = await validateCoqProof(code);
+          await validateCoqProof(code);
+          running = false;
+          runBtn.disabled = false;
+          return;
+        }
+
+        if (isLeanMode) {
+          if(lean4InitPromise){
+            try { await lean4InitPromise; } catch(e) {}
+          }
+          if(!lean4Ready){
+            try{
+              await initializeLeanRuntime(true);
+            }catch(e){
+              // handled by initializeLeanRuntime status update
+            }
+          }
+          if(!lean4Ready){
+            setStatus('Lean 4未初期化', true);
+            outputEl.textContent = '[Lean Validation]\nLean 4の初期化に失敗しました。\n詳細: ' + (lean4InitError || '(unknown)');
+            running = false;
+            runBtn.disabled = false;
+            return;
+          }
+
+          await validateLeanProof(code);
           running = false;
           runBtn.disabled = false;
           return;
@@ -1246,6 +1493,10 @@
     let jscoqResolvedBasePath = PROXY_BASE || CDN_BASE;
     let jscoqWorkerShimInstalled = false;
     let jscoqWorkerBlobMap = new Map();
+    const LEAN4_WEBSOCKET_URL = 'wss://live.lean-lang.org/websocket/MathlibDemo';
+    const LEAN4_DOCUMENT_URI = 'file:///MathlibDemo/Main.lean';
+    let lean4Instance = null;
+    let lean4InitGlobalPromise = null;
 
     async function autoInitJsCoq() {
       if (!window.__ivucxNeedsJsCoq) return null;
@@ -1280,6 +1531,26 @@
       });
 
       return jscoqInitGlobalPromise;
+    }
+
+    async function autoInitLean4() {
+      if (!window.__ivucxNeedsLean4) return null;
+      if (lean4InitGlobalPromise) return lean4InitGlobalPromise;
+
+      lean4InitGlobalPromise = (async () => {
+        const executor = createLean4Executor({
+          websocketUrl: LEAN4_WEBSOCKET_URL,
+          documentUri: LEAN4_DOCUMENT_URI
+        });
+        await executor.initialize();
+        lean4Instance = executor;
+        return lean4Instance;
+      })().catch((err) => {
+        lean4InitGlobalPromise = null;
+        throw err;
+      });
+
+      return lean4InitGlobalPromise;
     }
 
     async function loadJsCoqModule() {
@@ -1461,12 +1732,284 @@
       return 'Coq validation error';
     }
 
+    function createLean4Executor(options) {
+      const websocketUrl = options.websocketUrl;
+      const documentUri = options.documentUri;
+
+      let socket = null;
+      let nextId = 1;
+      let version = 0;
+      let initialized = false;
+      let opened = false;
+      let lastDiagnostics = {
+        version: -1,
+        diagnostics: [],
+        receivedAt: 0
+      };
+      let closedError = null;
+      const pending = new Map();
+
+      function ensureOpenSocket() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          throw new Error('Lean 4 WebSocket is not connected');
+        }
+      }
+
+      function rejectAllPending(error) {
+        const err = error instanceof Error ? error : new Error(String(error || 'Lean 4 request failed'));
+        for (const entry of pending.values()) {
+          entry.reject(err);
+        }
+        pending.clear();
+      }
+
+      function sendRaw(message) {
+        ensureOpenSocket();
+        socket.send(JSON.stringify(message));
+      }
+
+      function sendNotification(method, params) {
+        sendRaw({
+          jsonrpc: '2.0',
+          method: method,
+          params: params || {}
+        });
+      }
+
+      function sendRequest(method, params, timeoutMs = 15000) {
+        return new Promise((resolve, reject) => {
+          ensureOpenSocket();
+          const id = nextId++;
+          const timer = setTimeout(() => {
+            if (!pending.has(id)) return;
+            pending.delete(id);
+            reject(new Error('Lean 4 request timeout: ' + method));
+          }, timeoutMs);
+
+          pending.set(id, {
+            resolve: (result) => {
+              clearTimeout(timer);
+              resolve(result);
+            },
+            reject: (error) => {
+              clearTimeout(timer);
+              reject(error);
+            }
+          });
+
+          sendRaw({
+            jsonrpc: '2.0',
+            id: id,
+            method: method,
+            params: params || {}
+          });
+        });
+      }
+
+      function handleServerMessage(message) {
+        if (!message || typeof message !== 'object') return;
+
+        if (typeof message.id !== 'undefined' && pending.has(message.id)) {
+          const deferred = pending.get(message.id);
+          pending.delete(message.id);
+          if (Object.prototype.hasOwnProperty.call(message, 'error')) {
+            deferred.reject(new Error(formatLeanRpcError(message.error)));
+          } else {
+            deferred.resolve(message.result);
+          }
+          return;
+        }
+
+        if (message.method === 'textDocument/publishDiagnostics') {
+          const params = message.params || {};
+          if (params.uri === documentUri) {
+            lastDiagnostics = {
+              version: typeof params.version === 'number' ? params.version : version,
+              diagnostics: Array.isArray(params.diagnostics) ? params.diagnostics : [],
+              receivedAt: Date.now()
+            };
+          }
+          return;
+        }
+
+        // Reply to server requests we do not actively handle.
+        if (typeof message.id !== 'undefined' && typeof message.method === 'string') {
+          try {
+            sendRaw({
+              jsonrpc: '2.0',
+              id: message.id,
+              result: null
+            });
+          } catch (err) {
+            // Ignore response failures on shutdown.
+          }
+        }
+      }
+
+      function handleIncoming(payloadText) {
+        let parsed = null;
+        try {
+          parsed = JSON.parse(payloadText);
+        } catch (err) {
+          return;
+        }
+
+        if (Array.isArray(parsed)) {
+          for (const entry of parsed) {
+            handleServerMessage(entry);
+          }
+        } else {
+          handleServerMessage(parsed);
+        }
+      }
+
+      async function connect(timeoutMs = 15000) {
+        if (socket && socket.readyState === WebSocket.OPEN) return;
+
+        await new Promise((resolve, reject) => {
+          const ws = new WebSocket(websocketUrl);
+          let settled = false;
+          const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            try { ws.close(); } catch (err) {}
+            reject(new Error('Lean 4 WebSocket connection timeout'));
+          }, timeoutMs);
+
+          ws.addEventListener('open', () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            socket = ws;
+
+            ws.addEventListener('message', (event) => {
+              const data = typeof event.data === 'string' ? event.data : '';
+              if (!data) return;
+              handleIncoming(data);
+            });
+            ws.addEventListener('error', () => {
+              if (!closedError) {
+                closedError = new Error('Lean 4 WebSocket error');
+              }
+            });
+            ws.addEventListener('close', (event) => {
+              if (!closedError) {
+                closedError = new Error('Lean 4 WebSocket closed: ' + String(event.code || 'unknown'));
+              }
+              rejectAllPending(closedError);
+            });
+
+            resolve();
+          });
+
+          ws.addEventListener('error', () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            reject(new Error('Lean 4 WebSocket connection failed'));
+          });
+        });
+      }
+
+      async function initialize() {
+        if (initialized) return true;
+        await connect();
+
+        await sendRequest('initialize', {
+          processId: null,
+          rootUri: 'file:///',
+          capabilities: {},
+          workspaceFolders: null,
+          clientInfo: {
+            name: 'ivucx',
+            version: '1.0'
+          },
+          trace: 'off'
+        }, 20000);
+
+        sendNotification('initialized', {});
+        initialized = true;
+        return true;
+      }
+
+      async function waitForDiagnostics(targetVersion, timeoutMs = 20000) {
+        const started = Date.now();
+        while (true) {
+          if (closedError) throw closedError;
+
+          if (lastDiagnostics.version >= targetVersion) {
+            await sleep(120);
+            if (lastDiagnostics.version >= targetVersion) {
+              return lastDiagnostics.diagnostics;
+            }
+          }
+
+          if (Date.now() - started > timeoutMs) {
+            throw new Error('Lean 4 diagnostics timeout');
+          }
+
+          await sleep(80);
+        }
+      }
+
+      async function execute(code) {
+        await initialize();
+        version += 1;
+        const text = String(code || '');
+
+        if (!opened) {
+          sendNotification('textDocument/didOpen', {
+            textDocument: {
+              uri: documentUri,
+              languageId: 'lean',
+              version: version,
+              text: text
+            }
+          });
+          opened = true;
+        } else {
+          sendNotification('textDocument/didChange', {
+            textDocument: {
+              uri: documentUri,
+              version: version
+            },
+            contentChanges: [
+              { text: text }
+            ]
+          });
+        }
+
+        return waitForDiagnostics(version, 25000);
+      }
+
+      return {
+        initialize,
+        execute
+      };
+    }
+
+    function formatLeanRpcError(error) {
+      if (!error) return 'Lean 4 RPC error';
+      if (typeof error === 'string') return error;
+      if (typeof error.message === 'string' && error.message.length > 0) return error.message;
+      try {
+        return JSON.stringify(error);
+      } catch (err) {
+        return String(error);
+      }
+    }
+
     function sleep(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
     if (window.__ivucxNeedsJsCoq) {
       autoInitJsCoq().catch(() => {
+        // Initialization errors are surfaced via status/output panel.
+      });
+    }
+    if (window.__ivucxNeedsLean4) {
+      autoInitLean4().catch(() => {
         // Initialization errors are surfaced via status/output panel.
       });
     }
