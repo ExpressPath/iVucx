@@ -211,6 +211,18 @@
       display:none;
     }
 
+    #coq{
+      position:fixed;
+      width:1px;
+      height:1px;
+      top:-10000px;
+      left:-10000px;
+      overflow:hidden;
+      opacity:0;
+      pointer-events:none;
+      z-index:-1;
+    }
+
     #outputPanel{
       flex:1;
       margin:0;
@@ -259,7 +271,6 @@
       }
     }
   </style>
-  <link rel="stylesheet" href="https://jscoq.github.io/jscoq/latest/dist/jscoq.css">
 </head>
 <body>
   <header class="topbar">
@@ -375,19 +386,22 @@
       const params = new URLSearchParams(window.location.search);
       const selectedLanguage = resolveLanguage(params.get('lang') || initPayload.proofAssistant || 'Lean');
       const selectedConfig = languageConfig[selectedLanguage];
+      window.__ivucxNeedsJsCoq = selectedLanguage === 'Coq';
 
       langBadgeEl.textContent = selectedLanguage;
       fileNameEl.textContent = selectedConfig.fileName;
 
       updateRunnerInputVisibility(selectedLanguage);
 
-      const restoredRunner = params.get('runner') || localStorage.getItem(RUNNER_STORAGE_KEY) || '';
+      const restoredRunner = params.get('runner') || safeStorageGet(localStorage, RUNNER_STORAGE_KEY);
       runnerEndpointEl.value = restoredRunner;
 
       const summaryText = typeof initPayload.summary === 'string'
         ? initPayload.summary
         : (typeof initPayload.draft === 'string' ? initPayload.draft : '');
-      const initialDraft = '';
+      const initialDraft = typeof initPayload.draft === 'string'
+        ? initPayload.draft
+        : summaryText;
 
 
       let editorInstance = null;
@@ -403,17 +417,7 @@
 
       // Coqの場合はjsCoq初期化完了までRunボタンを無効化
       if(selectedLanguage === 'Coq') {
-        runBtn.disabled = true;
-        // グローバル初期化Promiseを利用
-        jscoqInitPromise = (typeof autoInitJsCoq === 'function' ? autoInitJsCoq() : Promise.reject())
-          .then(()=>{
-            jscoqReady = true;
-            runBtn.disabled = false;
-          })
-          .catch(()=>{
-            setStatus('jsCoq初期化失敗', true);
-            runBtn.disabled = true;
-          });
+        initializeCoqRuntime();
       }
 
       backBtn.addEventListener('click', ()=>{
@@ -421,7 +425,7 @@
       });
 
       runnerEndpointEl.addEventListener('change', ()=>{
-        localStorage.setItem(RUNNER_STORAGE_KEY, runnerEndpointEl.value.trim());
+        safeStorageSet(localStorage, RUNNER_STORAGE_KEY, runnerEndpointEl.value.trim());
       });
 
       runBtn.addEventListener('click', ()=>{
@@ -451,6 +455,23 @@
         return 'Lean';
       }
 
+      function safeStorageGet(storage, key){
+        try{
+          return storage.getItem(key) || '';
+        }catch(err){
+          return '';
+        }
+      }
+
+      function safeStorageSet(storage, key, value){
+        try{
+          storage.setItem(key, value);
+          return true;
+        }catch(err){
+          return false;
+        }
+      }
+
       function setStatus(text, isError){
         statusEl.textContent = text;
         statusEl.classList.toggle('error', !!isError);
@@ -459,6 +480,44 @@
       function updateRunnerInputVisibility(language){
         const isCoq = language === 'Coq';
         runnerEndpointEl.style.display = isCoq ? 'none' : 'block';
+      }
+
+      function waitForAutoInitJsCoq(timeoutMs = 20000){
+        if(typeof autoInitJsCoq === 'function') return Promise.resolve();
+        return new Promise((resolve, reject)=>{
+          const started = Date.now();
+          function check(){
+            if(typeof autoInitJsCoq === 'function'){
+              resolve();
+              return;
+            }
+            if(Date.now() - started > timeoutMs){
+              reject(new Error('autoInitJsCoq is not available'));
+              return;
+            }
+            setTimeout(check, 50);
+          }
+          check();
+        });
+      }
+
+      function initializeCoqRuntime(){
+        runBtn.disabled = true;
+        jscoqInitPromise = waitForAutoInitJsCoq()
+          .then(()=>{
+            if(typeof autoInitJsCoq !== 'function'){
+              throw new Error('autoInitJsCoq is not defined');
+            }
+            return autoInitJsCoq();
+          })
+          .then(()=>{
+            jscoqReady = true;
+            runBtn.disabled = false;
+          })
+          .catch(()=>{
+            setStatus('jsCoq初期化失敗', true);
+            runBtn.disabled = true;
+          });
       }
 
       function setInitialOutputMessage(language, fileName, payload, runnerEndpoint, summary){
@@ -674,10 +733,11 @@
       async function validateCoqProof(code){
         setStatus('Validating Coq proof...');
         outputEl.textContent = 'jsCoqで証明を検証中...\n';
-
-        const isInScrolledMode = initPayload.sourceState === 1;
-        if(!isInScrolledMode) {
-          return { status: 'skip', reason: 'Not in gray mode' };
+        const closure = analyzeCoqClosure(code);
+        if(closure.proofState === 'NN'){
+          setStatus('Coq validation failed', true);
+          outputEl.textContent = '[Coq Validation]\n' + closure.reason;
+          return { status: 'rejected', proof_state: 'NN', reason: closure.reason };
         }
 
         // jsCoq初期化を確実に待つ
@@ -698,78 +758,109 @@
         }
 
         try {
-          // jsCoqでコードを実行
+          // 実行ごとに環境をリセットして前回の定義を残さない。
+          await jscoqInstance.execute('Reset Initial.');
           await jscoqInstance.execute(code);
-          // エラーが出なかった場合、証明の終了方法をチェック
-          const trimmed = code.trim();
-          const hasQed = /\bQed\./.test(trimmed);
-          const hasAdmitted = /\bAdmitted\./.test(trimmed);
-          if (hasQed) {
+
+          if (closure.proofState === 'YY') {
             setStatus('Coq proof verified (YY)');
-            outputEl.textContent = '[Coq Validation Success]\n証明は Qed. で完成しています (YY状態)';
-            return { status: 'allowed', proof_state: 'YY', reason: 'Valid proved theorem' };
-          } else if (hasAdmitted) {
+            outputEl.textContent = '[Coq Validation Success]\n証明は ' + closure.closer + ' で完成しています (YY状態)';
+            return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
+          }
+          if (closure.proofState === 'NY') {
             setStatus('Coq proof accepted (NY)');
             outputEl.textContent = '[Coq Validation Success]\n証明は Admitted. で暫定受け入れです (NY状態)';
             return { status: 'allowed', proof_state: 'NY', reason: 'Admitted by user' };
-          } else {
-            setStatus('Coq validation failed', true);
-            outputEl.textContent = '[Coq Validation]\n証明が Qed. または Admitted. で終わっていません';
-            return { status: 'rejected', proof_state: 'NN', reason: 'Proof not closed' };
           }
+
+          setStatus('Coq validation failed', true);
+          outputEl.textContent = '[Coq Validation]\n証明が Qed. または Admitted. で終わっていません';
+          return { status: 'rejected', proof_state: 'NN', reason: 'Proof not closed' };
         } catch (err) {
           setStatus('Coq validation failed', true);
-          const errorMsg = String(err);
+          const errorMsg = err && err.message ? err.message : String(err);
           outputEl.textContent = '[Coq Validation]\njsCoq実行エラー:\n' + errorMsg;
-          const hasQed = /\bQed\./.test(code.trim());
-          const proofState = hasQed ? 'YN' : 'NN';
+          const proofState = closure.proofState === 'YY' ? 'YN' : 'NN';
           return { status: 'rejected', proof_state: proofState, reason: 'Coq execution error: ' + errorMsg };
         }
       }
 
-      function analyzeCoqCode(code) {
-        if (!code || typeof code !== 'string') {
-          return { isValid: false, error: 'Code is empty' };
+      function analyzeCoqClosure(code) {
+        if(!code || typeof code !== 'string'){
+          return { proofState: 'NN', reason: 'Code is empty' };
         }
 
-        const trimmed = code.trim();
-        const lines = trimmed.split(/\r?\n/);
-        
-        let hasError = false;
-        let errorMsg = '';
-        let hasQed = false;
-        let hasAdmitted = false;
-
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i].trim();
-          
-          if (line.includes('Qed.')) {
-            hasQed = true;
-          }
-          if (line.includes('Admitted.')) {
-            hasAdmitted = true;
-          }
-          
-          if (line.includes('Sorry') || line.includes('admit')) {
-            hasError = true;
-            errorMsg = 'Unsupported proof term found: ' + line;
-          }
+        const normalized = stripCoqCommentsAndStrings(code).trim();
+        if(!normalized){
+          return { proofState: 'NN', reason: 'Code is empty' };
         }
 
-        if (!hasQed && !hasAdmitted) {
-          hasError = true;
-          if (!errorMsg) {
-            errorMsg = 'Proof must end with Qed. or Admitted.';
-          }
+        if(/Admitted\.\s*$/.test(normalized)){
+          return { proofState: 'NY', closer: 'Admitted.' };
+        }
+        if(/Defined\.\s*$/.test(normalized)){
+          return { proofState: 'YY', closer: 'Defined.' };
+        }
+        if(/Qed\.\s*$/.test(normalized)){
+          return { proofState: 'YY', closer: 'Qed.' };
         }
 
-        return {
-          isValid: hasQed || hasAdmitted,
-          hasError: hasError,
-          error: errorMsg,
-          hasQed: hasQed,
-          hasAdmitted: hasAdmitted
-        };
+        return { proofState: 'NN', reason: '証明は最後を Qed. か Admitted. で閉じてください。' };
+      }
+
+      function stripCoqCommentsAndStrings(input){
+        let output = '';
+        let i = 0;
+        let commentDepth = 0;
+        let inString = false;
+
+        while(i < input.length){
+          const ch = input[i];
+          const next = input[i + 1];
+
+          if(inString){
+            if(ch === '\\'){
+              i += 2;
+              continue;
+            }
+            if(ch === '"'){
+              inString = false;
+            }
+            i += 1;
+            continue;
+          }
+
+          if(commentDepth > 0){
+            if(ch === '(' && next === '*'){
+              commentDepth += 1;
+              i += 2;
+              continue;
+            }
+            if(ch === '*' && next === ')'){
+              commentDepth -= 1;
+              i += 2;
+              continue;
+            }
+            i += 1;
+            continue;
+          }
+
+          if(ch === '"'){
+            inString = true;
+            i += 1;
+            continue;
+          }
+          if(ch === '(' && next === '*'){
+            commentDepth = 1;
+            i += 2;
+            continue;
+          }
+
+          output += ch;
+          i += 1;
+        }
+
+        return output;
       }
 
       async function runProof(){
@@ -778,7 +869,7 @@
         const isCoqMode = selectedLanguage === 'Coq';
         const endpoint = isCoqMode ? '' : runnerEndpointEl.value.trim();
         if (!isCoqMode) {
-          localStorage.setItem(RUNNER_STORAGE_KEY, endpoint);
+          safeStorageSet(localStorage, RUNNER_STORAGE_KEY, endpoint);
         }
 
         if(!isCoqMode && !endpoint){
@@ -1084,13 +1175,14 @@
       }
     })();
   </script>
-  <div id="coq" style="display:none;"></div>
+  <div id="coq" aria-hidden="true"></div>
   <script id="jscoqScript" src="https://jscoq.github.io/jscoq/3.0.0/dist/jscoq.js" defer></script>
   <script>
     // jsCoq initialization for Coq validation（自動化＆Promise管理）
     let jscoqInstance = null;
     let jscoqInitGlobalPromise = null;
     function autoInitJsCoq() {
+      if (!window.__ivucxNeedsJsCoq) return Promise.resolve(null);
       if (jscoqInitGlobalPromise) return jscoqInitGlobalPromise;
       jscoqInitGlobalPromise = new Promise((resolve, reject) => {
         const start = Date.now();
@@ -1122,10 +1214,12 @@
       });
       return jscoqInitGlobalPromise;
     }
-    // jsCoqスクリプトのロード完了後に初期化
-    document.getElementById('jscoqScript').addEventListener('load', autoInitJsCoq);
-    // DOMContentLoaded後にも必ず初期化（両方で保証）
-    window.addEventListener('DOMContentLoaded', autoInitJsCoq);
+    if (window.__ivucxNeedsJsCoq) {
+      // jsCoqスクリプトのロード完了後に初期化
+      document.getElementById('jscoqScript').addEventListener('load', autoInitJsCoq);
+      // DOMContentLoaded後にも必ず初期化（両方で保証）
+      window.addEventListener('DOMContentLoaded', autoInitJsCoq);
+    }
   </script>
 </body>
 </html>
