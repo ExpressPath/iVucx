@@ -6,17 +6,17 @@
   <title>iVucx Editor</title>
   <style>
     :root{
-      --bg:#f6f8fa;
-      --panel:#ffffff;
-      --ink:#1f2328;
-      --muted:#656d76;
-      --line:#d0d7de;
-      --accent:#1f6feb;
+      --bg:#0d1117;
+      --panel:#11161c;
+      --ink:#e6edf3;
+      --muted:#9aa7b6;
+      --line:#2d333b;
+      --accent:#2f81f7;
       --accent-dark:#0f4aa6;
-      --ok:#1a7f37;
-      --warn:#cf222e;
-      --header:#24292f;
-      --header-ink:#f6f8fa;
+      --ok:#3fb950;
+      --warn:#ff7b72;
+      --header:#010409;
+      --header-ink:#e6edf3;
     }
 
     *,*::before,*::after{box-sizing:border-box}
@@ -84,8 +84,9 @@
 
     .btn{
       border:1px solid transparent;
-      background:#ffffff;
-      color:#24292f;
+      background:#1f2937;
+      border-color:#374151;
+      color:#e6edf3;
       border-radius:8px;
       height:34px;
       padding:0 12px;
@@ -131,16 +132,16 @@
       min-width:180px;
       height:34px;
       border-radius:8px;
-      border:1px solid rgba(255,255,255,0.25);
-      background:rgba(255,255,255,0.08);
-      color:#fff;
+      border:1px solid #374151;
+      background:rgba(17,24,39,0.8);
+      color:#e6edf3;
       font-size:12px;
       padding:0 10px;
       outline:none;
     }
 
     .runner-input::placeholder{
-      color:#c3c9d0;
+      color:#8b96a5;
     }
 
     .workspace{
@@ -172,7 +173,7 @@
       border-bottom:1px solid var(--line);
       font-size:12px;
       color:var(--muted);
-      background:linear-gradient(to bottom, #ffffff, #f8fafc);
+      background:linear-gradient(to bottom, #141b23, #10161d);
     }
 
     .status{
@@ -188,7 +189,7 @@
       flex:1;
       min-height:0;
       position:relative;
-      background:#fff;
+      background:#0d1117;
     }
 
     #editor{
@@ -208,6 +209,8 @@
       font-size:14px;
       line-height:1.5;
       font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      background:#0d1117;
+      color:#e6edf3;
       display:none;
     }
 
@@ -235,8 +238,8 @@
       font-size:13px;
       line-height:1.45;
       font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-      color:#24292f;
-      background:#fbfdff;
+      color:#c9d1d9;
+      background:#0d1117;
     }
 
     @media (max-width:1020px){
@@ -1291,23 +1294,23 @@
 
       function defineEditorTheme(monaco){
         monaco.editor.defineTheme('ivucx-github-light', {
-          base: 'vs',
+          base: 'vs-dark',
           inherit: true,
           rules: [
-            { token: 'comment', foreground: '6A737D' },
-            { token: 'keyword', foreground: 'CF222E' },
-            { token: 'number', foreground: '0550AE' },
-            { token: 'operator', foreground: '24292F' },
-            { token: 'type.identifier', foreground: '8250DF' }
+            { token: 'comment', foreground: '8B949E' },
+            { token: 'keyword', foreground: 'FF7B72' },
+            { token: 'number', foreground: '79C0FF' },
+            { token: 'operator', foreground: 'C9D1D9' },
+            { token: 'type.identifier', foreground: 'D2A8FF' }
           ],
           colors: {
-            'editor.background': '#FFFFFF',
-            'editorLineNumber.foreground': '#9AA4B2',
-            'editorLineNumber.activeForeground': '#57606A',
-            'editor.selectionBackground': '#DDEBFF',
-            'editor.inactiveSelectionBackground': '#EDF3FF',
-            'editorCursor.foreground': '#0969DA',
-            'editorIndentGuide.background1': '#EFF2F6'
+            'editor.background': '#0D1117',
+            'editorLineNumber.foreground': '#6E7681',
+            'editorLineNumber.activeForeground': '#C9D1D9',
+            'editor.selectionBackground': '#264F78',
+            'editor.inactiveSelectionBackground': '#1C2C3A',
+            'editorCursor.foreground': '#58A6FF',
+            'editorIndentGuide.background1': '#30363D'
           }
         });
       }
@@ -1732,7 +1735,7 @@
       return 'Coq validation error';
     }
 
-    function createLean4Executor(options) {
+      function createLean4Executor(options) {
       const websocketUrl = options.websocketUrl;
       const documentUri = options.documentUri;
 
@@ -1881,9 +1884,21 @@
             settled = true;
             clearTimeout(timer);
             socket = ws;
+            closedError = null;
 
-            ws.addEventListener('message', (event) => {
-              const data = typeof event.data === 'string' ? event.data : '';
+            ws.addEventListener('message', async (event) => {
+              let data = '';
+              if (typeof event.data === 'string') {
+                data = event.data;
+              } else if (event.data && typeof event.data.text === 'function') {
+                try {
+                  data = await event.data.text();
+                } catch (err) {
+                  data = '';
+                }
+              } else if (typeof ArrayBuffer !== 'undefined' && event.data instanceof ArrayBuffer) {
+                data = new TextDecoder().decode(event.data);
+              }
               if (!data) return;
               handleIncoming(data);
             });
@@ -1896,6 +1911,9 @@
               if (!closedError) {
                 closedError = new Error('Lean 4 WebSocket closed: ' + String(event.code || 'unknown'));
               }
+              socket = null;
+              initialized = false;
+              opened = false;
               rejectAllPending(closedError);
             });
 
@@ -1933,15 +1951,17 @@
       }
 
       async function waitForDiagnostics(targetVersion, timeoutMs = 20000) {
+        const requestedAt = Date.now();
+        return waitForDiagnosticsSince(targetVersion, requestedAt, timeoutMs);
+      }
+
+      async function waitForDiagnosticsSince(targetVersion, requestedAt, timeoutMs = 20000) {
         const started = Date.now();
         while (true) {
           if (closedError) throw closedError;
 
-          if (lastDiagnostics.version >= targetVersion) {
-            await sleep(120);
-            if (lastDiagnostics.version >= targetVersion) {
-              return lastDiagnostics.diagnostics;
-            }
+          if (lastDiagnostics.version >= targetVersion && lastDiagnostics.receivedAt >= requestedAt) {
+            return lastDiagnostics.diagnostics;
           }
 
           if (Date.now() - started > timeoutMs) {
@@ -1956,35 +1976,53 @@
         await initialize();
         version += 1;
         const text = String(code || '');
+        const requestedAt = Date.now();
+        lastDiagnostics = {
+          version: -1,
+          diagnostics: [],
+          receivedAt: 0
+        };
 
-        if (!opened) {
-          sendNotification('textDocument/didOpen', {
+        if (opened) {
+          sendNotification('textDocument/didClose', {
             textDocument: {
-              uri: documentUri,
-              languageId: 'lean',
-              version: version,
-              text: text
+              uri: documentUri
             }
           });
-          opened = true;
-        } else {
-          sendNotification('textDocument/didChange', {
-            textDocument: {
-              uri: documentUri,
-              version: version
-            },
-            contentChanges: [
-              { text: text }
-            ]
-          });
+          opened = false;
         }
 
-        return waitForDiagnostics(version, 25000);
+        sendNotification('textDocument/didOpen', {
+          textDocument: {
+            uri: documentUri,
+            languageId: 'lean',
+            version: version,
+            text: text
+          }
+        });
+        opened = true;
+
+        return waitForDiagnosticsSince(version, requestedAt, 25000);
+      }
+
+      function dispose() {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          try {
+            socket.close();
+          } catch (err) {
+            // ignore close failures
+          }
+        }
+        socket = null;
+        initialized = false;
+        opened = false;
+        pending.clear();
       }
 
       return {
         initialize,
-        execute
+        execute,
+        dispose
       };
     }
 
