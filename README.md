@@ -66,3 +66,22 @@ npm run dev
 ## ライセンス
 
 MIT
+
+## BlueMode Supabase Auth
+
+Run the SQL below in Supabase SQL Editor before using BlueMode auth:
+
+- `supabase/blue_mode_auth.sql`
+
+Required Vercel environment variables:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+API routes used by BlueMode:
+
+- `GET /api/check-login`
+- `POST /api/blue-auth-signup`
+- `POST /api/blue-auth-login`
+- `POST /api/blue-auth-logout`

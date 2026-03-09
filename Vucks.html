@@ -620,6 +620,43 @@
       padding:18px;
     }
 
+    .rewards-auth-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,0.22);
+      background:rgba(255,255,255,0.08);
+    }
+
+    .rewards-auth-id{
+      font-size:11px;
+      color:rgba(226,241,255,0.82);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      flex:1;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;
+    }
+
+    .rewards-logout-btn{
+      border:1px solid rgba(255,255,255,0.35);
+      background:rgba(255,255,255,0.12);
+      color:#fff;
+      border-radius:9px;
+      height:30px;
+      padding:0 10px;
+      font-size:12px;
+      cursor:pointer;
+    }
+
+    .rewards-logout-btn:hover{
+      background:rgba(255,255,255,0.22);
+    }
+
     .login-popup{
       position:absolute;
       inset:0;
@@ -1626,32 +1663,47 @@
   }
 
   if(createAccountBtn){
-    createAccountBtn.addEventListener('click', ()=>{
+    createAccountBtn.addEventListener('click', async ()=>{
       if(!generatedCredentials){
         setPopupStatus('Generate credentials first.');
         return;
       }
 
-      const savedAuth = saveBlueAuth(generatedCredentials);
-      const savedSession = savedAuth ? saveBlueSession(generatedCredentials.accountId) : false;
-      if(!savedAuth || !savedSession){
-        setPopupStatus('Local storage is unavailable. Could not create BlueMode account.');
-        return;
-      }
+      createAccountBtn.disabled = true;
+      setPopupStatus('Creating account...');
 
-      if(loginAccountIdInput){
-        loginAccountIdInput.value = generatedCredentials.accountId;
-      }
-      if(loginRecoveryInput){
-        loginRecoveryInput.value = generatedCredentials.recoveryPassword;
-      }
+      try{
+        const result = await requestBlueSignup(generatedCredentials);
+        const accountId = result && typeof result.accountId === 'string'
+          ? result.accountId
+          : generatedCredentials.accountId;
+        const recoveryPassword = result && typeof result.recoveryPassword === 'string'
+          ? result.recoveryPassword
+          : generatedCredentials.recoveryPassword;
 
-      blueModeLoggedIn = true;
-      blueModeRewards = [];
-      renderRewards();
-      loginPopupDismissed = true;
-      clearGeneratedCredentials();
-      closeLoginPopup(true);
+        saveBlueAccountHint(accountId);
+
+        if(loginAccountIdInput){
+          loginAccountIdInput.value = accountId;
+        }
+        if(loginRecoveryInput){
+          loginRecoveryInput.value = recoveryPassword;
+        }
+
+        blueModeLoggedIn = !!(result && result.loggedIn);
+        blueModeRewards = Array.isArray(result && result.rewards) ? result.rewards : [];
+        renderRewards();
+        loginPopupDismissed = true;
+        clearGeneratedCredentials();
+        closeLoginPopup(true);
+      }catch(err){
+        const message = err && typeof err.message === 'string'
+          ? err.message
+          : 'Could not create account. Please retry.';
+        setPopupStatus(message);
+      }finally{
+        createAccountBtn.disabled = false;
+      }
     });
   }
 
@@ -1727,13 +1779,13 @@
   let suggestionTurnSeq = 0;
   let suggestionTurns = [];
   const SUGGESTION_COUNT = 10;
+  const LOGIN_CHECK_TIMEOUT_MS = 3500;
   const POPUP_LOADING_TEXT = 'Checking account state...';
   const AUTH_VIEW_LOGIN = 'login';
   const AUTH_VIEW_SIGNIN = 'signin';
   const LOGIN_VIEW_COPY = 'Use your Account ID and Recovery Password to log in.';
   const SIGNIN_VIEW_COPY = 'No ID yet? Generate one and store it in a secure place.';
-  const BLUE_AUTH_STORAGE_KEY = 'ivucxBlueModeAuthV1';
-  const BLUE_SESSION_STORAGE_KEY = 'ivucxBlueModeSessionV1';
+  const BLUE_ACCOUNT_HINT_KEY = 'ivucxBlueModeAccountHintV1';
   let popupAuthView = AUTH_VIEW_LOGIN;
   let generatedCredentials = null;
 
@@ -1759,58 +1811,20 @@
     }
   }
 
-  function removeLocalValue(key){
-    try{
-      localStorage.removeItem(key);
-    }catch(err){
-      // ignore storage failure
-    }
+  function readBlueAccountHint(){
+    const value = readLocalValue(BLUE_ACCOUNT_HINT_KEY);
+    return typeof value === 'string' ? value.trim() : '';
   }
 
-  function canonicalizeCredential(value){
-    return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  }
-
-  function readBlueAuth(){
-    const raw = readLocalValue(BLUE_AUTH_STORAGE_KEY);
-    if(!raw) return null;
-    try{
-      const parsed = JSON.parse(raw);
-      if(!parsed || typeof parsed !== 'object') return null;
-      if(typeof parsed.accountId !== 'string' || typeof parsed.recoveryPassword !== 'string') return null;
-      return {
-        accountId: parsed.accountId,
-        recoveryPassword: parsed.recoveryPassword
-      };
-    }catch(err){
-      return null;
+  function saveBlueAccountHint(accountId){
+    if(typeof accountId !== 'string' || accountId.trim().length === 0){
+      return false;
     }
+    return writeLocalValue(BLUE_ACCOUNT_HINT_KEY, accountId.trim());
   }
 
   function hasBlueAuth(){
-    return !!readBlueAuth();
-  }
-
-  function saveBlueAuth(record){
-    if(!record || typeof record !== 'object') return false;
-    if(typeof record.accountId !== 'string' || typeof record.recoveryPassword !== 'string') return false;
-    return writeLocalValue(BLUE_AUTH_STORAGE_KEY, JSON.stringify({
-      accountId: record.accountId,
-      recoveryPassword: record.recoveryPassword
-    }));
-  }
-
-  function readBlueSession(){
-    const value = readLocalValue(BLUE_SESSION_STORAGE_KEY);
-    return typeof value === 'string' ? value : '';
-  }
-
-  function saveBlueSession(accountId){
-    if(typeof accountId !== 'string' || accountId.trim().length === 0){
-      removeLocalValue(BLUE_SESSION_STORAGE_KEY);
-      return true;
-    }
-    return writeLocalValue(BLUE_SESSION_STORAGE_KEY, accountId.trim());
+    return readBlueAccountHint().length > 0;
   }
 
   function getCopyForAuthView(view){
@@ -1865,14 +1879,60 @@
     renderGeneratedCredentials(null);
   }
 
-  function credentialsMatch(stored, accountId, recoveryPassword){
-    if(!stored) return false;
-    const expectedId = canonicalizeCredential(stored.accountId);
-    const expectedRecovery = canonicalizeCredential(stored.recoveryPassword);
-    return expectedId.length > 0
-      && expectedRecovery.length > 0
-      && expectedId === canonicalizeCredential(accountId)
-      && expectedRecovery === canonicalizeCredential(recoveryPassword);
+  async function requestAuthJson(path, method = 'GET', payload = null, signal = null){
+    const options = {
+      method,
+      credentials:'include',
+      cache:'no-store',
+      headers:{
+        'Accept':'application/json'
+      }
+    };
+
+    if(payload){
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(payload);
+    }
+
+    if(signal){
+      options.signal = signal;
+    }
+
+    const res = await fetch(path, options);
+    let data = null;
+
+    try{
+      data = await res.json();
+    }catch(err){
+      data = null;
+    }
+
+    if(!res.ok){
+      const errMessage = data && typeof data.error === 'string'
+        ? data.error
+        : `Request failed (${res.status})`;
+      const error = new Error(errMessage);
+      error.status = res.status;
+      error.payload = data;
+      throw error;
+    }
+
+    return data && typeof data === 'object' ? data : {};
+  }
+
+  async function requestBlueSignup(record){
+    return requestAuthJson('/api/blue-auth-signup', 'POST', record);
+  }
+
+  async function requestBlueLogin(accountId, recoveryPassword){
+    return requestAuthJson('/api/blue-auth-login', 'POST', {
+      accountId,
+      recoveryPassword
+    });
+  }
+
+  async function requestBlueLogout(){
+    return requestAuthJson('/api/blue-auth-logout', 'POST');
   }
 
   async function writeToClipboard(text){
@@ -1951,7 +2011,7 @@
     showPopupMain(getCopyForAuthView(targetView), statusMessage, targetView);
   }
 
-  function handleLoginSubmit(e){
+  async function handleLoginSubmit(e){
     e.preventDefault();
     if(!loginAccountIdInput || !loginRecoveryInput) return;
 
@@ -1967,29 +2027,45 @@
       return;
     }
 
-    const stored = readBlueAuth();
-    if(!stored){
-      setPopupStatus('No ID found on this device. Please move to Sign in.');
-      setAuthView(AUTH_VIEW_SIGNIN, { keepStatus: true });
-      return;
-    }
+    const loginSubmitBtn = loginPopupForm
+      ? loginPopupForm.querySelector('button[type="submit"]')
+      : null;
 
-    if(!credentialsMatch(stored, accountId, recoveryPassword)){
-      setPopupStatus('Account ID or Recovery Password is not correct.');
-      loginRecoveryInput.select();
-      return;
+    if(loginSubmitBtn){
+      loginSubmitBtn.disabled = true;
     }
+    setPopupStatus('Signing in...');
 
-    if(!saveBlueSession(stored.accountId)){
-      setPopupStatus('Local storage is unavailable. Could not keep login session.');
-      return;
+    try{
+      const result = await requestBlueLogin(accountId, recoveryPassword);
+
+      if(result && typeof result.accountId === 'string'){
+        saveBlueAccountHint(result.accountId);
+      }else{
+        saveBlueAccountHint(accountId);
+      }
+
+      blueModeLoggedIn = !!(result && result.loggedIn);
+      blueModeRewards = Array.isArray(result && result.rewards) ? result.rewards : [];
+      renderRewards();
+      loginPopupDismissed = true;
+      closeLoginPopup(true);
+    }catch(err){
+      const message = err && typeof err.message === 'string'
+        ? err.message
+        : 'Login failed. Please try again.';
+      setPopupStatus(message);
+      if(loginRecoveryInput){
+        loginRecoveryInput.select();
+      }
+      if(err && (err.status === 404 || (err.status === 401 && !hasBlueAuth()))){
+        setAuthView(AUTH_VIEW_SIGNIN, { keepStatus: true });
+      }
+    }finally{
+      if(loginSubmitBtn){
+        loginSubmitBtn.disabled = false;
+      }
     }
-
-    blueModeLoggedIn = true;
-    blueModeRewards = [];
-    renderRewards();
-    loginPopupDismissed = true;
-    closeLoginPopup(true);
   }
 
   function showBlueModePanel(){
@@ -2462,6 +2538,35 @@
       return;
     }
 
+    const authRow = document.createElement('div');
+    authRow.className = 'rewards-auth-row';
+
+    const authId = document.createElement('span');
+    authId.className = 'rewards-auth-id';
+    authId.textContent = readBlueAccountHint() || 'Signed in';
+    authRow.appendChild(authId);
+
+    const logoutBtn = document.createElement('button');
+    logoutBtn.type = 'button';
+    logoutBtn.className = 'rewards-logout-btn';
+    logoutBtn.textContent = 'Logout';
+    logoutBtn.addEventListener('click', async ()=>{
+      logoutBtn.disabled = true;
+      try{
+        await requestBlueLogout();
+      }catch(err){
+        // ignore logout error and still clear local state
+      }
+      blueModeLoggedIn = false;
+      blueModeRewards = [];
+      loginPopupDismissed = false;
+      renderRewards();
+      showAuthPopup('Logged out.');
+    });
+    authRow.appendChild(logoutBtn);
+
+    rewardsList.appendChild(authRow);
+
     if(blueModeRewards.length === 0){
       const empty = document.createElement('div');
       empty.className = 'rewards-empty';
@@ -2525,6 +2630,9 @@
 
     blueModeLoggedIn = loginResult.loggedIn;
     blueModeRewards = loginResult.rewards;
+    if(loginResult.loggedIn && typeof loginResult.accountId === 'string'){
+      saveBlueAccountHint(loginResult.accountId);
+    }
     renderRewards();
 
     if(blueModeLoggedIn){
@@ -2537,8 +2645,17 @@
       return;
     }
 
-    const targetView = loginResult.reason === 'no_account' ? AUTH_VIEW_SIGNIN : AUTH_VIEW_LOGIN;
-    showPopupMain(getCopyForAuthView(targetView), '', targetView);
+    if(loginResult.reason === 'timeout' || loginResult.reason === 'network'){
+      const fallbackView = getInitialAuthView();
+      showPopupMain(getCopyForAuthView(fallbackView), 'Could not reach auth server. Please retry.', fallbackView);
+      return;
+    }
+
+    const targetView = getInitialAuthView();
+    const statusMessage = loginResult.reason === 'invalid_session'
+      ? 'Session expired. Please login again.'
+      : '';
+    showPopupMain(getCopyForAuthView(targetView), statusMessage, targetView);
   }
 
   function restoreSummaryFromEditor(){
@@ -2778,39 +2895,37 @@
   });
 
   async function checkLogin(){
-    const storedAuth = readBlueAuth();
-    if(!storedAuth){
+    const controller = new AbortController();
+    const timeoutId = setTimeout(()=>controller.abort(), LOGIN_CHECK_TIMEOUT_MS);
+
+    try{
+      const payload = await requestAuthJson('/api/check-login', 'GET', null, controller.signal);
+      clearTimeout(timeoutId);
+
+      const loggedIn = !!(payload && payload.loggedIn);
+      const rewards = Array.isArray(payload && payload.rewards) ? payload.rewards : [];
+      const accountId = payload && typeof payload.accountId === 'string' ? payload.accountId : '';
+      if(loggedIn && accountId){
+        saveBlueAccountHint(accountId);
+      }
+      return {
+        loggedIn,
+        accountId,
+        rewards,
+        reason: payload && typeof payload.reason === 'string'
+          ? payload.reason
+          : (loggedIn ? 'ok' : 'logged_out')
+      };
+    }catch(err){
+      clearTimeout(timeoutId);
+      const reason = err && err.name === 'AbortError' ? 'timeout' : 'network';
       return {
         loggedIn:false,
+        accountId:'',
         rewards:[],
-        reason:'no_account'
+        reason
       };
     }
-
-    const sessionId = readBlueSession();
-    if(!sessionId){
-      return {
-        loggedIn:false,
-        rewards:[],
-        reason:'logged_out'
-      };
-    }
-
-    const isLoggedIn = canonicalizeCredential(sessionId) === canonicalizeCredential(storedAuth.accountId);
-    if(!isLoggedIn){
-      saveBlueSession('');
-      return {
-        loggedIn:false,
-        rewards:[],
-        reason:'logged_out'
-      };
-    }
-
-    return {
-      loggedIn:true,
-      rewards:[],
-      reason:'ok'
-    };
   }
 
   const THRESHOLD = 40;
