@@ -853,7 +853,7 @@
         }
 
         // jsCoq初期化を確実に待つ
-        const coqErrorCollector = createCoqErrorCollector(jscoqManager);
+        const coqErrorCollector = createCoqErrorCollector(jscoqManager, code);
         coqErrorCollector.attach();
         coqErrorCollector.reset();
         try {
@@ -896,11 +896,21 @@
             if(coqErrorCollector.getErrorCount() > 0){
               const firstError = coqErrorCollector.getErrors()[0] || {};
               const parsed = firstError.parsed || {};
-              const line = parsed.line ? String(parsed.line) : '?';
-              const col = parsed.charFrom !== null && parsed.charFrom !== undefined ? String(parsed.charFrom) : '?';
-              const summary = parsed.summary || firstError.msg || 'Coq reported an error';
+              const derived = firstError.derived || {};
+              const derivedLoc = derived.location || null;
+              const line = derivedLoc && Number.isFinite(derivedLoc.line)
+                ? String(derivedLoc.line)
+                : (parsed.line ? String(parsed.line) : '?');
+              const col = derivedLoc && Number.isFinite(derivedLoc.col)
+                ? String(derivedLoc.col)
+                : (parsed.charFrom !== null && parsed.charFrom !== undefined ? String(parsed.charFrom) : '?');
+              const summary = (derived.message && derived.message.trim())
+                ? derived.message.trim()
+                : (parsed.summary || firstError.msg || 'Coq reported an error');
+              const hasLocation = line !== '?' || col !== '?';
+              const locationPrefix = hasLocation ? (line + ':' + col + ' ') : '';
               setStatus('Coq soundness failed', true);
-              outputEl.textContent = '[Coq Soundness]\n' + line + ':' + col + ' ' + summary;
+              outputEl.textContent = '[Coq Soundness]\n' + locationPrefix + summary;
               return { status: 'rejected', proof_state: 'YN', reason: summary };
             }
             setStatus('Coq proof verified (YY)');
@@ -1210,7 +1220,7 @@
         return output;
       }
 
-      function createCoqErrorCollector(manager){
+      function createCoqErrorCollector(manager, sourceText){
         const errors = [];
         let errorCount = 0;
         let detachFn = null;
@@ -1224,13 +1234,15 @@
         function getErrors(){ return errors.slice(); }
 
         function onError(payload){
-          const msg = stringifyCoqPayload(payload);
+          const derived = extractCoqErrorFromPayload(payload, sourceText, manager);
+          const msg = derived.message || stringifyCoqPayload(payload);
           const parsed = parseCoqErrorMessage(msg);
           const errObj = {
             timestamp: Date.now(),
             raw: payload,
             msg: msg,
-            parsed: parsed
+            parsed: parsed,
+            derived: derived
           };
           errors.push(errObj);
           errorCount += 1;
@@ -1238,6 +1250,8 @@
 
         function attach(){
           if(detachFn) return true;
+          const detachList = [];
+          let attached = false;
           const targets = [];
           if(typeof window !== 'undefined' && window.jsCoq) {
             targets.push({ type: 'global', obj: window.jsCoq });
@@ -1260,18 +1274,18 @@
                   try { prev(payload); } catch(e) {}
                 }
               };
-              detachFn = function(){ obj.onError = prev; };
-              return true;
+              detachList.push(function(){ obj.onError = prev; });
+              attached = true;
             }
             if(typeof obj.on === 'function'){
               try {
                 obj.on('error', onError);
-                detachFn = function(){
+                detachList.push(function(){
                   if(typeof obj.off === 'function'){
                     try { obj.off('error', onError); } catch(e) {}
                   }
-                };
-                return true;
+                });
+                attached = true;
               } catch(e) {
                 // try next target
               }
@@ -1284,8 +1298,8 @@
               onError(payload);
               return prev.apply(this, arguments);
             };
-            detachFn = function(){ manager.reportError = prev; };
-            return true;
+            detachList.push(function(){ manager.reportError = prev; });
+            attached = true;
           }
 
           if(manager && typeof manager.addError === 'function'){
@@ -1294,11 +1308,11 @@
               onError(payload);
               return prev.apply(this, arguments);
             };
-            detachFn = function(){ manager.addError = prev; };
-            return true;
+            detachList.push(function(){ manager.addError = prev; });
+            attached = true;
           }
 
-          if(manager && Object.prototype.hasOwnProperty.call(manager, 'error')){
+          if(manager && ('error' in manager)){
             const prevDescriptor = Object.getOwnPropertyDescriptor(manager, 'error');
             let current = manager.error;
             try {
@@ -1315,7 +1329,7 @@
                   }
                 }
               });
-              detachFn = function(){
+              detachList.push(function(){
                 try {
                   if(prevDescriptor){
                     Object.defineProperty(manager, 'error', prevDescriptor);
@@ -1324,8 +1338,8 @@
                     manager.error = current;
                   }
                 } catch(e) {}
-              };
-              return true;
+              });
+              attached = true;
             } catch(e) {
               // ignore and continue to array hook
             }
@@ -1341,9 +1355,18 @@
                 }
                 return prevPush.apply(this, arguments);
               };
-              detachFn = function(){ arr.push = prevPush; };
-              return true;
+              detachList.push(function(){ arr.push = prevPush; });
+              attached = true;
             }
+          }
+
+          if(attached){
+            detachFn = function(){
+              for(let i = 0; i < detachList.length; i += 1){
+                try { detachList[i](); } catch(e) {}
+              }
+            };
+            return true;
           }
 
           return false;
@@ -1363,11 +1386,90 @@
         try {
           if(typeof payload === 'string') return payload;
           if(payload === null || payload === undefined) return String(payload);
-          if(payload.toString && payload.toString() !== '[object Object]') return payload.toString();
-          return JSON.stringify(payload, safeJsonReplacer(), 2);
+          if(payload.toString){
+            const str = payload.toString();
+            if(str && str !== '[object Object]') return str;
+          }
+          const json = JSON.stringify(payload, safeJsonReplacer(), 2);
+          if(typeof json === 'string') return json;
+          return String(payload);
         } catch(e) {
           return String(payload);
         }
+      }
+
+      function extractCoqErrorFromPayload(payload, sourceText, manager){
+        let message = '';
+        let location = null;
+        const pprint = manager && manager.pprint && typeof manager.pprint.pp2Text === 'function'
+          ? manager.pprint
+          : null;
+        if(payload && typeof payload === 'object'){
+          message = pickCoqMessage(payload);
+          if(!message && payload.err && typeof payload.err === 'object'){
+            message = pickCoqMessage(payload.err);
+          }
+          if(!message && pprint && payload.msg){
+            try {
+              const text = pprint.pp2Text(payload.msg);
+              if(text) message = text;
+            } catch(e) {}
+          }
+          if(!message && pprint && payload.err && payload.err.msg){
+            try {
+              const text = pprint.pp2Text(payload.err.msg);
+              if(text) message = text;
+            } catch(e) {}
+          }
+          const locCandidates = [];
+          if(payload.loc) locCandidates.push(payload.loc);
+          if(payload.location) locCandidates.push(payload.location);
+          if(payload.range) locCandidates.push(payload.range);
+          if(payload.pploc) locCandidates.push(payload.pploc);
+          if(payload.pos) locCandidates.push(payload.pos);
+          if(payload.position) locCandidates.push(payload.position);
+          if(payload.span) locCandidates.push(payload.span);
+          if(payload.err && payload.err.loc) locCandidates.push(payload.err.loc);
+          if(payload.err && payload.err.location) locCandidates.push(payload.err.location);
+          if(payload.err && payload.err.range) locCandidates.push(payload.err.range);
+
+          for(const loc of locCandidates){
+            const resolved = normalizeCoqLocation(loc, sourceText);
+            if(resolved){
+              location = resolved;
+              break;
+            }
+          }
+        } else if(typeof payload === 'string'){
+          message = payload;
+        }
+
+        if(!message){
+          message = '';
+        }
+
+        return { message, location };
+      }
+
+      function pickCoqMessage(obj){
+        if(!obj || typeof obj !== 'object') return '';
+        if(typeof obj.message === 'string') return obj.message;
+        if(typeof obj.msg === 'string') return obj.msg;
+        if(typeof obj.error === 'string') return obj.error;
+        if(obj.error && typeof obj.error.message === 'string') return obj.error.message;
+        if(typeof obj.text === 'string') return obj.text;
+        if(typeof obj.pp === 'string') return obj.pp;
+        if(obj.pp && typeof obj.pp === 'string') return obj.pp;
+        if(obj.msg && typeof obj.msg === 'object'){
+          try { return JSON.stringify(obj.msg); } catch(e) {}
+        }
+        if(obj.message && typeof obj.message === 'object'){
+          try { return JSON.stringify(obj.message); } catch(e) {}
+        }
+        if(obj.error && typeof obj.error === 'object'){
+          try { return JSON.stringify(obj.error); } catch(e) {}
+        }
+        return '';
       }
 
       function parseCoqErrorMessage(msg){
@@ -2795,6 +2897,15 @@
 
     function normalizeCoqLocation(loc, sourceText) {
       if (!loc || typeof loc !== 'object') return null;
+
+      if (Array.isArray(loc)) {
+        if (loc.length > 0 && typeof loc[0] === 'object') {
+          return normalizeCoqLocation(loc[0], sourceText);
+        }
+        if (loc.length >= 2 && Number.isFinite(loc[0]) && typeof sourceText === 'string') {
+          return indexToLineCol(sourceText, loc[0]);
+        }
+      }
 
       const lineRaw = pickNumber(loc.line, loc.lineno, loc.startLine);
       const colRaw = pickNumber(loc.column, loc.col, loc.character, loc.char, loc.startCol);
