@@ -874,6 +874,12 @@
           await jscoqInstance.execute('Reset Initial.\n' + code);
 
           if (closure.proofState === 'YY') {
+            const soundnessIssue = findCoqUnsoundToken(code);
+            if(soundnessIssue){
+              setStatus('Coq soundness failed', true);
+              outputEl.textContent = '[Coq Soundness]\n' + soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ')';
+              return { status: 'rejected', proof_state: 'YN', reason: soundnessIssue.message };
+            }
             setStatus('Coq proof verified (YY)');
             outputEl.textContent = '[Coq Validation Success]\n証明は ' + closure.closer + ' で完成しています (YY状態)';
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
@@ -1178,6 +1184,129 @@
         }
 
         return output;
+      }
+
+      function findCoqUnsoundToken(code){
+        if(!code || typeof code !== 'string') return null;
+        const tokenMessages = {
+          Axiom: 'Axiom declaration is not allowed in YY proofs.',
+          Axioms: 'Axiom declaration is not allowed in YY proofs.',
+          Admitted: 'Admitted leaves the proof incomplete.',
+          Admit: 'Admit leaves the proof incomplete.',
+          admit: 'admit leaves the proof incomplete.',
+          Conjecture: 'Conjecture leaves the proof unproven.'
+        };
+
+        let i = 0;
+        let line = 1;
+        let col = 1;
+        let commentDepth = 0;
+        let inString = false;
+        let word = '';
+        let wordLine = 1;
+        let wordCol = 1;
+
+        function flushWord(){
+          if(!word) return null;
+          const token = word;
+          word = '';
+          if(Object.prototype.hasOwnProperty.call(tokenMessages, token)){
+            return {
+              token,
+              line: wordLine,
+              col: wordCol,
+              message: tokenMessages[token]
+            };
+          }
+          return null;
+        }
+
+        function advanceChar(){
+          const ch = code[i];
+          if(ch === '\r'){
+            if(code[i + 1] === '\n'){
+              i += 2;
+            }else{
+              i += 1;
+            }
+            line += 1;
+            col = 1;
+            return;
+          }
+          if(ch === '\n'){
+            i += 1;
+            line += 1;
+            col = 1;
+            return;
+          }
+          i += 1;
+          col += 1;
+        }
+
+        while(i < code.length){
+          const ch = code[i];
+          const next = code[i + 1];
+
+          if(inString){
+            if(ch === '\\'){
+              advanceChar();
+              if(i < code.length) advanceChar();
+              continue;
+            }
+            if(ch === '"'){
+              inString = false;
+            }
+            advanceChar();
+            continue;
+          }
+
+          if(commentDepth > 0){
+            if(ch === '(' && next === '*'){
+              commentDepth += 1;
+              advanceChar();
+              advanceChar();
+              continue;
+            }
+            if(ch === '*' && next === ')'){
+              commentDepth -= 1;
+              advanceChar();
+              advanceChar();
+              continue;
+            }
+            advanceChar();
+            continue;
+          }
+
+          if(ch === '"'){
+            inString = true;
+            advanceChar();
+            continue;
+          }
+          if(ch === '(' && next === '*'){
+            commentDepth = 1;
+            advanceChar();
+            advanceChar();
+            continue;
+          }
+
+          if(/[A-Za-z]/.test(ch)){
+            if(word.length === 0){
+              wordLine = line;
+              wordCol = col;
+            }
+            word += ch;
+            advanceChar();
+            continue;
+          }
+
+          const hit = flushWord();
+          if(hit) return hit;
+          advanceChar();
+        }
+
+        const finalHit = flushWord();
+        if(finalHit) return finalHit;
+        return null;
       }
 
       function buildCoqLibraryCatalog(payload){
