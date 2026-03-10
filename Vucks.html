@@ -869,6 +869,15 @@
       color:rgba(255,255,255,0.72);
     }
 
+    .login-popup-hint.legacy-import{
+      margin-top:4px;
+      color:rgba(171,216,255,0.9);
+    }
+
+    .login-popup-submit.legacy-import{
+      margin-bottom:6px;
+    }
+
     .login-popup-submit{
       width:100%;
       height:50px;
@@ -1373,6 +1382,8 @@
         </section>
         <section class="login-popup-view" data-auth-panel="signin">
           <div class="login-popup-hint">Generate a long Account ID and Recovery Password, then save both values securely.</div>
+          <div class="login-popup-hint legacy-import" id="legacyImportHint" hidden>Legacy ID detected on this device.</div>
+          <button class="login-popup-submit secondary legacy-import" id="importLegacyBtn" type="button" hidden>Import Local ID</button>
           <button class="login-popup-submit" id="generateCredentialsBtn" type="button">Generate New ID</button>
           <div class="credential-stack" id="generatedCredentials" hidden>
             <label class="login-popup-label" for="generatedAccountId">Account ID</label>
@@ -1430,6 +1441,8 @@
   const loginRecoveryInput = document.getElementById('loginRecoveryInput');
   const switchToSigninBtn = document.getElementById('switchToSigninBtn');
   const switchToLoginBtn = document.getElementById('switchToLoginBtn');
+  const legacyImportHint = document.getElementById('legacyImportHint');
+  const importLegacyBtn = document.getElementById('importLegacyBtn');
   const generateCredentialsBtn = document.getElementById('generateCredentialsBtn');
   const generatedCredentialsBox = document.getElementById('generatedCredentials');
   const generatedAccountIdOutput = document.getElementById('generatedAccountId');
@@ -1657,6 +1670,49 @@
     });
   }
 
+  if(importLegacyBtn){
+    importLegacyBtn.addEventListener('click', async ()=>{
+      const legacy = readLegacyAuth();
+      if(!legacy){
+        syncLegacyImportVisibility();
+        setPopupStatus('No legacy ID found.');
+        return;
+      }
+
+      importLegacyBtn.disabled = true;
+      setPopupStatus('Importing legacy ID...');
+
+      try{
+        const result = await requestBlueSignup({
+          accountId: legacy.accountId,
+          recoveryPassword: legacy.recoveryPassword
+        });
+
+        saveBlueAccountHint(result.accountId || legacy.accountId);
+        clearLegacyAuth();
+        syncLegacyImportVisibility();
+
+        blueModeLoggedIn = !!(result && result.loggedIn);
+        blueModeRewards = Array.isArray(result && result.rewards) ? result.rewards : [];
+        renderRewards();
+        loginPopupDismissed = true;
+        closeLoginPopup(true);
+      }catch(err){
+        if(err && err.status === 409){
+          setPopupStatus('Account already exists. Please login with your ID.');
+          setAuthView(AUTH_VIEW_LOGIN, { keepStatus: true });
+        }else{
+          const message = err && typeof err.message === 'string'
+            ? err.message
+            : 'Could not import legacy ID.';
+          setPopupStatus(message);
+        }
+      }finally{
+        importLegacyBtn.disabled = false;
+      }
+    });
+  }
+
   if(generateCredentialsBtn){
     generateCredentialsBtn.addEventListener('click', ()=>{
       generatedCredentials = generateBlueCredentials();
@@ -1789,6 +1845,7 @@
   const LOGIN_VIEW_COPY = 'Use your Account ID and Recovery Password to log in.';
   const SIGNIN_VIEW_COPY = 'No ID yet? Generate one and store it in a secure place.';
   const BLUE_ACCOUNT_HINT_KEY = 'ivucxBlueModeAccountHintV1';
+  const LEGACY_AUTH_KEY = 'ivucxBlueModeAuthV1';
   let popupAuthView = AUTH_VIEW_LOGIN;
   let generatedCredentials = null;
 
@@ -1814,6 +1871,14 @@
     }
   }
 
+  function removeLocalValue(key){
+    try{
+      localStorage.removeItem(key);
+    }catch(err){
+      // ignore storage failure
+    }
+  }
+
   function readBlueAccountHint(){
     const value = readLocalValue(BLUE_ACCOUNT_HINT_KEY);
     return typeof value === 'string' ? value.trim() : '';
@@ -1824,6 +1889,37 @@
       return false;
     }
     return writeLocalValue(BLUE_ACCOUNT_HINT_KEY, accountId.trim());
+  }
+
+  function readLegacyAuth(){
+    const raw = readLocalValue(LEGACY_AUTH_KEY);
+    if(!raw) return null;
+    try{
+      const parsed = JSON.parse(raw);
+      if(!parsed || typeof parsed !== 'object') return null;
+      if(typeof parsed.accountId !== 'string' || typeof parsed.recoveryPassword !== 'string') return null;
+      return {
+        accountId: parsed.accountId,
+        recoveryPassword: parsed.recoveryPassword
+      };
+    }catch(err){
+      return null;
+    }
+  }
+
+  function clearLegacyAuth(){
+    removeLocalValue(LEGACY_AUTH_KEY);
+  }
+
+  function syncLegacyImportVisibility(){
+    const legacy = readLegacyAuth();
+    const show = !!(legacy && legacy.accountId && legacy.recoveryPassword);
+    if(legacyImportHint){
+      legacyImportHint.hidden = !show;
+    }
+    if(importLegacyBtn){
+      importLegacyBtn.hidden = !show;
+    }
   }
 
   function hasBlueAuth(){
@@ -1995,6 +2091,10 @@
       panel.classList.toggle('is-active', isActive);
     });
 
+    if(nextView === AUTH_VIEW_SIGNIN){
+      syncLegacyImportVisibility();
+    }
+
     if(!options.skipCopy){
       setPopupCopy(getCopyForAuthView(nextView));
     }
@@ -2061,7 +2161,11 @@
       if(loginRecoveryInput){
         loginRecoveryInput.select();
       }
-      if(err && (err.status === 404 || (err.status === 401 && !hasBlueAuth()))){
+      const legacy = readLegacyAuth();
+      if(legacy){
+        setPopupStatus('Legacy ID detected. Please import it from Sign in.');
+        setAuthView(AUTH_VIEW_SIGNIN, { keepStatus: true });
+      }else if(err && (err.status === 404 || (err.status === 401 && !hasBlueAuth()))){
         setAuthView(AUTH_VIEW_SIGNIN, { keepStatus: true });
       }
     }finally{
