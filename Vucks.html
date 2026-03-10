@@ -476,7 +476,7 @@
       position:absolute;
       top:24px;
       left:24px;
-      width:min(360px, calc(100vw - 40px));
+      width:min(420px, calc(100vw - 40px));
       opacity:0;
       transform:translateY(-10px);
       pointer-events:none;
@@ -497,6 +497,25 @@
       color:#fff;
       font-weight:760;
       text-shadow:0 8px 26px rgba(0,0,0,0.38);
+    }
+
+    .vx-auth-row{
+      margin-top:8px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:4px 0;
+    }
+
+    .vx-auth-id{
+      font-size:11px;
+      color:rgba(226,241,255,0.82);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      flex:1;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;
     }
 
     .cash-actions{
@@ -540,32 +559,27 @@
     .rewards-list{
       margin-top:8px;
       width:100%;
-      min-height:190px;
-      border-radius:18px;
-      border:1px solid rgba(255,255,255,0.2);
-      background:rgba(255,255,255,0.08);
-      backdrop-filter:blur(8px);
-      padding:12px;
-      display:flex;
-      flex-direction:column;
-      justify-content:center;
+      min-height:clamp(120px, 26vh, 200px);
+      padding:0;
+      display:block;
     }
 
     .rewards-login-wrap{
-      min-height:166px;
+      min-height:clamp(120px, 24vh, 176px);
       display:flex;
       align-items:center;
       justify-content:center;
+      padding:6px 0;
     }
 
     .rewards-login-btn{
       width:min(250px, 92%);
-      min-height:56px;
+      min-height:clamp(48px, 7vh, 56px);
       border-radius:16px;
       border:1px solid rgba(173,215,255,0.58);
       background:linear-gradient(145deg, rgba(31,73,132,0.7), rgba(15,36,88,0.78));
       color:#ecf5ff;
-      font-size:20px;
+      font-size:clamp(16px, 3.2vw, 20px);
       font-weight:700;
       letter-spacing:.01em;
       cursor:pointer;
@@ -587,59 +601,40 @@
       list-style:none;
       display:flex;
       flex-direction:column;
-      gap:8px;
+      gap:14px;
     }
 
     .rewards-item{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      padding:10px 12px;
-      border-radius:12px;
-      background:rgba(255,255,255,0.12);
+      display:block;
+      padding:0;
       color:rgba(255,255,255,0.92);
-      font-size:13px;
-      line-height:1.35;
+      line-height:1.45;
     }
 
-    .rewards-item .amount{
+    .rewards-item-title{
+      display:block;
+      font-size:clamp(14px, 2.4vw, 17px);
+      font-weight:600;
+      color:#8ec5ff;
+      letter-spacing:.01em;
+      margin-bottom:4px;
+    }
+
+    .rewards-item-amount{
+      display:block;
       color:rgba(255,255,255,0.68);
-      white-space:nowrap;
-      font-size:12px;
+      font-size:clamp(12px, 2.1vw, 14px);
     }
 
     .rewards-empty{
-      min-height:166px;
+      min-height:clamp(120px, 24vh, 176px);
       display:flex;
       align-items:center;
       justify-content:center;
       color:rgba(255,255,255,0.58);
       font-size:14px;
       text-align:center;
-      padding:18px;
-    }
-
-    .rewards-auth-row{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      margin-bottom:10px;
-      padding:8px 10px;
-      border-radius:10px;
-      border:1px solid rgba(255,255,255,0.22);
-      background:rgba(255,255,255,0.08);
-    }
-
-    .rewards-auth-id{
-      font-size:11px;
-      color:rgba(226,241,255,0.82);
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-      flex:1;
-      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;
+      padding:18px 0;
     }
 
     .rewards-logout-btn{
@@ -1254,6 +1249,11 @@
         font-size:clamp(28px, 12vw, 44px);
       }
 
+      .vx-auth-row{
+        margin-top:6px;
+        padding:4px 0;
+      }
+
       .cash-action-btn{
         font-size:17px;
       }
@@ -1335,6 +1335,7 @@
 <div class="blue-mode-shell" id="blueModeShell">
   <section class="blue-mode-panel" id="blueModePanel" aria-live="polite">
     <h1 class="vx-title">Vx -- ($ --)</h1>
+    <div class="vx-auth-row" id="vxAuthRow" hidden></div>
 
     <div class="cash-actions" aria-label="Withdraw and deposit actions">
       <button class="cash-action-btn" id="withdrawBtn" type="button">Withdrawals</button>
@@ -1418,6 +1419,8 @@
   const selectionCancel = document.getElementById('selectionCancel');
   const blueModePanel = document.getElementById('blueModePanel');
   const rewardsList = document.getElementById('rewardsList');
+  const vxTitle = document.querySelector('.vx-title');
+  const vxAuthRow = document.getElementById('vxAuthRow');
   const loginPopup = document.getElementById('loginPopup');
   const loginPopupClose = document.getElementById('loginPopupClose');
   const loginPopupForm = document.getElementById('loginPopupForm');
@@ -2515,9 +2518,20 @@
     return [];
   }
 
+  function updateVxTitle(){
+    if(!vxTitle) return;
+    vxTitle.textContent = blueModeLoggedIn ? 'Vx 0($ 0)' : 'Vx -- ($ --)';
+  }
+
   function renderRewards(){
     if(!rewardsList) return;
     rewardsList.innerHTML = '';
+    updateVxTitle();
+
+    if(vxAuthRow){
+      vxAuthRow.innerHTML = '';
+      vxAuthRow.hidden = true;
+    }
 
     if(!blueModeLoggedIn){
       const wrap = document.createElement('div');
@@ -2538,13 +2552,9 @@
       return;
     }
 
-    const authRow = document.createElement('div');
-    authRow.className = 'rewards-auth-row';
-
     const authId = document.createElement('span');
-    authId.className = 'rewards-auth-id';
+    authId.className = 'vx-auth-id';
     authId.textContent = readBlueAccountHint() || 'Signed in';
-    authRow.appendChild(authId);
 
     const logoutBtn = document.createElement('button');
     logoutBtn.type = 'button';
@@ -2563,9 +2573,11 @@
       renderRewards();
       showAuthPopup('Logged out.');
     });
-    authRow.appendChild(logoutBtn);
-
-    rewardsList.appendChild(authRow);
+    if(vxAuthRow){
+      vxAuthRow.hidden = false;
+      vxAuthRow.appendChild(authId);
+      vxAuthRow.appendChild(logoutBtn);
+    }
 
     if(blueModeRewards.length === 0){
       const empty = document.createElement('div');
@@ -2583,11 +2595,12 @@
       row.className = 'rewards-item';
 
       const title = document.createElement('span');
+      title.className = 'rewards-item-title';
       title.textContent = item.title;
       row.appendChild(title);
 
       const amount = document.createElement('span');
-      amount.className = 'amount';
+      amount.className = 'rewards-item-amount';
       amount.textContent = item.amount || '--';
       row.appendChild(amount);
 
