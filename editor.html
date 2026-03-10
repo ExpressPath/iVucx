@@ -801,6 +801,30 @@
       async function validateCoqProof(code){
         setStatus('Validating Coq proof...');
         outputEl.textContent = 'jsCoqで証明を検証中...\n';
+        const normalized = stripCoqCommentsAndStrings(code);
+        const libraryCatalog = buildCoqLibraryCatalog(initPayload);
+        const libraryCheck = validateCoqLibraryUsage(normalized, libraryCatalog);
+        if(!libraryCheck.ok){
+          setStatus('Coq validation failed', true);
+          outputEl.textContent = '[Coq Validation]\n' + libraryCheck.reason;
+          return { status: 'rejected', proof_state: 'NN', reason: libraryCheck.reason };
+        }
+        const axiomConflict = detectCoqAxiomConflict(normalized, libraryCatalog);
+        if(axiomConflict){
+          const conflictLines = [
+            'Library axiom conflicts with proof axiom: ' + axiomConflict.name
+          ];
+          if(axiomConflict.libraryStatement){
+            conflictLines.push('Library axiom: ' + axiomConflict.libraryStatement);
+          }
+          if(axiomConflict.proofStatement){
+            conflictLines.push('Proof axiom: ' + axiomConflict.proofStatement);
+          }
+          const conflictMessage = conflictLines.join('\n');
+          setStatus('Coq validation failed', true);
+          outputEl.textContent = '[Coq Validation]\n' + conflictMessage;
+          return { status: 'rejected', proof_state: 'NN', reason: conflictMessage };
+        }
         const closure = analyzeCoqClosure(code);
         if(closure.proofState === 'NN'){
           setStatus('Coq validation failed', true);
@@ -1110,6 +1134,364 @@
         }
 
         return output;
+      }
+
+      function buildCoqLibraryCatalog(payload){
+        const tables = collectCoqLibraryTables(payload);
+        const allowedLibraries = new Set();
+        const allowedTheorems = new Set();
+        const libraryAxioms = new Map();
+
+        tables.forEach((table)=>{
+          extractLibraryNames(table).forEach((name)=>{
+            if(name) allowedLibraries.add(name);
+          });
+          extractTheoremsFromTable(table).forEach((name)=>{
+            if(name) allowedTheorems.add(name);
+          });
+          extractAxiomsFromTable(table).forEach((entry)=>{
+            if(!entry || !entry.name) return;
+            const normalizedStatement = normalizeCoqStatement(entry.statement);
+            if(libraryAxioms.has(entry.name)) return;
+            libraryAxioms.set(entry.name, normalizedStatement);
+          });
+        });
+
+        return {
+          tablesCount: tables.length,
+          allowedLibraries,
+          allowedTheorems,
+          libraryAxioms
+        };
+      }
+
+      function collectCoqLibraryTables(payload){
+        const out = [];
+        const sources = [];
+        if(payload && typeof payload === 'object'){
+          sources.push(
+            payload.coqLibraryTables,
+            payload.coqLibraryTable,
+            payload.libraryTables,
+            payload.libraryTable,
+            payload.coqLibraries,
+            payload.library
+          );
+        }
+
+        const storedTables = readStoredCoqLibraryTables();
+        if(storedTables) sources.push(storedTables);
+
+        sources.forEach((source)=>{
+          normalizeLibraryTablesInput(source).forEach((table)=>{
+            if(isCoqLibraryTable(table)) out.push(table);
+          });
+        });
+
+        return out;
+      }
+
+      function readStoredCoqLibraryTables(){
+        const raw = safeStorageGet(localStorage, 'ivucxCoqLibraryTables')
+          || safeStorageGet(localStorage, 'ivucxLibraryTables');
+        if(!raw) return null;
+        try{
+          return JSON.parse(raw);
+        }catch(err){
+          return null;
+        }
+      }
+
+      function normalizeLibraryTablesInput(source){
+        const out = [];
+        if(!source) return out;
+        if(Array.isArray(source)){
+          out.push(...source);
+          return out;
+        }
+        if(typeof source === 'object'){
+          if(Array.isArray(source.Coq)) out.push(...source.Coq);
+          if(Array.isArray(source.coq)) out.push(...source.coq);
+          if(Array.isArray(source.tables)) out.push(...source.tables);
+          if(out.length === 0) out.push(source);
+        }
+        return out;
+      }
+
+      function isCoqLibraryTable(table){
+        if(!table || typeof table !== 'object') return false;
+        const lang = table.language || table.lang || table.assistant || table.proofAssistant;
+        if(!lang) return true;
+        return String(lang).trim().toLowerCase() === 'coq';
+      }
+
+      function extractLibraryNames(table){
+        const names = [];
+        if(!table || typeof table !== 'object') return names;
+        const candidates = [
+          table.library,
+          table.libraryName,
+          table.name,
+          table.module,
+          table.table,
+          table.tableName
+        ];
+        candidates.forEach((value)=>{
+          if(typeof value === 'string' && value.trim()){
+            names.push(value.trim());
+          }
+        });
+        if(Array.isArray(table.libraries)){
+          table.libraries.forEach((value)=>{
+            if(typeof value === 'string' && value.trim()){
+              names.push(value.trim());
+            }
+          });
+        }
+        return names;
+      }
+
+      function extractTheoremsFromTable(table){
+        const out = [];
+        if(!table || typeof table !== 'object') return out;
+        if(Array.isArray(table.theorems)){
+          out.push(...extractNamesFromEntries(table.theorems));
+        }
+        if(Array.isArray(table.entries)){
+          table.entries.forEach((entry)=>{
+            if(entry && typeof entry === 'object' && entry.type && String(entry.type).toLowerCase() !== 'theorem') return;
+            const name = extractEntryName(entry);
+            if(name) out.push(name);
+          });
+        }
+        if(Array.isArray(table.items)){
+          table.items.forEach((entry)=>{
+            if(entry && typeof entry === 'object' && entry.kind && String(entry.kind).toLowerCase() !== 'theorem') return;
+            const name = extractEntryName(entry);
+            if(name) out.push(name);
+          });
+        }
+        if(Array.isArray(table.rows)){
+          table.rows.forEach((entry)=>{
+            if(entry && typeof entry === 'object' && entry.kind && String(entry.kind).toLowerCase() !== 'theorem') return;
+            const name = extractEntryName(entry);
+            if(name) out.push(name);
+          });
+        }
+        return out;
+      }
+
+      function extractAxiomsFromTable(table){
+        const out = [];
+        if(!table || typeof table !== 'object') return out;
+        if(Array.isArray(table.axioms)){
+          out.push(...normalizeAxiomEntries(table.axioms));
+        }
+        if(Array.isArray(table.entries)){
+          table.entries.forEach((entry)=>{
+            if(entry && typeof entry === 'object' && entry.type && String(entry.type).toLowerCase() !== 'axiom') return;
+            out.push(...normalizeAxiomEntries([entry]));
+          });
+        }
+        if(Array.isArray(table.items)){
+          table.items.forEach((entry)=>{
+            if(entry && typeof entry === 'object' && entry.kind && String(entry.kind).toLowerCase() !== 'axiom') return;
+            out.push(...normalizeAxiomEntries([entry]));
+          });
+        }
+        if(Array.isArray(table.rows)){
+          table.rows.forEach((entry)=>{
+            if(entry && typeof entry === 'object' && entry.kind && String(entry.kind).toLowerCase() !== 'axiom') return;
+            out.push(...normalizeAxiomEntries([entry]));
+          });
+        }
+        return out;
+      }
+
+      function extractNamesFromEntries(entries){
+        const out = [];
+        entries.forEach((entry)=>{
+          const name = extractEntryName(entry);
+          if(name) out.push(name);
+        });
+        return out;
+      }
+
+      function extractEntryName(entry){
+        if(typeof entry === 'string') return entry.trim();
+        if(entry && typeof entry === 'object'){
+          const candidates = [entry.name, entry.theorem, entry.id, entry.symbol, entry.title, entry.label];
+          for(const value of candidates){
+            if(typeof value === 'string' && value.trim()) return value.trim();
+          }
+        }
+        return '';
+      }
+
+      function normalizeAxiomEntries(entries){
+        const out = [];
+        entries.forEach((entry)=>{
+          if(!entry) return;
+          if(typeof entry === 'string'){
+            out.push(...parseAxiomString(entry));
+            return;
+          }
+          if(typeof entry === 'object'){
+            const parsed = typeof entry.axiom === 'string' ? parseAxiomString(entry.axiom) : [];
+            if(parsed.length){
+              out.push(...parsed);
+              return;
+            }
+            const name = extractEntryName(entry) || (typeof entry.axiom === 'string' ? entry.axiom.trim() : '');
+            const statement = extractAxiomStatement(entry);
+            if(name) out.push({ name, statement });
+          }
+        });
+        return out;
+      }
+
+      function parseAxiomString(text){
+        const out = [];
+        const trimmed = String(text || '').trim();
+        if(!trimmed) return out;
+        const axiomMatch = trimmed.match(/Axioms?\b\s+([^:]+?)\s*:\s*(.+)\.?$/i);
+        if(axiomMatch){
+          const names = splitAxiomNames(axiomMatch[1]);
+          const stmt = normalizeCoqStatement(axiomMatch[2]);
+          names.forEach((name)=>{
+            if(name) out.push({ name, statement: stmt });
+          });
+          return out;
+        }
+        const colonMatch = trimmed.match(/^([^:]+?)\s*:\s*(.+)$/);
+        if(colonMatch){
+          const names = splitAxiomNames(colonMatch[1]);
+          const stmt = normalizeCoqStatement(colonMatch[2]);
+          names.forEach((name)=>{
+            if(name) out.push({ name, statement: stmt });
+          });
+          return out;
+        }
+        out.push({ name: trimmed, statement: '' });
+        return out;
+      }
+
+      function splitAxiomNames(part){
+        return String(part || '')
+          .trim()
+          .split(/\s+/)
+          .map((name)=>name.trim())
+          .filter((name)=>!!name);
+      }
+
+      function extractAxiomStatement(entry){
+        if(!entry || typeof entry !== 'object') return '';
+        const candidates = [entry.statement, entry.prop, entry.type, entry.signature, entry.formula];
+        for(const value of candidates){
+          if(typeof value === 'string' && value.trim()){
+            return normalizeCoqStatement(value);
+          }
+        }
+        return '';
+      }
+
+      function normalizeCoqStatement(statement){
+        return String(statement || '').replace(/\s+/g, ' ').trim();
+      }
+
+      function validateCoqLibraryUsage(normalized, catalog){
+        if(!catalog || !normalized) return { ok: true, invalid: [] };
+        const used = Array.from(new Set(extractCoqLibraryReferences(normalized)));
+        if(used.length === 0) return { ok: true, invalid: [] };
+        if(catalog.allowedLibraries.size === 0){
+          if(catalog.tablesCount > 0){
+            return {
+              ok: false,
+              invalid: used,
+              reason: 'Coq LibraryTable does not allow these libraries: ' + used.join(', ')
+            };
+          }
+          return { ok: true, invalid: [] };
+        }
+        const invalid = used.filter((name)=>!catalog.allowedLibraries.has(name));
+        if(invalid.length === 0) return { ok: true, invalid: [] };
+        return {
+          ok: false,
+          invalid,
+          reason: 'Coq LibraryTable does not allow these libraries: ' + invalid.join(', ')
+        };
+      }
+
+      function extractCoqLibraryReferences(normalized){
+        const libs = [];
+        const requireRegex = /(^|\n)\s*(From\s+([A-Za-z0-9_.']+)\s+)?Require\s+(Import|Export)?\s*([\s\S]*?)\.(?=\s|$)/g;
+        let match;
+        while((match = requireRegex.exec(normalized)) !== null){
+          const prefix = match[3] ? match[3].trim() : '';
+          const modulesPart = match[5] ? match[5].trim() : '';
+          if(!modulesPart) continue;
+          libs.push(...expandCoqRequireModules(prefix, modulesPart));
+        }
+        return libs;
+      }
+
+      function expandCoqRequireModules(prefix, modulesPart){
+        const modules = [];
+        const tokens = modulesPart.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+        for(let i = 0; i < tokens.length; i += 1){
+          const token = tokens[i];
+          if(!token) continue;
+          const lower = token.toLowerCase();
+          if(lower === 'as'){
+            i += 1;
+            continue;
+          }
+          if(!/^[A-Za-z0-9_.']+$/.test(token)) continue;
+          let name = token;
+          if(prefix){
+            if(token === prefix || token.startsWith(prefix + '.')){
+              name = token;
+            }else{
+              name = prefix + '.' + token;
+            }
+          }
+          modules.push(name);
+        }
+        return modules;
+      }
+
+      function detectCoqAxiomConflict(normalized, catalog){
+        if(!catalog || catalog.libraryAxioms.size === 0) return null;
+        const proofAxioms = extractCoqAxioms(normalized);
+        for(const axiom of proofAxioms){
+          const libStmt = catalog.libraryAxioms.get(axiom.name);
+          if(!libStmt) continue;
+          const proofStmt = normalizeCoqStatement(axiom.statement);
+          if(!proofStmt || !libStmt) continue;
+          if(proofStmt !== libStmt){
+            return {
+              name: axiom.name,
+              libraryStatement: libStmt,
+              proofStatement: proofStmt
+            };
+          }
+        }
+        return null;
+      }
+
+      function extractCoqAxioms(normalized){
+        const axioms = [];
+        const regex = /(^|\n)\s*Axioms?\b\s+([^:]+?)\s*:\s*([\s\S]*?)\.(?=\s|$)/g;
+        let match;
+        while((match = regex.exec(normalized)) !== null){
+          const names = splitAxiomNames(match[2]);
+          const statement = normalizeCoqStatement(match[3]);
+          names.forEach((name)=>{
+            if(!name) return;
+            axioms.push({ name, statement });
+          });
+        }
+        return axioms;
       }
 
       async function runProof(){
