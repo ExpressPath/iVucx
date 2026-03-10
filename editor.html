@@ -890,6 +890,30 @@
 
       async function validateLeanProof(code){
         setStatus('Validating Lean 4 proof...');
+        const normalized = stripLeanCommentsAndStrings(code);
+        const libraryCatalog = buildLeanLibraryCatalog(initPayload);
+        const libraryCheck = validateLeanLibraryUsage(normalized, libraryCatalog);
+        if(!libraryCheck.ok){
+          setStatus('Lean validation failed', true);
+          outputEl.textContent = '[Lean Validation]\n' + libraryCheck.reason;
+          return { status: 'rejected', proof_state: 'NN', reason: libraryCheck.reason };
+        }
+        const axiomConflict = detectLeanAxiomConflict(normalized, libraryCatalog);
+        if(axiomConflict){
+          const conflictLines = [
+            'Library axiom conflicts with proof axiom: ' + axiomConflict.name
+          ];
+          if(axiomConflict.libraryStatement){
+            conflictLines.push('Library axiom: ' + axiomConflict.libraryStatement);
+          }
+          if(axiomConflict.proofStatement){
+            conflictLines.push('Proof axiom: ' + axiomConflict.proofStatement);
+          }
+          const conflictMessage = conflictLines.join('\n');
+          setStatus('Lean validation failed', true);
+          outputEl.textContent = '[Lean Validation]\n' + conflictMessage;
+          return { status: 'rejected', proof_state: 'NN', reason: conflictMessage };
+        }
         outputEl.textContent = 'Lean 4で証明を検証中...\n';
 
         try{
@@ -1482,6 +1506,158 @@
       function extractCoqAxioms(normalized){
         const axioms = [];
         const regex = /(^|\n)\s*Axioms?\b\s+([^:]+?)\s*:\s*([\s\S]*?)\.(?=\s|$)/g;
+        let match;
+        while((match = regex.exec(normalized)) !== null){
+          const names = splitAxiomNames(match[2]);
+          const statement = normalizeCoqStatement(match[3]);
+          names.forEach((name)=>{
+            if(!name) return;
+            axioms.push({ name, statement });
+          });
+        }
+        return axioms;
+      }
+
+      function buildLeanLibraryCatalog(payload){
+        const tables = collectLeanLibraryTables(payload);
+        const allowedLibraries = new Set();
+        const allowedTheorems = new Set();
+        const libraryAxioms = new Map();
+
+        tables.forEach((table)=>{
+          extractLibraryNames(table).forEach((name)=>{
+            if(name) allowedLibraries.add(name);
+          });
+          extractTheoremsFromTable(table).forEach((name)=>{
+            if(name) allowedTheorems.add(name);
+          });
+          extractAxiomsFromTable(table).forEach((entry)=>{
+            if(!entry || !entry.name) return;
+            const normalizedStatement = normalizeCoqStatement(entry.statement);
+            if(libraryAxioms.has(entry.name)) return;
+            libraryAxioms.set(entry.name, normalizedStatement);
+          });
+        });
+
+        return {
+          tablesCount: tables.length,
+          allowedLibraries,
+          allowedTheorems,
+          libraryAxioms
+        };
+      }
+
+      function collectLeanLibraryTables(payload){
+        const out = [];
+        const sources = [];
+        if(payload && typeof payload === 'object'){
+          sources.push(
+            payload.leanLibraryTables,
+            payload.leanLibraryTable,
+            payload.libraryTables,
+            payload.libraryTable,
+            payload.leanLibraries,
+            payload.library
+          );
+        }
+
+        const storedTables = readStoredLeanLibraryTables();
+        if(storedTables) sources.push(storedTables);
+
+        sources.forEach((source)=>{
+          normalizeLibraryTablesInput(source).forEach((table)=>{
+            if(isLeanLibraryTable(table)) out.push(table);
+          });
+        });
+
+        return out;
+      }
+
+      function readStoredLeanLibraryTables(){
+        const raw = safeStorageGet(localStorage, 'ivucxLeanLibraryTables')
+          || safeStorageGet(localStorage, 'ivucxLibraryTables');
+        if(!raw) return null;
+        try{
+          return JSON.parse(raw);
+        }catch(err){
+          return null;
+        }
+      }
+
+      function isLeanLibraryTable(table){
+        if(!table || typeof table !== 'object') return false;
+        const lang = table.language || table.lang || table.assistant || table.proofAssistant;
+        if(!lang) return true;
+        return String(lang).trim().toLowerCase() === 'lean';
+      }
+
+      function validateLeanLibraryUsage(normalized, catalog){
+        if(!catalog || !normalized) return { ok: true, invalid: [] };
+        const used = Array.from(new Set(extractLeanLibraryReferences(normalized)));
+        if(used.length === 0) return { ok: true, invalid: [] };
+        if(catalog.allowedLibraries.size === 0){
+          if(catalog.tablesCount > 0){
+            return {
+              ok: false,
+              invalid: used,
+              reason: 'Lean LibraryTable does not allow these libraries: ' + used.join(', ')
+            };
+          }
+          return { ok: true, invalid: [] };
+        }
+        const invalid = used.filter((name)=>!catalog.allowedLibraries.has(name));
+        if(invalid.length === 0) return { ok: true, invalid: [] };
+        return {
+          ok: false,
+          invalid,
+          reason: 'Lean LibraryTable does not allow these libraries: ' + invalid.join(', ')
+        };
+      }
+
+      function extractLeanLibraryReferences(normalized){
+        const libs = [];
+        const importRegex = /(^|\n)\s*import\s+([^\n]+)/g;
+        let match;
+        while((match = importRegex.exec(normalized)) !== null){
+          const modulesPart = match[2] ? match[2].trim() : '';
+          if(!modulesPart) continue;
+          const tokens = modulesPart.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+          for(let i = 0; i < tokens.length; i += 1){
+            const token = tokens[i];
+            if(!token) continue;
+            const lower = token.toLowerCase();
+            if(lower === 'hiding' || lower === 'renaming' || lower === 'as'){
+              break;
+            }
+            if(!/^[A-Za-z0-9_.']+$/.test(token)) continue;
+            libs.push(token);
+          }
+        }
+        return libs;
+      }
+
+      function detectLeanAxiomConflict(normalized, catalog){
+        if(!catalog || catalog.libraryAxioms.size === 0) return null;
+        const proofAxioms = extractLeanAxioms(normalized);
+        for(const axiom of proofAxioms){
+          const libStmt = catalog.libraryAxioms.get(axiom.name);
+          if(!libStmt) continue;
+          const proofStmt = normalizeCoqStatement(axiom.statement);
+          if(!proofStmt || !libStmt) continue;
+          if(proofStmt !== libStmt){
+            return {
+              name: axiom.name,
+              libraryStatement: libStmt,
+              proofStatement: proofStmt
+            };
+          }
+        }
+        return null;
+      }
+
+      function extractLeanAxioms(normalized){
+        const axioms = [];
+        const regex = /(^|\n)\s*axioms?\b\s+([^:]+?)\s*:\s*([^\n]+)/gi;
         let match;
         while((match = regex.exec(normalized)) !== null){
           const names = splitAxiomNames(match[2]);
