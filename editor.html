@@ -893,8 +893,9 @@
               outputEl.textContent = '[Coq Soundness]\n' + errMsg;
               return { status: 'rejected', proof_state: 'YN', reason: errMsg };
             }
-            if(coqErrorCollector.getErrorCount() > 0){
-              const firstError = coqErrorCollector.getErrors()[0] || {};
+            const collectedErrors = coqErrorCollector.getErrors();
+            const firstError = pickBestCoqError(collectedErrors);
+            if(firstError){
               const parsed = firstError.parsed || {};
               const derived = firstError.derived || {};
               const derivedLoc = derived.location || null;
@@ -904,9 +905,10 @@
               const col = derivedLoc && Number.isFinite(derivedLoc.col)
                 ? String(derivedLoc.col)
                 : (parsed.charFrom !== null && parsed.charFrom !== undefined ? String(parsed.charFrom) : '?');
-              const summary = (derived.message && derived.message.trim())
-                ? derived.message.trim()
-                : (parsed.summary || firstError.msg || 'Coq reported an error');
+              const derivedMsg = sanitizeCoqMessage(derived.message);
+              const parsedMsg = sanitizeCoqMessage(parsed.summary);
+              const rawMsg = sanitizeCoqMessage(firstError.msg);
+              const summary = derivedMsg || parsedMsg || rawMsg || 'Coq reported an error';
               const hasLocation = line !== '?' || col !== '?';
               const locationPrefix = hasLocation ? (line + ':' + col + ' ') : '';
               setStatus('Coq soundness failed', true);
@@ -1234,9 +1236,18 @@
         function getErrors(){ return errors.slice(); }
 
         function onError(payload){
+          if(payload === null || payload === undefined) return;
+          if(Array.isArray(payload)){
+            if(payload.length === 0) return;
+            for(let i = 0; i < payload.length; i += 1){
+              onError(payload[i]);
+            }
+            return;
+          }
           const derived = extractCoqErrorFromPayload(payload, sourceText, manager);
           const msg = derived.message || stringifyCoqPayload(payload);
           const parsed = parseCoqErrorMessage(msg);
+          if(!isMeaningfulCoqError(derived, msg, parsed)) return;
           const errObj = {
             timestamp: Date.now(),
             raw: payload,
@@ -1409,6 +1420,21 @@
           if(!message && payload.err && typeof payload.err === 'object'){
             message = pickCoqMessage(payload.err);
           }
+          if(!message && payload.feedback && Array.isArray(payload.feedback)){
+            const fb = payload.feedback.find((item)=> item && item.level === 'Error') || payload.feedback[0];
+            if(fb){
+              if(!message && pprint && fb.msg){
+                try {
+                  const text = pprint.pp2Text(fb.msg);
+                  if(text) message = text;
+                } catch(e) {}
+              }
+              if(!message && fb.msg){
+                try { message = typeof fb.msg === 'string' ? fb.msg : JSON.stringify(fb.msg); } catch(e) {}
+              }
+              if(!message && fb.message) message = String(fb.message);
+            }
+          }
           if(!message && pprint && payload.msg){
             try {
               const text = pprint.pp2Text(payload.msg);
@@ -1429,6 +1455,15 @@
           if(payload.pos) locCandidates.push(payload.pos);
           if(payload.position) locCandidates.push(payload.position);
           if(payload.span) locCandidates.push(payload.span);
+          if(payload.feedback && Array.isArray(payload.feedback)){
+            const fb = payload.feedback.find((item)=> item && item.level === 'Error') || payload.feedback[0];
+            if(fb){
+              if(fb.loc) locCandidates.push(fb.loc);
+              if(fb.location) locCandidates.push(fb.location);
+              if(fb.pploc) locCandidates.push(fb.pploc);
+              if(fb.range) locCandidates.push(fb.range);
+            }
+          }
           if(payload.err && payload.err.loc) locCandidates.push(payload.err.loc);
           if(payload.err && payload.err.location) locCandidates.push(payload.err.location);
           if(payload.err && payload.err.range) locCandidates.push(payload.err.range);
@@ -1493,6 +1528,33 @@
         if(m) parsed.summary = m[1].trim();
         if(!parsed.summary) parsed.summary = (msg.length > 200 ? msg.slice(0, 200) + '…' : msg);
         return parsed;
+      }
+
+      function sanitizeCoqMessage(msg){
+        const trimmed = String(msg || '').trim();
+        if(!trimmed) return '';
+        if(trimmed === '[]' || trimmed === '{}' || trimmed === '[object Object]') return '';
+        return trimmed;
+      }
+
+      function isMeaningfulCoqError(derived, msg, parsed){
+        if(derived && derived.location) return true;
+        const summary = parsed && parsed.summary ? sanitizeCoqMessage(parsed.summary) : '';
+        if(summary) return true;
+        const raw = sanitizeCoqMessage(msg);
+        return !!raw;
+      }
+
+      function pickBestCoqError(errors){
+        if(!Array.isArray(errors) || errors.length === 0) return null;
+        for(let i = errors.length - 1; i >= 0; i -= 1){
+          const err = errors[i];
+          if(!err) continue;
+          const derived = err.derived || {};
+          const parsed = err.parsed || {};
+          if(isMeaningfulCoqError(derived, err.msg, parsed)) return err;
+        }
+        return null;
       }
 
       function safeJsonReplacer(){
