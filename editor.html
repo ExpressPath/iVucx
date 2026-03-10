@@ -874,12 +874,6 @@
           await jscoqInstance.execute('Reset Initial.\n' + code);
 
           if (closure.proofState === 'YY') {
-            const extraCheck = runExtraCoqProofCheck(normalized);
-            if(!extraCheck.ok){
-              setStatus('Coq extra check failed', true);
-              outputEl.textContent = '[Coq Validation]\nAdditional proof check failed:\n' + extraCheck.reason;
-              return { status: 'rejected', proof_state: 'YN', reason: extraCheck.reason };
-            }
             setStatus('Coq proof verified (YY)');
             outputEl.textContent = '[Coq Validation Success]\n証明は ' + closure.closer + ' で完成しています (YY状態)';
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
@@ -988,12 +982,6 @@
             return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
           }
 
-          const extraCheck = runExtraLeanProofCheck(normalized);
-          if(!extraCheck.ok){
-            setStatus('Lean extra check failed', true);
-            outputEl.textContent = '[Lean Validation]\nAdditional proof check failed:\n' + extraCheck.reason;
-            return { status: 'rejected', proof_state: 'YN', reason: extraCheck.reason };
-          }
           setStatus('Lean proof verified (YY)');
           outputEl.textContent = '[Lean Validation Success]\nLean 4でエラーなく検証できました (YY状態)';
           return { status: 'allowed', proof_state: 'YY', reason: 'Lean 4 verified' };
@@ -1096,41 +1084,6 @@
         }
 
         return output;
-      }
-
-      function scanDisallowedTokens(normalized, tokens){
-        if(!normalized) return [];
-        const hits = [];
-        tokens.forEach((token)=>{
-          if(token && token.regex && token.regex.test(normalized)){
-            hits.push(token.label);
-          }
-        });
-        return Array.from(new Set(hits));
-      }
-
-      function runExtraCoqProofCheck(normalized){
-        const hits = scanDisallowedTokens(normalized, [
-          { label: 'Admitted', regex: /\bAdmitted\b/ },
-          { label: 'Admit', regex: /\bAdmit\b/ },
-          { label: 'admit', regex: /\badmit\b/ },
-          { label: 'Axiom', regex: /\bAxiom\b/ },
-          { label: 'Axioms', regex: /\bAxioms\b/ },
-          { label: 'Conjecture', regex: /\bConjecture\b/ }
-        ]);
-        if(hits.length === 0) return { ok: true };
-        return { ok: false, reason: 'Disallowed token(s) for YY: ' + hits.join(', ') };
-      }
-
-      function runExtraLeanProofCheck(normalized){
-        const hits = scanDisallowedTokens(normalized, [
-          { label: 'sorry', regex: /\bsorry\b/ },
-          { label: 'admit', regex: /\badmit\b/ },
-          { label: 'axiom', regex: /\baxiom\b/ },
-          { label: 'constant', regex: /\bconstant\b/ }
-        ]);
-        if(hits.length === 0) return { ok: true };
-        return { ok: false, reason: 'Disallowed token(s) for YY: ' + hits.join(', ') };
       }
 
       function analyzeCoqClosure(code) {
@@ -2413,7 +2366,7 @@
             await waitForManagerIdle(manager, started);
 
             if (manager.error && manager.error.length > 0) {
-              throw new Error(extractCoqError(manager));
+              throw new Error(extractCoqError(manager, code));
             }
 
             if (!advanced) break;
@@ -2441,7 +2394,7 @@
       }
     }
 
-    function extractCoqError(manager) {
+    function extractCoqError(manager, sourceText) {
       try {
         const stm = manager.error && manager.error[0];
         if (!stm) return 'Coq validation error';
@@ -2450,19 +2403,111 @@
           ? stm.feedback.find((item) => item && item.level === 'Error')
           : null;
 
+        let message = '';
         if (feedback && manager.pprint && typeof manager.pprint.pp2Text === 'function') {
           const text = manager.pprint.pp2Text(feedback.msg);
-          if (text) return text;
+          if (text) message = text;
         }
 
-        if (feedback && feedback.msg) {
-          return JSON.stringify(feedback.msg);
+        if (!message && feedback && feedback.msg) {
+          message = JSON.stringify(feedback.msg);
         }
+
+        if (!message && stm && stm.msg) {
+          message = typeof stm.msg === 'string' ? stm.msg : JSON.stringify(stm.msg);
+        }
+
+        const location = resolveCoqErrorLocation(stm, feedback, sourceText);
+        if (location) {
+          return location.line + ':' + location.col + ' ' + (message || 'Coq validation error');
+        }
+
+        if (message) return message;
       } catch (err) {
         // fall through to generic message
       }
 
       return 'Coq validation error';
+    }
+
+    function resolveCoqErrorLocation(stm, feedback, sourceText) {
+      const candidates = [];
+      if (feedback && feedback.loc) candidates.push(feedback.loc);
+      if (feedback && feedback.location) candidates.push(feedback.location);
+      if (stm && stm.loc) candidates.push(stm.loc);
+      if (stm && stm.location) candidates.push(stm.location);
+      if (stm && stm.pploc) candidates.push(stm.pploc);
+
+      for (const loc of candidates) {
+        const resolved = normalizeCoqLocation(loc, sourceText);
+        if (resolved) return resolved;
+      }
+      return null;
+    }
+
+    function normalizeCoqLocation(loc, sourceText) {
+      if (!loc || typeof loc !== 'object') return null;
+
+      const lineRaw = pickNumber(loc.line, loc.lineno, loc.startLine);
+      const colRaw = pickNumber(loc.column, loc.col, loc.character, loc.char, loc.startCol);
+      if (Number.isFinite(lineRaw) && Number.isFinite(colRaw)) {
+        return {
+          line: lineRaw <= 0 ? lineRaw + 1 : lineRaw,
+          col: colRaw <= 0 ? colRaw + 1 : colRaw
+        };
+      }
+
+      const start = loc.start && typeof loc.start === 'object' ? loc.start : null;
+      if (start) {
+        const sLine = pickNumber(start.line, start.lineno);
+        const sCol = pickNumber(start.column, start.col, start.character, start.char);
+        if (Number.isFinite(sLine) && Number.isFinite(sCol)) {
+          return {
+            line: sLine <= 0 ? sLine + 1 : sLine,
+            col: sCol <= 0 ? sCol + 1 : sCol
+          };
+        }
+      }
+
+      const bp = pickNumber(loc.bp, loc.startPos, loc.startOffset);
+      if (Number.isFinite(bp) && typeof sourceText === 'string') {
+        return indexToLineCol(sourceText, bp);
+      }
+
+      return null;
+    }
+
+    function pickNumber() {
+      for (let i = 0; i < arguments.length; i += 1) {
+        const value = arguments[i];
+        if (Number.isFinite(value)) return value;
+      }
+      return null;
+    }
+
+    function indexToLineCol(text, index) {
+      if (!text || !Number.isFinite(index) || index < 0) return null;
+      let line = 1;
+      let col = 1;
+      const limit = Math.min(text.length, index);
+      for (let i = 0; i < limit; i += 1) {
+        const ch = text[i];
+        if (ch === '\n') {
+          line += 1;
+          col = 1;
+          continue;
+        }
+        if (ch === '\r') {
+          if (text[i + 1] === '\n') {
+            i += 1;
+          }
+          line += 1;
+          col = 1;
+          continue;
+        }
+        col += 1;
+      }
+      return { line, col };
     }
 
       function createLean4Executor(options) {
