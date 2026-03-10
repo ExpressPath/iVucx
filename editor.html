@@ -866,6 +866,9 @@
         const coqErrorCollector = createCoqErrorCollector(jscoqManager, code);
         coqErrorCollector.attach();
         coqErrorCollector.reset();
+        if(jscoqManager && Array.isArray(jscoqManager.error)) {
+          jscoqManager.error.length = 0;
+        }
         try {
           if(!jscoqInstance) {
             await waitJsCoqReady();
@@ -897,43 +900,11 @@
               outputEl.textContent = '[Coq Soundness]\n' + soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ')';
               return { status: 'rejected', proof_state: 'YN', reason: soundnessIssue.message };
             }
-            if(jscoqManager && Array.isArray(jscoqManager.error) && jscoqManager.error.length > 0){
-              const errMsg = extractCoqError(jscoqManager, code);
-              const sanitizedMsg = sanitizeCoqMessage(errMsg);
-              if(!sanitizedMsg){
-                const fallbackMsg = pickBestCoqManagerError(jscoqManager.error, code, jscoqManager);
-                if(fallbackMsg){
-                  setStatus('Coq soundness failed', true);
-                  outputEl.textContent = '[Coq Soundness]\n' + fallbackMsg;
-                  return { status: 'rejected', proof_state: 'YN', reason: fallbackMsg };
-                }
-                // fall through to collector for better diagnostics
-              } else {
-                setStatus('Coq soundness failed', true);
-                outputEl.textContent = '[Coq Soundness]\n' + errMsg;
-                return { status: 'rejected', proof_state: 'YN', reason: errMsg };
-              }
-            }
-            const collectedErrors = coqErrorCollector.getErrors();
-            const firstError = pickBestCoqError(collectedErrors);
-            if(firstError){
-              const parsed = firstError.parsed || {};
-              const derived = firstError.derived || {};
-              const derivedLoc = derived.location || null;
-              const line = derivedLoc && Number.isFinite(derivedLoc.line)
-                ? String(derivedLoc.line)
-                : (parsed.line ? String(parsed.line) : '?');
-              const col = derivedLoc && Number.isFinite(derivedLoc.col)
-                ? String(derivedLoc.col)
-                : (parsed.charFrom !== null && parsed.charFrom !== undefined ? String(parsed.charFrom) : '?');
-              const derivedMsg = sanitizeCoqMessage(derived.message);
-              const parsedMsg = sanitizeCoqMessage(parsed.summary);
-              const rawMsg = sanitizeCoqMessage(firstError.msg);
-              const summary = derivedMsg || parsedMsg || rawMsg || 'Coq reported an error';
-              const hasLocation = line !== '?' || col !== '?';
-              const locationPrefix = hasLocation ? (line + ':' + col + ' ') : '';
+            const coqErrorDetails = getCoqErrorDetails(jscoqManager, coqErrorCollector, code);
+            if(coqErrorDetails.hasError){
+              const summary = coqErrorDetails.message || 'Coq reported an error (details unavailable)';
               setStatus('Coq soundness failed', true);
-              outputEl.textContent = '[Coq Soundness]\n' + locationPrefix + summary;
+              outputEl.textContent = '[Coq Soundness]\n' + summary;
               return { status: 'rejected', proof_state: 'YN', reason: summary };
             }
             setStatus('Coq proof verified (YY)');
@@ -1603,6 +1574,92 @@
           if(msg) return msg;
         }
         return '';
+      }
+
+      function coqFeedbackIsError(feedback){
+        if(!feedback) return false;
+        if(typeof feedback.is_error === 'boolean') return feedback.is_error;
+        if(typeof feedback.sev === 'number' && feedback.sev >= 2) return true;
+        if(typeof feedback.severity === 'number' && feedback.severity >= 2) return true;
+        const level = String(feedback.level || feedback.severity || feedback.sev || '').toLowerCase();
+        if(level === 'error' || level === 'err' || level === 'fatal') return true;
+        return false;
+      }
+
+      function collectCoqErrorCandidates(manager){
+        const payloads = [];
+        let hasSignal = false;
+        if(manager && Array.isArray(manager.error) && manager.error.length > 0){
+          hasSignal = true;
+          payloads.push(...manager.error);
+        }
+
+        const sentences = manager && manager.doc && Array.isArray(manager.doc.sentences)
+          ? manager.doc.sentences
+          : null;
+        if(sentences){
+          for(let i = 0; i < sentences.length; i += 1){
+            const stm = sentences[i];
+            if(!stm) continue;
+            if(stm.err || stm.error){
+              hasSignal = true;
+              payloads.push(stm.err || stm.error);
+            }
+            if(typeof stm.phase === 'string' && /error|failed/i.test(stm.phase)){
+              hasSignal = true;
+              payloads.push(stm);
+            }
+            if(Array.isArray(stm.feedback)){
+              const errorFeedback = stm.feedback.filter(coqFeedbackIsError);
+              if(errorFeedback.length){
+                hasSignal = true;
+                payloads.push(...errorFeedback);
+              }
+            }
+          }
+        }
+
+        return { payloads, hasSignal };
+      }
+
+      function formatCollectedCoqError(err){
+        if(!err) return '';
+        const parsed = err.parsed || {};
+        const derived = err.derived || {};
+        const derivedLoc = derived.location || null;
+        const derivedMsg = sanitizeCoqMessage(derived.message);
+        const parsedMsg = sanitizeCoqMessage(parsed.summary);
+        const rawMsg = sanitizeCoqMessage(err.msg);
+        const summary = derivedMsg || parsedMsg || rawMsg;
+        if(!summary) return '';
+        if(derivedLoc && Number.isFinite(derivedLoc.line) && Number.isFinite(derivedLoc.col)){
+          return derivedLoc.line + ':' + derivedLoc.col + ' ' + summary;
+        }
+        return summary;
+      }
+
+      function getCoqErrorDetails(manager, collector, sourceText){
+        const candidates = collectCoqErrorCandidates(manager);
+        let hasError = candidates.hasSignal;
+
+        for(let i = 0; i < candidates.payloads.length; i += 1){
+          const msg = formatCoqPayloadError(candidates.payloads[i], sourceText, manager);
+          if(msg) return { hasError: true, message: msg };
+        }
+
+        const collectorBest = collector ? pickBestCoqError(collector.getErrors()) : null;
+        if(collectorBest){
+          hasError = true;
+          const collectorMsg = formatCollectedCoqError(collectorBest);
+          if(collectorMsg) return { hasError: true, message: collectorMsg };
+        }
+
+        if(hasError){
+          const fallback = manager ? sanitizeCoqMessage(extractCoqError(manager, sourceText)) : '';
+          if(fallback) return { hasError: true, message: fallback };
+        }
+
+        return { hasError, message: '' };
       }
 
       function safeJsonReplacer(){
