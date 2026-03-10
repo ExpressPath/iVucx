@@ -874,6 +874,12 @@
           await jscoqInstance.execute('Reset Initial.\n' + code);
 
           if (closure.proofState === 'YY') {
+            const extraCheck = runExtraCoqProofCheck(normalized);
+            if(!extraCheck.ok){
+              setStatus('Coq extra check failed', true);
+              outputEl.textContent = '[Coq Validation]\nAdditional proof check failed:\n' + extraCheck.reason;
+              return { status: 'rejected', proof_state: 'YN', reason: extraCheck.reason };
+            }
             setStatus('Coq proof verified (YY)');
             outputEl.textContent = '[Coq Validation Success]\n証明は ' + closure.closer + ' で完成しています (YY状態)';
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
@@ -982,6 +988,12 @@
             return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
           }
 
+          const extraCheck = runExtraLeanProofCheck(normalized);
+          if(!extraCheck.ok){
+            setStatus('Lean extra check failed', true);
+            outputEl.textContent = '[Lean Validation]\nAdditional proof check failed:\n' + extraCheck.reason;
+            return { status: 'rejected', proof_state: 'YN', reason: extraCheck.reason };
+          }
           setStatus('Lean proof verified (YY)');
           outputEl.textContent = '[Lean Validation Success]\nLean 4でエラーなく検証できました (YY状態)';
           return { status: 'allowed', proof_state: 'YY', reason: 'Lean 4 verified' };
@@ -1084,6 +1096,41 @@
         }
 
         return output;
+      }
+
+      function scanDisallowedTokens(normalized, tokens){
+        if(!normalized) return [];
+        const hits = [];
+        tokens.forEach((token)=>{
+          if(token && token.regex && token.regex.test(normalized)){
+            hits.push(token.label);
+          }
+        });
+        return Array.from(new Set(hits));
+      }
+
+      function runExtraCoqProofCheck(normalized){
+        const hits = scanDisallowedTokens(normalized, [
+          { label: 'Admitted', regex: /\bAdmitted\b/ },
+          { label: 'Admit', regex: /\bAdmit\b/ },
+          { label: 'admit', regex: /\badmit\b/ },
+          { label: 'Axiom', regex: /\bAxiom\b/ },
+          { label: 'Axioms', regex: /\bAxioms\b/ },
+          { label: 'Conjecture', regex: /\bConjecture\b/ }
+        ]);
+        if(hits.length === 0) return { ok: true };
+        return { ok: false, reason: 'Disallowed token(s) for YY: ' + hits.join(', ') };
+      }
+
+      function runExtraLeanProofCheck(normalized){
+        const hits = scanDisallowedTokens(normalized, [
+          { label: 'sorry', regex: /\bsorry\b/ },
+          { label: 'admit', regex: /\badmit\b/ },
+          { label: 'axiom', regex: /\baxiom\b/ },
+          { label: 'constant', regex: /\bconstant\b/ }
+        ]);
+        if(hits.length === 0) return { ok: true };
+        return { ok: false, reason: 'Disallowed token(s) for YY: ' + hits.join(', ') };
       }
 
       function analyzeCoqClosure(code) {
