@@ -818,6 +818,16 @@
         });
       }
 
+      async function waitForCoqErrorSignals(manager, collector, timeoutMs = 250){
+        const start = Date.now();
+        while(Date.now() - start < timeoutMs){
+          if(manager && Array.isArray(manager.error) && manager.error.length > 0) return;
+          const best = collector ? pickBestCoqError(collector.getErrors()) : null;
+          if(best) return;
+          await sleep(25);
+        }
+      }
+
       async function validateCoqProof(code){
         setStatus('Validating Coq proof...');
         outputEl.textContent = 'jsCoqで証明を検証中...\n';
@@ -877,7 +887,7 @@
         try {
           // 実行ごとに環境をリセットして前回の定義を残さない。
           await jscoqInstance.execute('Reset Initial.\n' + code);
-          await sleep(20);
+          await waitForCoqErrorSignals(jscoqManager, coqErrorCollector);
           coqErrorCollector.detach();
 
           if (closure.proofState === 'YY') {
@@ -889,9 +899,20 @@
             }
             if(jscoqManager && Array.isArray(jscoqManager.error) && jscoqManager.error.length > 0){
               const errMsg = extractCoqError(jscoqManager, code);
-              setStatus('Coq soundness failed', true);
-              outputEl.textContent = '[Coq Soundness]\n' + errMsg;
-              return { status: 'rejected', proof_state: 'YN', reason: errMsg };
+              const sanitizedMsg = sanitizeCoqMessage(errMsg);
+              if(!sanitizedMsg){
+                const fallbackMsg = pickBestCoqManagerError(jscoqManager.error, code, jscoqManager);
+                if(fallbackMsg){
+                  setStatus('Coq soundness failed', true);
+                  outputEl.textContent = '[Coq Soundness]\n' + fallbackMsg;
+                  return { status: 'rejected', proof_state: 'YN', reason: fallbackMsg };
+                }
+                // fall through to collector for better diagnostics
+              } else {
+                setStatus('Coq soundness failed', true);
+                outputEl.textContent = '[Coq Soundness]\n' + errMsg;
+                return { status: 'rejected', proof_state: 'YN', reason: errMsg };
+              }
             }
             const collectedErrors = coqErrorCollector.getErrors();
             const firstError = pickBestCoqError(collectedErrors);
@@ -1533,7 +1554,9 @@
       function sanitizeCoqMessage(msg){
         const trimmed = String(msg || '').trim();
         if(!trimmed) return '';
-        if(trimmed === '[]' || trimmed === '{}' || trimmed === '[object Object]') return '';
+        if(trimmed === '[object Object]') return '';
+        if(/^\[\s*\]$/.test(trimmed)) return '';
+        if(/^\{\s*\}$/.test(trimmed)) return '';
         return trimmed;
       }
 
@@ -1555,6 +1578,31 @@
           if(isMeaningfulCoqError(derived, err.msg, parsed)) return err;
         }
         return null;
+      }
+
+      function formatCoqPayloadError(payload, sourceText, manager){
+        if(payload === null || payload === undefined) return '';
+        const derived = extractCoqErrorFromPayload(payload, sourceText, manager);
+        const msg = derived.message || stringifyCoqPayload(payload);
+        const parsed = parseCoqErrorMessage(msg);
+        const derivedMsg = sanitizeCoqMessage(derived.message);
+        const parsedMsg = sanitizeCoqMessage(parsed.summary);
+        const rawMsg = sanitizeCoqMessage(msg);
+        const summary = derivedMsg || parsedMsg || rawMsg;
+        if(!summary) return '';
+        if(derived.location && Number.isFinite(derived.location.line) && Number.isFinite(derived.location.col)){
+          return derived.location.line + ':' + derived.location.col + ' ' + summary;
+        }
+        return summary;
+      }
+
+      function pickBestCoqManagerError(errors, sourceText, manager){
+        if(!Array.isArray(errors) || errors.length === 0) return '';
+        for(let i = errors.length - 1; i >= 0; i -= 1){
+          const msg = formatCoqPayloadError(errors[i], sourceText, manager);
+          if(msg) return msg;
+        }
+        return '';
       }
 
       function safeJsonReplacer(){
@@ -2922,12 +2970,14 @@
         }
 
         if (!message && feedback && feedback.msg) {
-          message = JSON.stringify(feedback.msg);
+          message = stringifyCoqPayload(feedback.msg);
         }
 
         if (!message && stm && stm.msg) {
-          message = typeof stm.msg === 'string' ? stm.msg : JSON.stringify(stm.msg);
+          message = typeof stm.msg === 'string' ? stm.msg : stringifyCoqPayload(stm.msg);
         }
+
+        message = sanitizeCoqMessage(message);
 
         const location = resolveCoqErrorLocation(stm, feedback, sourceText);
         if (location) {
