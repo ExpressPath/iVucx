@@ -477,12 +477,32 @@
         }
       }
 
+      function safeStorageHas(storage, key){
+        try{
+          return storage.getItem(key) !== null;
+        }catch(err){
+          return false;
+        }
+      }
+
       function safeStorageSet(storage, key, value){
         try{
           storage.setItem(key, value);
           return true;
         }catch(err){
           return false;
+        }
+      }
+
+      function tryParseJson(text){
+        if(typeof text !== 'string') return null;
+        const trimmed = text.trim();
+        if(!trimmed) return null;
+        if(!/^[\[{]/.test(trimmed)) return null;
+        try{
+          return JSON.parse(trimmed);
+        }catch(err){
+          return null;
         }
       }
 
@@ -1161,7 +1181,8 @@
       }
 
       function buildCoqLibraryCatalog(payload){
-        const tables = collectCoqLibraryTables(payload);
+        const collected = collectCoqLibraryTables(payload);
+        const tables = collected.tables;
         const allowedLibraries = new Set();
         const allowedTheorems = new Set();
         const libraryAxioms = new Map();
@@ -1185,26 +1206,35 @@
           tablesCount: tables.length,
           allowedLibraries,
           allowedTheorems,
-          libraryAxioms
+          libraryAxioms,
+          sourcePresent: collected.sourcePresent
         };
       }
 
       function collectCoqLibraryTables(payload){
         const out = [];
         const sources = [];
+        let sourcePresent = false;
         if(payload && typeof payload === 'object'){
-          sources.push(
-            payload.coqLibraryTables,
-            payload.coqLibraryTable,
-            payload.libraryTables,
-            payload.libraryTable,
-            payload.coqLibraries,
-            payload.library
-          );
+          const payloadKeys = [
+            'coqLibraryTables',
+            'coqLibraryTable',
+            'libraryTables',
+            'libraryTable',
+            'coqLibraries',
+            'library'
+          ];
+          payloadKeys.forEach((key)=>{
+            if(Object.prototype.hasOwnProperty.call(payload, key)){
+              sourcePresent = true;
+              sources.push(payload[key]);
+            }
+          });
         }
 
-        const storedTables = readStoredCoqLibraryTables();
-        if(storedTables) sources.push(storedTables);
+        const stored = readStoredLibraryTables(['ivucxCoqLibraryTables', 'ivucxLibraryTables']);
+        if(stored.found) sourcePresent = true;
+        sources.push(...stored.values);
 
         sources.forEach((source)=>{
           normalizeLibraryTablesInput(source).forEach((table)=>{
@@ -1212,23 +1242,32 @@
           });
         });
 
-        return out;
+        return { tables: out, sourcePresent };
       }
 
-      function readStoredCoqLibraryTables(){
-        const raw = safeStorageGet(localStorage, 'ivucxCoqLibraryTables')
-          || safeStorageGet(localStorage, 'ivucxLibraryTables');
-        if(!raw) return null;
-        try{
-          return JSON.parse(raw);
-        }catch(err){
-          return null;
-        }
+      function readStoredLibraryTables(keys){
+        const values = [];
+        let found = false;
+        const storages = [localStorage, sessionStorage];
+        keys.forEach((key)=>{
+          storages.forEach((storage)=>{
+            if(!safeStorageHas(storage, key)) return;
+            found = true;
+            const raw = safeStorageGet(storage, key);
+            if(raw) values.push(raw);
+          });
+        });
+        return { values, found };
       }
 
       function normalizeLibraryTablesInput(source){
         const out = [];
         if(!source) return out;
+        if(typeof source === 'string'){
+          const parsed = tryParseJson(source);
+          if(parsed) return normalizeLibraryTablesInput(parsed);
+          return out;
+        }
         if(Array.isArray(source)){
           out.push(...source);
           return out;
@@ -1425,63 +1464,147 @@
 
       function validateCoqLibraryUsage(normalized, catalog){
         if(!catalog || !normalized) return { ok: true, invalid: [] };
-        const used = Array.from(new Set(extractCoqLibraryReferences(normalized)));
+        const used = extractCoqLibraryReferences(normalized);
         if(used.length === 0) return { ok: true, invalid: [] };
         if(catalog.allowedLibraries.size === 0){
-          if(catalog.tablesCount > 0){
-            return {
-              ok: false,
-              invalid: used,
-              reason: 'Coq LibraryTable does not allow these libraries: ' + used.join(', ')
-            };
-          }
-          return { ok: true, invalid: [] };
+          const baseMessage = catalog.sourcePresent
+            ? 'Coq LibraryTable is empty.'
+            : 'Coq LibraryTable is missing.';
+          return {
+            ok: false,
+            invalid: used,
+            reason: baseMessage + ' Imports are not allowed: ' + formatLibraryReferences(used)
+          };
         }
-        const invalid = used.filter((name)=>!catalog.allowedLibraries.has(name));
+        const invalid = used.filter((ref)=>!isAllowedCoqLibrary(ref, catalog.allowedLibraries));
         if(invalid.length === 0) return { ok: true, invalid: [] };
         return {
           ok: false,
           invalid,
-          reason: 'Coq LibraryTable does not allow these libraries: ' + invalid.join(', ')
+          reason: 'Coq LibraryTable does not allow these libraries: ' + formatLibraryReferences(invalid)
         };
       }
 
       function extractCoqLibraryReferences(normalized){
-        const libs = [];
-        const requireRegex = /(^|\n)\s*(From\s+([A-Za-z0-9_.']+)\s+)?Require\s+(Import|Export)?\s*([\s\S]*?)\.(?=\s|$)/g;
+        const refs = [];
+        const requireRegex = /(^|\n)\s*(From\s+([A-Za-z0-9_.']+)\s+)?Require\s+((Import|Export)\s+)?([\s\S]*?)\.(?=\s|$)/g;
         let match;
         while((match = requireRegex.exec(normalized)) !== null){
           const prefix = match[3] ? match[3].trim() : '';
-          const modulesPart = match[5] ? match[5].trim() : '';
+          const modulesPart = match[6] ? match[6].trim() : '';
           if(!modulesPart) continue;
-          libs.push(...expandCoqRequireModules(prefix, modulesPart));
+          const quoted = extractQuotedStrings(modulesPart);
+          quoted.forEach((value)=>{
+            if(value) refs.push({ type: 'string', value });
+          });
+          const stripped = modulesPart.replace(/"[^"]*"/g, ' ');
+          const modules = extractCoqModuleNames(stripped);
+          modules.forEach((name)=>{
+            if(!name) return;
+            if(prefix){
+              refs.push({ type: 'from', prefix, qualid: name });
+            }else{
+              refs.push({ type: 'qualid', name });
+            }
+          });
         }
-        return libs;
+        return refs;
       }
 
-      function expandCoqRequireModules(prefix, modulesPart){
-        const modules = [];
-        const tokens = modulesPart.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+      function extractQuotedStrings(text){
+        const out = [];
+        const regex = /"([^"]*)"/g;
+        let match;
+        while((match = regex.exec(text)) !== null){
+          if(match[1]) out.push(match[1]);
+        }
+        return out;
+      }
+
+      function extractCoqModuleNames(text){
+        const out = [];
+        const tokens = text.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
         for(let i = 0; i < tokens.length; i += 1){
           const token = tokens[i];
-          if(!token) continue;
-          const lower = token.toLowerCase();
-          if(lower === 'as'){
+          if(token === 'as'){
             i += 1;
             continue;
           }
-          if(!/^[A-Za-z0-9_.']+$/.test(token)) continue;
-          let name = token;
-          if(prefix){
-            if(token === prefix || token.startsWith(prefix + '.')){
-              name = token;
-            }else{
-              name = prefix + '.' + token;
-            }
-          }
-          modules.push(name);
+          if(!/^[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*$/.test(token)) continue;
+          out.push(token);
         }
-        return modules;
+        return out;
+      }
+
+      function isAllowedCoqLibrary(ref, allowed){
+        if(!ref) return false;
+        if(ref.type === 'string'){
+          return matchesLibraryName(ref.value, allowed);
+        }
+        if(ref.type === 'from'){
+          return matchesFromLibrary(ref.prefix, ref.qualid, allowed);
+        }
+        return matchesLibraryName(ref.name, allowed);
+      }
+
+      function isAllowedLeanLibrary(ref, allowed){
+        if(!ref) return false;
+        if(ref.type === 'string'){
+          return matchesLibraryName(ref.value, allowed);
+        }
+        return matchesLibraryName(ref.name, allowed);
+      }
+
+      function matchesLibraryName(name, allowed){
+        if(!name) return false;
+        for(const entry of allowed){
+          if(!entry) continue;
+          const trimmed = String(entry).trim();
+          if(!trimmed) continue;
+          if(trimmed.endsWith('.*')){
+            const base = trimmed.slice(0, -2);
+            if(name === base || name.startsWith(base + '.')) return true;
+            continue;
+          }
+          if(name === trimmed) return true;
+          if(name.startsWith(trimmed + '.')) return true;
+        }
+        return false;
+      }
+
+      function matchesFromLibrary(prefix, qualid, allowed){
+        if(!prefix || !qualid) return false;
+        const suffix = '.' + qualid;
+        for(const entry of allowed){
+          if(!entry) continue;
+          const trimmed = String(entry).trim();
+          if(!trimmed) continue;
+          if(trimmed.endsWith('.*')){
+            const base = trimmed.slice(0, -2);
+            if(base === prefix || base.startsWith(prefix + '.')) return true;
+            continue;
+          }
+          if(trimmed === prefix) return true;
+          if(trimmed.startsWith(prefix + '.') && trimmed.endsWith(suffix)) return true;
+        }
+        return false;
+      }
+
+      function formatLibraryReferences(refs){
+        const labels = refs.map(formatLibraryReference).filter(Boolean);
+        return Array.from(new Set(labels)).join(', ');
+      }
+
+      function formatLibraryReference(ref){
+        if(!ref) return '';
+        if(typeof ref === 'string') return ref;
+        if(ref.type === 'from'){
+          return 'From ' + ref.prefix + ' Require ' + ref.qualid;
+        }
+        if(ref.type === 'string'){
+          return '"' + ref.value + '"';
+        }
+        return ref.name || '';
       }
 
       function detectCoqAxiomConflict(normalized, catalog){
@@ -1519,7 +1642,8 @@
       }
 
       function buildLeanLibraryCatalog(payload){
-        const tables = collectLeanLibraryTables(payload);
+        const collected = collectLeanLibraryTables(payload);
+        const tables = collected.tables;
         const allowedLibraries = new Set();
         const allowedTheorems = new Set();
         const libraryAxioms = new Map();
@@ -1543,26 +1667,35 @@
           tablesCount: tables.length,
           allowedLibraries,
           allowedTheorems,
-          libraryAxioms
+          libraryAxioms,
+          sourcePresent: collected.sourcePresent
         };
       }
 
       function collectLeanLibraryTables(payload){
         const out = [];
         const sources = [];
+        let sourcePresent = false;
         if(payload && typeof payload === 'object'){
-          sources.push(
-            payload.leanLibraryTables,
-            payload.leanLibraryTable,
-            payload.libraryTables,
-            payload.libraryTable,
-            payload.leanLibraries,
-            payload.library
-          );
+          const payloadKeys = [
+            'leanLibraryTables',
+            'leanLibraryTable',
+            'libraryTables',
+            'libraryTable',
+            'leanLibraries',
+            'library'
+          ];
+          payloadKeys.forEach((key)=>{
+            if(Object.prototype.hasOwnProperty.call(payload, key)){
+              sourcePresent = true;
+              sources.push(payload[key]);
+            }
+          });
         }
 
-        const storedTables = readStoredLeanLibraryTables();
-        if(storedTables) sources.push(storedTables);
+        const stored = readStoredLibraryTables(['ivucxLeanLibraryTables', 'ivucxLibraryTables']);
+        if(stored.found) sourcePresent = true;
+        sources.push(...stored.values);
 
         sources.forEach((source)=>{
           normalizeLibraryTablesInput(source).forEach((table)=>{
@@ -1570,18 +1703,7 @@
           });
         });
 
-        return out;
-      }
-
-      function readStoredLeanLibraryTables(){
-        const raw = safeStorageGet(localStorage, 'ivucxLeanLibraryTables')
-          || safeStorageGet(localStorage, 'ivucxLibraryTables');
-        if(!raw) return null;
-        try{
-          return JSON.parse(raw);
-        }catch(err){
-          return null;
-        }
+        return { tables: out, sourcePresent };
       }
 
       function isLeanLibraryTable(table){
@@ -1593,47 +1715,50 @@
 
       function validateLeanLibraryUsage(normalized, catalog){
         if(!catalog || !normalized) return { ok: true, invalid: [] };
-        const used = Array.from(new Set(extractLeanLibraryReferences(normalized)));
+        const used = extractLeanLibraryReferences(normalized);
         if(used.length === 0) return { ok: true, invalid: [] };
         if(catalog.allowedLibraries.size === 0){
-          if(catalog.tablesCount > 0){
-            return {
-              ok: false,
-              invalid: used,
-              reason: 'Lean LibraryTable does not allow these libraries: ' + used.join(', ')
-            };
-          }
-          return { ok: true, invalid: [] };
+          const baseMessage = catalog.sourcePresent
+            ? 'Lean LibraryTable is empty.'
+            : 'Lean LibraryTable is missing.';
+          return {
+            ok: false,
+            invalid: used,
+            reason: baseMessage + ' Imports are not allowed: ' + formatLibraryReferences(used)
+          };
         }
-        const invalid = used.filter((name)=>!catalog.allowedLibraries.has(name));
+        const invalid = used.filter((ref)=>!isAllowedLeanLibrary(ref, catalog.allowedLibraries));
         if(invalid.length === 0) return { ok: true, invalid: [] };
         return {
           ok: false,
           invalid,
-          reason: 'Lean LibraryTable does not allow these libraries: ' + invalid.join(', ')
+          reason: 'Lean LibraryTable does not allow these libraries: ' + formatLibraryReferences(invalid)
         };
       }
 
       function extractLeanLibraryReferences(normalized){
-        const libs = [];
-        const importRegex = /(^|\n)\s*import\s+([^\n]+)/g;
-        let match;
-        while((match = importRegex.exec(normalized)) !== null){
-          const modulesPart = match[2] ? match[2].trim() : '';
-          if(!modulesPart) continue;
-          const tokens = modulesPart.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
-          for(let i = 0; i < tokens.length; i += 1){
-            const token = tokens[i];
-            if(!token) continue;
-            const lower = token.toLowerCase();
-            if(lower === 'hiding' || lower === 'renaming' || lower === 'as'){
-              break;
-            }
-            if(!/^[A-Za-z0-9_.']+$/.test(token)) continue;
-            libs.push(token);
+        const refs = [];
+        const lines = normalized.split(/\r?\n/);
+        lines.forEach((line)=>{
+          const trimmed = line.trim();
+          if(!trimmed) return;
+          const tokens = trimmed.split(/\s+/).filter(Boolean);
+          if(tokens.length === 0) return;
+          let idx = 0;
+          while(tokens[idx] === 'public' || tokens[idx] === 'meta'){
+            idx += 1;
           }
-        }
-        return libs;
+          if(tokens[idx] !== 'import') return;
+          idx += 1;
+          if(tokens[idx] === 'all') idx += 1;
+          for(; idx < tokens.length; idx += 1){
+            const token = tokens[idx];
+            if(!token) continue;
+            if(!/^[A-Za-z0-9_.']+$/.test(token)) break;
+            refs.push({ type: 'qualid', name: token });
+          }
+        });
+        return refs;
       }
 
       function detectLeanAxiomConflict(normalized, catalog){
