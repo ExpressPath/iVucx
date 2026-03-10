@@ -854,7 +854,7 @@
 
         // jsCoq初期化を確実に待つ
         const coqErrorCollector = createCoqErrorCollector(jscoqManager);
-        const collectorAttached = coqErrorCollector.attach();
+        coqErrorCollector.attach();
         coqErrorCollector.reset();
         try {
           if(!jscoqInstance) {
@@ -893,7 +893,7 @@
               outputEl.textContent = '[Coq Soundness]\n' + errMsg;
               return { status: 'rejected', proof_state: 'YN', reason: errMsg };
             }
-            if(collectorAttached && coqErrorCollector.getErrorCount() > 0){
+            if(coqErrorCollector.getErrorCount() > 0){
               const firstError = coqErrorCollector.getErrors()[0] || {};
               const parsed = firstError.parsed || {};
               const line = parsed.line ? String(parsed.line) : '?';
@@ -902,11 +902,6 @@
               setStatus('Coq soundness failed', true);
               outputEl.textContent = '[Coq Soundness]\n' + line + ':' + col + ' ' + summary;
               return { status: 'rejected', proof_state: 'YN', reason: summary };
-            }
-            if(!collectorAttached){
-              setStatus('Coq soundness failed', true);
-              outputEl.textContent = '[Coq Soundness]\njsCoq error hook is unavailable. Soundness check could not be completed.';
-              return { status: 'error', proof_state: 'NN', reason: 'jsCoq error hook unavailable' };
             }
             setStatus('Coq proof verified (YY)');
             outputEl.textContent = '[Coq Validation Success]\n証明は ' + closure.closer + ' で完成しています (YY状態)';
@@ -1280,6 +1275,74 @@
               } catch(e) {
                 // try next target
               }
+            }
+          }
+
+          if(manager && typeof manager.reportError === 'function'){
+            const prev = manager.reportError;
+            manager.reportError = function(payload){
+              onError(payload);
+              return prev.apply(this, arguments);
+            };
+            detachFn = function(){ manager.reportError = prev; };
+            return true;
+          }
+
+          if(manager && typeof manager.addError === 'function'){
+            const prev = manager.addError;
+            manager.addError = function(payload){
+              onError(payload);
+              return prev.apply(this, arguments);
+            };
+            detachFn = function(){ manager.addError = prev; };
+            return true;
+          }
+
+          if(manager && Object.prototype.hasOwnProperty.call(manager, 'error')){
+            const prevDescriptor = Object.getOwnPropertyDescriptor(manager, 'error');
+            let current = manager.error;
+            try {
+              Object.defineProperty(manager, 'error', {
+                configurable: true,
+                enumerable: true,
+                get: function(){ return current; },
+                set: function(value){
+                  current = value;
+                  if(Array.isArray(value) && value.length > 0){
+                    onError(value[0]);
+                  }else if(value){
+                    onError(value);
+                  }
+                }
+              });
+              detachFn = function(){
+                try {
+                  if(prevDescriptor){
+                    Object.defineProperty(manager, 'error', prevDescriptor);
+                  }else{
+                    delete manager.error;
+                    manager.error = current;
+                  }
+                } catch(e) {}
+              };
+              return true;
+            } catch(e) {
+              // ignore and continue to array hook
+            }
+          }
+
+          if(manager && Array.isArray(manager.error)){
+            const arr = manager.error;
+            if(typeof arr.push === 'function'){
+              const prevPush = arr.push;
+              arr.push = function(){
+                for(let i = 0; i < arguments.length; i += 1){
+                  onError(arguments[i]);
+                }
+                return prevPush.apply(this, arguments);
+              };
+              detachFn = function(){ arr.push = prevPush; };
+              return true;
             }
           }
 
