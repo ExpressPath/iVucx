@@ -853,17 +853,22 @@
         }
 
         // jsCoq初期化を確実に待つ
+        const coqErrorCollector = createCoqErrorCollector(jscoqManager);
+        const collectorAttached = coqErrorCollector.attach();
+        coqErrorCollector.reset();
         try {
           if(!jscoqInstance) {
             await waitJsCoqReady();
           }
         } catch(e) {
+          coqErrorCollector.detach();
           setStatus('Coq validation failed', true);
           outputEl.textContent = '[Coq Validation]\njsCoqが初期化されていません（タイムアウト）。ページをリロードしてください。';
           return { status: 'error', proof_state: 'NN', reason: 'jsCoq not initialized' };
         }
 
         if (!jscoqInstance) {
+          coqErrorCollector.detach();
           setStatus('Coq validation failed', true);
           outputEl.textContent = '[Coq Validation]\njsCoqが初期化されていません。ページをリロードしてください。';
           return { status: 'error', proof_state: 'NN', reason: 'jsCoq not initialized' };
@@ -872,6 +877,8 @@
         try {
           // 実行ごとに環境をリセットして前回の定義を残さない。
           await jscoqInstance.execute('Reset Initial.\n' + code);
+          await sleep(20);
+          coqErrorCollector.detach();
 
           if (closure.proofState === 'YY') {
             const soundnessIssue = findCoqUnsoundToken(code);
@@ -879,6 +886,27 @@
               setStatus('Coq soundness failed', true);
               outputEl.textContent = '[Coq Soundness]\n' + soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ')';
               return { status: 'rejected', proof_state: 'YN', reason: soundnessIssue.message };
+            }
+            if(jscoqManager && Array.isArray(jscoqManager.error) && jscoqManager.error.length > 0){
+              const errMsg = extractCoqError(jscoqManager, code);
+              setStatus('Coq soundness failed', true);
+              outputEl.textContent = '[Coq Soundness]\n' + errMsg;
+              return { status: 'rejected', proof_state: 'YN', reason: errMsg };
+            }
+            if(collectorAttached && coqErrorCollector.getErrorCount() > 0){
+              const firstError = coqErrorCollector.getErrors()[0] || {};
+              const parsed = firstError.parsed || {};
+              const line = parsed.line ? String(parsed.line) : '?';
+              const col = parsed.charFrom !== null && parsed.charFrom !== undefined ? String(parsed.charFrom) : '?';
+              const summary = parsed.summary || firstError.msg || 'Coq reported an error';
+              setStatus('Coq soundness failed', true);
+              outputEl.textContent = '[Coq Soundness]\n' + line + ':' + col + ' ' + summary;
+              return { status: 'rejected', proof_state: 'YN', reason: summary };
+            }
+            if(!collectorAttached){
+              setStatus('Coq soundness failed', true);
+              outputEl.textContent = '[Coq Soundness]\njsCoq error hook is unavailable. Soundness check could not be completed.';
+              return { status: 'error', proof_state: 'NN', reason: 'jsCoq error hook unavailable' };
             }
             setStatus('Coq proof verified (YY)');
             outputEl.textContent = '[Coq Validation Success]\n証明は ' + closure.closer + ' で完成しています (YY状態)';
@@ -894,6 +922,7 @@
           outputEl.textContent = '[Coq Validation]\n証明が Qed. / Defined. / Admitted. / Conjecture で終わっていません';
           return { status: 'rejected', proof_state: 'NN', reason: 'Proof not closed' };
         } catch (err) {
+          coqErrorCollector.detach();
           setStatus('Coq validation failed', true);
           const errorMsg = err && err.message ? err.message : String(err);
           outputEl.textContent = '[Coq Validation]\njsCoq実行エラー:\n' + errorMsg;
@@ -1184,6 +1213,133 @@
         }
 
         return output;
+      }
+
+      function createCoqErrorCollector(manager){
+        const errors = [];
+        let errorCount = 0;
+        let detachFn = null;
+
+        function reset(){
+          errors.length = 0;
+          errorCount = 0;
+        }
+
+        function getErrorCount(){ return errorCount; }
+        function getErrors(){ return errors.slice(); }
+
+        function onError(payload){
+          const msg = stringifyCoqPayload(payload);
+          const parsed = parseCoqErrorMessage(msg);
+          const errObj = {
+            timestamp: Date.now(),
+            raw: payload,
+            msg: msg,
+            parsed: parsed
+          };
+          errors.push(errObj);
+          errorCount += 1;
+        }
+
+        function attach(){
+          if(detachFn) return true;
+          const targets = [];
+          if(typeof window !== 'undefined' && window.jsCoq) {
+            targets.push({ type: 'global', obj: window.jsCoq });
+          }
+          if(manager) {
+            targets.push({ type: 'manager', obj: manager });
+            if(manager.coq) targets.push({ type: 'coq', obj: manager.coq });
+            if(manager.provider && manager.provider.coq) targets.push({ type: 'provider', obj: manager.provider.coq });
+          }
+
+          for(const target of targets){
+            const obj = target.obj;
+            if(!obj || typeof obj !== 'object') continue;
+
+            if('onError' in obj){
+              const prev = obj.onError;
+              obj.onError = function(payload){
+                onError(payload);
+                if(typeof prev === 'function'){
+                  try { prev(payload); } catch(e) {}
+                }
+              };
+              detachFn = function(){ obj.onError = prev; };
+              return true;
+            }
+            if(typeof obj.on === 'function'){
+              try {
+                obj.on('error', onError);
+                detachFn = function(){
+                  if(typeof obj.off === 'function'){
+                    try { obj.off('error', onError); } catch(e) {}
+                  }
+                };
+                return true;
+              } catch(e) {
+                // try next target
+              }
+            }
+          }
+
+          return false;
+        }
+
+        function detach(){
+          if(typeof detachFn === 'function'){
+            detachFn();
+            detachFn = null;
+          }
+        }
+
+        return { attach, detach, reset, getErrorCount, getErrors };
+      }
+
+      function stringifyCoqPayload(payload){
+        try {
+          if(typeof payload === 'string') return payload;
+          if(payload === null || payload === undefined) return String(payload);
+          if(payload.toString && payload.toString() !== '[object Object]') return payload.toString();
+          return JSON.stringify(payload, safeJsonReplacer(), 2);
+        } catch(e) {
+          return String(payload);
+        }
+      }
+
+      function parseCoqErrorMessage(msg){
+        if(!msg) return {};
+        const parsed = { line: null, charFrom: null, charTo: null, summary: null };
+
+        let m = msg.match(/line\s+(\d+)(?:[,\s]+characters\s+(\d+)(?:-(\d+))?)?/i);
+        if(m){
+          parsed.line = Number(m[1]);
+          if(m[2]) parsed.charFrom = Number(m[2]);
+          if(m[3]) parsed.charTo = Number(m[3]);
+        } else {
+          m = msg.match(/at\s+line\s+(\d+)(?:\s*,\s*char(?:acter)?s?\s*(\d+))?/i);
+          if(m){
+            parsed.line = Number(m[1]);
+            if(m[2]) parsed.charFrom = Number(m[2]);
+          }
+        }
+
+        m = msg.match(/(?:Error|error|Fail):?\s*(.+?)(?:\n|$)/i);
+        if(m) parsed.summary = m[1].trim();
+        if(!parsed.summary) parsed.summary = (msg.length > 200 ? msg.slice(0, 200) + '…' : msg);
+        return parsed;
+      }
+
+      function safeJsonReplacer(){
+        const seen = new WeakSet();
+        return function(key, val){
+          if(val && typeof val === 'object'){
+            if(seen.has(val)) return '[Circular]';
+            seen.add(val);
+          }
+          if(typeof val === 'function') return '[Function]';
+          return val;
+        };
       }
 
       function findCoqUnsoundToken(code){
