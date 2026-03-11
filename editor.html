@@ -907,6 +907,19 @@
               outputEl.textContent = '[Coq Soundness]\n' + summary;
               return { status: 'rejected', proof_state: 'YN', reason: summary };
             }
+            const goalsCount = await getCoqGoalsCount(jscoqManager);
+            if(goalsCount === null){
+              const summary = 'Coq goals check unavailable (jsCoq API mismatch).';
+              setStatus('Coq soundness failed', true);
+              outputEl.textContent = '[Coq Soundness]\n' + summary;
+              return { status: 'rejected', proof_state: 'YN', reason: summary };
+            }
+            if(goalsCount > 0){
+              const summary = 'Coq proof not complete (remaining goals: ' + goalsCount + ').';
+              setStatus('Coq soundness failed', true);
+              outputEl.textContent = '[Coq Soundness]\n' + summary;
+              return { status: 'rejected', proof_state: 'YN', reason: summary };
+            }
             setStatus('Coq proof verified (YY)');
             outputEl.textContent = '[Coq Validation Success]\n証明は ' + closure.closer + ' で完成しています (YY状態)';
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
@@ -1576,6 +1589,160 @@
         return '';
       }
 
+      function coqSentenceText(stm){
+        if(!stm || typeof stm !== 'object') return '';
+        const candidates = [
+          stm.text,
+          stm.sentence,
+          stm.s,
+          stm.raw,
+          stm.content,
+          stm.stmt
+        ];
+        for(let i = 0; i < candidates.length; i += 1){
+          if(typeof candidates[i] === 'string' && candidates[i].trim()) return candidates[i];
+        }
+        return '';
+      }
+
+      function coqSentenceStatus(stm){
+        const phase = String(stm && stm.phase ? stm.phase : '').toLowerCase();
+        const sid = pickNumber(
+          stm && stm.coq_sid,
+          stm && stm.state_id,
+          stm && stm.state,
+          stm && stm.sid,
+          stm && stm.sentence_id
+        );
+        const processed = (Number.isFinite(sid) && sid > 0)
+          || phase === 'processed'
+          || phase === 'done'
+          || phase === 'complete'
+          || phase === 'checked';
+        const pending = phase === 'pending'
+          || phase === 'adding'
+          || phase === 'added'
+          || phase === 'processing';
+        return { processed, pending, phase, sid };
+      }
+
+      function coqSentenceHasError(stm){
+        if(!stm || typeof stm !== 'object') return false;
+        if(stm.err || stm.error) return true;
+        if(Array.isArray(stm.feedback) && stm.feedback.some(coqFeedbackIsError)) return true;
+        const phase = String(stm.phase || '').toLowerCase();
+        if(phase === 'error' || phase === 'failed') return true;
+        return false;
+      }
+
+      function summarizeCoqExecution(manager, sourceText){
+        const sentences = manager && manager.doc && Array.isArray(manager.doc.sentences)
+          ? manager.doc.sentences
+          : [];
+        const summary = {
+          total: 0,
+          processed: 0,
+          pending: 0,
+          hasError: false
+        };
+        for(let i = 0; i < sentences.length; i += 1){
+          const stm = sentences[i];
+          const text = coqSentenceText(stm);
+          if(!text) continue;
+          summary.total += 1;
+          const status = coqSentenceStatus(stm);
+          if(status.processed) summary.processed += 1;
+          if(status.pending) summary.pending += 1;
+          if(coqSentenceHasError(stm)) summary.hasError = true;
+        }
+        if(summary.total === 0 && typeof sourceText === 'string' && sourceText.trim()){
+          summary.hasError = summary.hasError || false;
+        }
+        return summary;
+      }
+
+      function getLastCoqSid(manager){
+        if(!manager || !manager.doc || !Array.isArray(manager.doc.sentences)) return null;
+        let maxSid = null;
+        for(let i = 0; i < manager.doc.sentences.length; i += 1){
+          const stm = manager.doc.sentences[i];
+          const sid = pickNumber(stm && stm.coq_sid, stm && stm.state_id, stm && stm.state, stm && stm.sid);
+          if(Number.isFinite(sid)){
+            if(maxSid === null || sid > maxSid) maxSid = sid;
+          }
+        }
+        return maxSid;
+      }
+
+      function unwrapGoalsResponse(res){
+        if(!res || typeof res !== 'object') return res;
+        if(res.data) return res.data;
+        if(res.answer) return res.answer;
+        if(res.result) return res.result;
+        if(res.value) return res.value;
+        return res;
+      }
+
+      function countGoalsFromResponse(res){
+        if(res === null || res === undefined) return null;
+        if(typeof res === 'string'){
+          if(/no\s+more\s+goals/i.test(res)) return 0;
+          if(/not\s+in\s+proof\s+mode/i.test(res)) return 0;
+          if(/no\s+focused\s+proof/i.test(res)) return 0;
+          return null;
+        }
+        if(Array.isArray(res)) return res.length;
+        if(typeof res === 'object'){
+          let count = 0;
+          let saw = false;
+          const fields = ['goals','shelf','stack','given_up','givenUp','aborted','admitted','admit','goal'];
+          for(let i = 0; i < fields.length; i += 1){
+            const val = res[fields[i]];
+            if(Array.isArray(val)){
+              count += val.length;
+              saw = true;
+            } else if(val && typeof val === 'object' && fields[i] === 'goal'){
+              count += 1;
+              saw = true;
+            }
+          }
+          if(saw) return count;
+        }
+        return null;
+      }
+
+      async function resolveMaybePromise(fn){
+        try {
+          const res = fn();
+          if(res && typeof res.then === 'function') return await res;
+          return res;
+        } catch(e) {
+          return null;
+        }
+      }
+
+      async function getCoqGoalsCount(manager){
+        if(!manager) return null;
+        const coq = manager.coq || (manager.provider && manager.provider.coq) || null;
+        if(!coq) return null;
+        const sid = getLastCoqSid(manager);
+        const calls = [];
+        if(typeof coq.goals === 'function') calls.push(() => (sid !== null ? coq.goals(sid) : coq.goals()));
+        if(typeof coq.Goals === 'function') calls.push(() => (sid !== null ? coq.Goals(sid) : coq.Goals()));
+        if(typeof coq.query === 'function' && sid !== null) calls.push(() => coq.query(sid, 'Goals'));
+        if(typeof coq.query === 'function' && sid !== null) calls.push(() => coq.query(sid, { query: 'Goals' }));
+        if(typeof coq.exec === 'function') calls.push(() => coq.exec('Goals.'));
+        for(let i = 0; i < calls.length; i += 1){
+          const res = await resolveMaybePromise(calls[i]);
+          if(res !== null && res !== undefined){
+            const normalized = unwrapGoalsResponse(res);
+            const count = countGoalsFromResponse(normalized);
+            if(count !== null) return count;
+          }
+        }
+        return null;
+      }
+
       function coqFeedbackIsError(feedback){
         if(!feedback) return false;
         if(typeof feedback.is_error === 'boolean') return feedback.is_error;
@@ -1679,6 +1846,15 @@
         const tokenMessages = {
           Axiom: 'Axiom declaration is not allowed in YY proofs.',
           Axioms: 'Axiom declaration is not allowed in YY proofs.',
+          Parameter: 'Parameter introduces an axiom; not allowed in YY proofs.',
+          Parameters: 'Parameter introduces axioms; not allowed in YY proofs.',
+          Variable: 'Variable introduces an assumption; not allowed in YY proofs.',
+          Variables: 'Variable introduces assumptions; not allowed in YY proofs.',
+          Hypothesis: 'Hypothesis introduces an assumption; not allowed in YY proofs.',
+          Hypotheses: 'Hypothesis introduces assumptions; not allowed in YY proofs.',
+          Assumption: 'Assumption introduces an axiom; not allowed in YY proofs.',
+          Assumptions: 'Assumption introduces axioms; not allowed in YY proofs.',
+          Context: 'Context introduces assumptions; not allowed in YY proofs.',
           Admitted: 'Admitted leaves the proof incomplete.',
           Admit: 'Admit leaves the proof incomplete.',
           admit: 'admit leaves the proof incomplete.',
@@ -2974,19 +3150,44 @@
     function createJsCoqExecutor(manager) {
       return {
         execute: async function(code) {
+          if(!manager || !manager.provider || typeof manager.provider.load !== 'function') {
+            throw new Error('jsCoq manager provider is unavailable');
+          }
           manager.provider.load(String(code || ''), 'Main.v', true);
-          manager.provider.focus();
+          if(typeof manager.provider.focus === 'function') {
+            manager.provider.focus();
+          }
 
           const started = Date.now();
+          let steps = 0;
           while (true) {
-            const advanced = manager.goNext(false);
+            const advanced = typeof manager.goNext === 'function' ? manager.goNext(false) : false;
             await waitForManagerIdle(manager, started);
 
             if (manager.error && manager.error.length > 0) {
               throw new Error(extractCoqError(manager, code));
             }
 
+            if(advanced) steps += 1;
             if (!advanced) break;
+          }
+
+          const errorDetails = getCoqErrorDetails(manager, null, code);
+          if(errorDetails.hasError){
+            throw new Error(errorDetails.message || 'Coq reported an error');
+          }
+
+          const summary = summarizeCoqExecution(manager, code);
+          if(typeof code === 'string' && code.trim()){
+            if(summary.total === 0){
+              throw new Error('jsCoq did not parse any sentences; cannot verify proof.');
+            }
+            if(steps === 0 && summary.total > 0){
+              throw new Error('jsCoq did not execute any sentence; cannot verify proof.');
+            }
+            if(summary.processed < summary.total){
+              throw new Error('jsCoq did not finish processing all sentences.');
+            }
           }
 
           return true;
