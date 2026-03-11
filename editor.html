@@ -1723,7 +1723,9 @@
 
       async function getCoqGoalsCount(manager){
         if(!manager) return null;
-        const coq = manager.coq || (manager.provider && manager.provider.coq) || null;
+        const coq = manager.coq
+          || (manager.provider && manager.provider.coq)
+          || (typeof window !== 'undefined' ? window.jsCoq : null);
         if(!coq) return null;
         const sid = getLastCoqSid(manager);
         const calls = [];
@@ -2932,6 +2934,10 @@
           }
         });
       }
+
+      // Expose Coq helpers needed by the jsCoq bootstrap script.
+      window.__ivucxGetCoqErrorDetails = getCoqErrorDetails;
+      window.__ivucxSummarizeCoqExecution = summarizeCoqExecution;
     })();
   </script>
   <div id="coq" aria-hidden="true"></div>
@@ -3172,12 +3178,19 @@
             if (!advanced) break;
           }
 
-          const errorDetails = getCoqErrorDetails(manager, null, code);
-          if(errorDetails.hasError){
-            throw new Error(errorDetails.message || 'Coq reported an error');
+          const getDetails = window.__ivucxGetCoqErrorDetails;
+          if(typeof getDetails === 'function'){
+            const errorDetails = getDetails(manager, null, code);
+            if(errorDetails.hasError){
+              throw new Error(errorDetails.message || 'Coq reported an error');
+            }
           }
 
-          const summary = summarizeCoqExecution(manager, code);
+          const summarize = window.__ivucxSummarizeCoqExecution;
+          if(typeof summarize !== 'function'){
+            throw new Error('jsCoq helpers unavailable for execution checks.');
+          }
+          const summary = summarize(manager, code);
           if(typeof code === 'string' && code.trim()){
             if(summary.total === 0){
               throw new Error('jsCoq did not parse any sentences; cannot verify proof.');
