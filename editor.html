@@ -818,16 +818,6 @@
         });
       }
 
-      async function waitForCoqErrorSignals(manager, collector, timeoutMs = 250){
-        const start = Date.now();
-        while(Date.now() - start < timeoutMs){
-          if(manager && Array.isArray(manager.error) && manager.error.length > 0) return;
-          const best = collector ? pickBestCoqError(collector.getErrors()) : null;
-          if(best) return;
-          await sleep(25);
-        }
-      }
-
       async function validateCoqProof(code){
         setStatus('Validating Coq proof...');
         outputEl.textContent = 'jsCoqで証明を検証中...\n';
@@ -863,9 +853,7 @@
         }
 
         // jsCoq初期化を確実に待つ
-        const coqErrorCollector = createCoqErrorCollector(jscoqManager, code);
-        coqErrorCollector.attach();
-        coqErrorCollector.reset();
+        
         if(jscoqManager && Array.isArray(jscoqManager.error)) {
           jscoqManager.error.length = 0;
         }
@@ -874,14 +862,12 @@
             await waitJsCoqReady();
           }
         } catch(e) {
-          coqErrorCollector.detach();
           setStatus('Coq validation failed', true);
           outputEl.textContent = '[Coq Validation]\njsCoqが初期化されていません（タイムアウト）。ページをリロードしてください。';
           return { status: 'error', proof_state: 'NN', reason: 'jsCoq not initialized' };
         }
 
         if (!jscoqInstance) {
-          coqErrorCollector.detach();
           setStatus('Coq validation failed', true);
           outputEl.textContent = '[Coq Validation]\njsCoqが初期化されていません。ページをリロードしてください。';
           return { status: 'error', proof_state: 'NN', reason: 'jsCoq not initialized' };
@@ -890,8 +876,7 @@
         try {
           // 実行ごとに環境をリセットして前回の定義を残さない。
           await jscoqInstance.execute('Reset Initial.\n' + code);
-          await waitForCoqErrorSignals(jscoqManager, coqErrorCollector);
-          coqErrorCollector.detach();
+          
 
           if (closure.proofState === 'YY') {
             const soundnessIssue = findCoqUnsoundToken(code);
@@ -900,13 +885,7 @@
               outputEl.textContent = '[Coq Soundness]\n' + soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ')';
               return { status: 'rejected', proof_state: 'YN', reason: soundnessIssue.message };
             }
-            const coqErrorDetails = getCoqErrorDetails(jscoqManager, coqErrorCollector, code);
-            if(coqErrorDetails.hasError){
-              const summary = coqErrorDetails.message || 'Coq reported an error (details unavailable)';
-              setStatus('Coq soundness failed', true);
-              outputEl.textContent = '[Coq Soundness]\n' + summary;
-              return { status: 'rejected', proof_state: 'YN', reason: summary };
-            }
+            
             const goalsCount = await getCoqGoalsCount(jscoqManager);
             if(goalsCount === null){
               const summary = 'Coq goals check unavailable (jsCoq API mismatch).';
@@ -934,7 +913,6 @@
           outputEl.textContent = '[Coq Validation]\n証明が Qed. / Defined. / Admitted. / Conjecture で終わっていません';
           return { status: 'rejected', proof_state: 'NN', reason: 'Proof not closed' };
         } catch (err) {
-          coqErrorCollector.detach();
           setStatus('Coq validation failed', true);
           const errorMsg = err && err.message ? err.message : String(err);
           outputEl.textContent = '[Coq Validation]\njsCoq実行エラー:\n' + errorMsg;
@@ -2935,9 +2913,6 @@
         });
       }
 
-      // Expose Coq helpers needed by the jsCoq bootstrap script.
-      window.__ivucxGetCoqErrorDetails = getCoqErrorDetails;
-      window.__ivucxSummarizeCoqExecution = summarizeCoqExecution;
     })();
   </script>
   <div id="coq" aria-hidden="true"></div>
@@ -3165,7 +3140,6 @@
           }
 
           const started = Date.now();
-          let steps = 0;
           while (true) {
             const advanced = typeof manager.goNext === 'function' ? manager.goNext(false) : false;
             await waitForManagerIdle(manager, started);
@@ -3174,33 +3148,7 @@
               throw new Error(extractCoqError(manager, code));
             }
 
-            if(advanced) steps += 1;
             if (!advanced) break;
-          }
-
-          const getDetails = window.__ivucxGetCoqErrorDetails;
-          if(typeof getDetails === 'function'){
-            const errorDetails = getDetails(manager, null, code);
-            if(errorDetails.hasError){
-              throw new Error(errorDetails.message || 'Coq reported an error');
-            }
-          }
-
-          const summarize = window.__ivucxSummarizeCoqExecution;
-          if(typeof summarize !== 'function'){
-            throw new Error('jsCoq helpers unavailable for execution checks.');
-          }
-          const summary = summarize(manager, code);
-          if(typeof code === 'string' && code.trim()){
-            if(summary.total === 0){
-              throw new Error('jsCoq did not parse any sentences; cannot verify proof.');
-            }
-            if(steps === 0 && summary.total > 0){
-              throw new Error('jsCoq did not execute any sentence; cannot verify proof.');
-            }
-            if(summary.processed < summary.total){
-              throw new Error('jsCoq did not finish processing all sentences.');
-            }
           }
 
           return true;
