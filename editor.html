@@ -1661,30 +1661,76 @@
         return res;
       }
 
-      function countGoalsFromResponse(res){
+      function countGoalsFromResponse(res, depth){
         if(res === null || res === undefined) return null;
+        const level = Number.isFinite(depth) ? depth : 0;
+        if(level > 6) return null;
         if(typeof res === 'string'){
           if(/no\s+more\s+goals/i.test(res)) return 0;
           if(/not\s+in\s+proof\s+mode/i.test(res)) return 0;
           if(/no\s+focused\s+proof/i.test(res)) return 0;
           return null;
         }
-        if(Array.isArray(res)) return res.length;
+        if(typeof res === 'number'){
+          return Number.isFinite(res) ? res : null;
+        }
+        if(Array.isArray(res)){
+          let total = 0;
+          let saw = false;
+          for(let i = 0; i < res.length; i += 1){
+            const inner = countGoalsFromResponse(res[i], level + 1);
+            if(inner !== null){
+              total += inner;
+              saw = true;
+            }
+          }
+          return saw ? total : null;
+        }
         if(typeof res === 'object'){
+          // unwrap common wrappers
+          const wrappers = ['data','value','result','answer','payload','msg','message','text'];
+          for(let i = 0; i < wrappers.length; i += 1){
+            if(res[wrappers[i]] !== undefined){
+              const inner = countGoalsFromResponse(res[wrappers[i]], level + 1);
+              if(inner !== null) return inner;
+            }
+          }
+
           let count = 0;
           let saw = false;
-          const fields = ['goals','shelf','stack','given_up','givenUp','aborted','admitted','admit','goal'];
+          const fields = [
+            'goals','goal','fg_goals','bg_goals',
+            'shelf','shelved','stack','given_up','givenUp',
+            'aborted','admitted','admit'
+          ];
           for(let i = 0; i < fields.length; i += 1){
-            const val = res[fields[i]];
+            const key = fields[i];
+            if(!Object.prototype.hasOwnProperty.call(res, key)) continue;
+            const val = res[key];
             if(Array.isArray(val)){
               count += val.length;
               saw = true;
-            } else if(val && typeof val === 'object' && fields[i] === 'goal'){
+            } else if(val && typeof val === 'object'){
+              const inner = countGoalsFromResponse(val, level + 1);
+              if(inner !== null){
+                count += inner;
+                saw = true;
+              }
+            } else if(key === 'goal' && val){
               count += 1;
               saw = true;
             }
           }
           if(saw) return count;
+
+          // last resort: look for any key containing "goal"
+          const keys = Object.keys(res);
+          for(let i = 0; i < keys.length; i += 1){
+            const key = keys[i];
+            if(!/goal/i.test(key)) continue;
+            const inner = countGoalsFromResponse(res[key], level + 1);
+            if(inner !== null) return inner;
+          }
         }
         return null;
       }
@@ -1700,18 +1746,41 @@
       }
 
       async function getCoqGoalsCount(manager){
-        if(!manager) return null;
-        const coq = manager.coq
-          || (manager.provider && manager.provider.coq)
-          || (typeof window !== 'undefined' ? window.jsCoq : null);
-        if(!coq) return null;
-        const sid = getLastCoqSid(manager);
+        const targets = [];
+        const sid = manager ? getLastCoqSid(manager) : null;
+        if(typeof window !== 'undefined' && window.jsCoq) {
+          targets.push({ obj: window.jsCoq, sid: null });
+        }
+        if(manager) targets.push({ obj: manager, sid: sid });
+        if(manager && manager.coq) targets.push({ obj: manager.coq, sid: sid });
+        if(manager && manager.provider && manager.provider.coq) targets.push({ obj: manager.provider.coq, sid: sid });
+
         const calls = [];
-        if(typeof coq.goals === 'function') calls.push(() => (sid !== null ? coq.goals(sid) : coq.goals()));
-        if(typeof coq.Goals === 'function') calls.push(() => (sid !== null ? coq.Goals(sid) : coq.Goals()));
-        if(typeof coq.query === 'function' && sid !== null) calls.push(() => coq.query(sid, 'Goals'));
-        if(typeof coq.query === 'function' && sid !== null) calls.push(() => coq.query(sid, { query: 'Goals' }));
-        if(typeof coq.exec === 'function') calls.push(() => coq.exec('Goals.'));
+        for(let i = 0; i < targets.length; i += 1){
+          const obj = targets[i].obj;
+          const objSid = targets[i].sid;
+          if(!obj || typeof obj !== 'object') continue;
+          if(typeof obj.goals === 'function') calls.push(() => (objSid !== null ? obj.goals(objSid) : obj.goals()));
+          if(typeof obj.Goals === 'function') calls.push(() => (objSid !== null ? obj.Goals(objSid) : obj.Goals()));
+          if(typeof obj.getGoals === 'function') calls.push(() => (objSid !== null ? obj.getGoals(objSid) : obj.getGoals()));
+          if(typeof obj.query === 'function') {
+            if(objSid !== null) {
+              calls.push(() => obj.query(objSid, 'Goals'));
+              calls.push(() => obj.query(objSid, 'Goals.'));
+              calls.push(() => obj.query(objSid, { query: 'Goals' }));
+              calls.push(() => obj.query(objSid, { query: 'Goals.' }));
+            }
+            calls.push(() => obj.query('Goals'));
+            calls.push(() => obj.query('Goals.'));
+            calls.push(() => obj.query({ query: 'Goals' }));
+            calls.push(() => obj.query({ query: 'Goals.' }));
+          }
+          if(typeof obj.exec === 'function') {
+            calls.push(() => obj.exec('Goals.'));
+            calls.push(() => obj.exec('Goals'));
+          }
+        }
+
         for(let i = 0; i < calls.length; i += 1){
           const res = await resolveMaybePromise(calls[i]);
           if(res !== null && res !== undefined){
@@ -2983,6 +3052,13 @@
         });
 
         await waitForManagerReady(jscoqManager);
+        if (typeof window !== 'undefined') {
+          if (!window.jsCoq && jscoqManager && jscoqManager.coq) {
+            window.jsCoq = jscoqManager.coq;
+          } else if (!window.jsCoq && jscoqManager && jscoqManager.provider && jscoqManager.provider.coq) {
+            window.jsCoq = jscoqManager.provider.coq;
+          }
+        }
         jscoqInstance = createJsCoqExecutor(jscoqManager);
         return jscoqInstance;
       })().catch((err) => {
@@ -3271,6 +3347,12 @@
       for (let i = 0; i < arguments.length; i += 1) {
         const value = arguments[i];
         if (Number.isFinite(value)) return value;
+        if (typeof value === 'string') {
+          const trimmed = value.trim();
+          if (!trimmed) continue;
+          const num = Number(trimmed);
+          if (Number.isFinite(num)) return num;
+        }
       }
       return null;
     }
