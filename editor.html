@@ -18,9 +18,6 @@
       --header:#010409;
       --header-ink:#e6edf3;
     }
-
-    *,*::before,*::after{box-sizing:border-box}
-
     html,body{
       width:100%;
       height:100%;
@@ -279,7 +276,7 @@
 <body>
   <header class="topbar">
     <div class="left-cluster">
-      <button class="btn btn-back" id="backBtn" type="button" aria-label="Back to summary">×</button>
+      <button class="btn btn-back" id="backBtn" type="button" aria-label="Back to summary">✕</button>
       <div class="product">iVucx Editor</div>
       <div class="lang-badge" id="langBadge">Lean</div>
       <div class="file-name" id="fileName">Main.lean</div>
@@ -426,7 +423,7 @@
       setStatus('Ready');
       setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, restoredRunner, summaryText);
 
-      // Coqの場合はjsCoq初期化完了までRunボタンを無効化
+      // Coqの場合、jsCoq初期化完了でRunボタンを無効化
       if(selectedLanguage === 'Coq') {
         initializeCoqRuntime();
       }
@@ -694,7 +691,7 @@
       function handleBackNavigation(){
         const currentCode = getEditorCode();
         if(currentCode.length >= 30){
-          const shouldReturn = window.confirm('エディタに30文字以上の内容があります。戻るとコード編集内容は破棄されます。戻りますか？');
+          const shouldReturn = window.confirm('エディタに30行以上のコードがあります。戻るとコード編集内容は破棄されます。戻りますか？');
           if(!shouldReturn) return;
         }
 
@@ -796,7 +793,7 @@
         const pasted = chunks.join('\n\n');
         const lineCount = pasted.length === 0 ? 0 : pasted.split(/\r?\n/).length;
         if(lineCount >= 30){
-          const shouldPaste = window.confirm('貼り付け内容は ' + lineCount + ' 行です。エディタに挿入しますか？');
+          const shouldPaste = window.confirm('貼り付け行数は ' + lineCount + ' 行です。エディタに挿入しますか？');
           if(!shouldPaste) return;
         }
 
@@ -806,7 +803,7 @@
 
 
       async function waitJsCoqReady(timeoutMs = 10000) {
-        // jscoqInstanceがセットされるまで待つ
+        // jscoqInstanceがセチE��されるまで征E��
         return new Promise((resolve, reject) => {
           const start = Date.now();
           function check() {
@@ -852,7 +849,7 @@
           return { status: 'rejected', proof_state: 'NN', reason: closure.reason };
         }
 
-        // jsCoq初期化を確実に待つ
+        // jsCoq初期化を確実に征E��
         
         if(jscoqManager && Array.isArray(jscoqManager.error)) {
           jscoqManager.error.length = 0;
@@ -874,8 +871,7 @@
         }
 
         try {
-          // 実行ごとに環境をリセットして前回の定義を残さない。
-          await jscoqInstance.execute(code);
+          // 実行ごとに環墁E��リセチE��して前回の定義を残さなぁE��E          await jscoqInstance.execute(code);
           
 
           if (closure.proofState === 'YY') {
@@ -900,17 +896,17 @@
               return { status: 'rejected', proof_state: 'YN', reason: summary };
             }
             setStatus('Coq proof verified (YY)');
-            outputEl.textContent = '[Coq Validation Success]\n証明は ' + closure.closer + ' で完成しています (YY状態)';
+            outputEl.textContent = '[Coq Validation Success]\n証明�E ' + closure.closer + ' で完�EしてぁE��ぁE(YY状慁E';
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
           }
           if (closure.proofState === 'NY') {
             setStatus('Coq proof accepted (NY)');
-            outputEl.textContent = '[Coq Validation Success]\n証明は ' + closure.closer + ' で暫定受け入れです (NY状態)';
+            outputEl.textContent = '[Coq Validation Success]\n証明�E ' + closure.closer + ' で暫定受け�EれでぁE(NY状慁E';
             return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
           }
 
           setStatus('Coq validation failed', true);
-          outputEl.textContent = '[Coq Validation]\n証明が Qed. / Defined. / Admitted. / Conjecture で終わっていません';
+          outputEl.textContent = '[Coq Validation]\n証明が Qed. / Defined. / Admitted. / Conjecture で終わってぁE��せん';
           return { status: 'rejected', proof_state: 'NN', reason: 'Proof not closed' };
         } catch (err) {
           setStatus('Coq validation failed', true);
@@ -1003,12 +999,12 @@
           }
           if(closure.proofState === 'NY'){
             setStatus('Lean proof accepted (NY)');
-            outputEl.textContent = '[Lean Validation Success]\n証明は ' + closure.closer + ' を含むため暫定受け入れです (NY状態)';
+            outputEl.textContent = '[Lean Validation Success]\n証明�E ' + closure.closer + ' を含むため暫定受け�EれでぁE(NY状慁E';
             return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
           }
 
           setStatus('Lean proof verified (YY)');
-          outputEl.textContent = '[Lean Validation Success]\nLean 4でエラーなく検証できました (YY状態)';
+          outputEl.textContent = '[Lean Validation Success]\nLean 4でエラーなく検証できました (YY状慁E';
           return { status: 'allowed', proof_state: 'YY', reason: 'Lean 4 verified' };
         }catch(err){
           const errorMsg = err && err.message ? err.message : String(err);
@@ -1134,7 +1130,7 @@
           return { proofState: 'YY', closer: 'Qed.' };
         }
 
-        return { proofState: 'NN', reason: '証明は最後を Qed. / Defined. / Admitted. / Conjecture で閉じてください。' };
+        return { proofState: 'NN', reason: '証明の最後を Qed. / Defined. / Admitted. / Conjecture で閉じてください。' };
       }
 
       function isConjectureTail(normalized){
@@ -1205,177 +1201,6 @@
         return output;
       }
 
-      function createCoqErrorCollector(manager, sourceText){
-        const errors = [];
-        let errorCount = 0;
-        let detachFn = null;
-
-        function reset(){
-          errors.length = 0;
-          errorCount = 0;
-        }
-
-        function getErrorCount(){ return errorCount; }
-        function getErrors(){ return errors.slice(); }
-
-        function onError(payload){
-          if(payload === null || payload === undefined) return;
-          if(Array.isArray(payload)){
-            if(payload.length === 0) return;
-            for(let i = 0; i < payload.length; i += 1){
-              onError(payload[i]);
-            }
-            return;
-          }
-          const derived = extractCoqErrorFromPayload(payload, sourceText, manager);
-          const msg = derived.message || stringifyCoqPayload(payload);
-          const parsed = parseCoqErrorMessage(msg);
-          if(!isMeaningfulCoqError(derived, msg, parsed)) return;
-          const errObj = {
-            timestamp: Date.now(),
-            raw: payload,
-            msg: msg,
-            parsed: parsed,
-            derived: derived
-          };
-          errors.push(errObj);
-          errorCount += 1;
-        }
-
-        function attach(){
-          if(detachFn) return true;
-          const detachList = [];
-          let attached = false;
-          const targets = [];
-          if(typeof window !== 'undefined' && window.jsCoq) {
-            targets.push({ type: 'global', obj: window.jsCoq });
-          }
-          if(manager) {
-            targets.push({ type: 'manager', obj: manager });
-            if(manager.coq) targets.push({ type: 'coq', obj: manager.coq });
-            if(manager.provider && manager.provider.coq) targets.push({ type: 'provider', obj: manager.provider.coq });
-          }
-
-          for(const target of targets){
-            const obj = target.obj;
-            if(!obj || typeof obj !== 'object') continue;
-
-            if('onError' in obj){
-              const prev = obj.onError;
-              obj.onError = function(payload){
-                onError(payload);
-                if(typeof prev === 'function'){
-                  try { prev(payload); } catch(e) {}
-                }
-              };
-              detachList.push(function(){ obj.onError = prev; });
-              attached = true;
-            }
-            if(typeof obj.on === 'function'){
-              try {
-                obj.on('error', onError);
-                detachList.push(function(){
-                  if(typeof obj.off === 'function'){
-                    try { obj.off('error', onError); } catch(e) {}
-                  }
-                });
-                attached = true;
-              } catch(e) {
-                // try next target
-              }
-            }
-          }
-
-          if(manager && typeof manager.reportError === 'function'){
-            const prev = manager.reportError;
-            manager.reportError = function(payload){
-              onError(payload);
-              return prev.apply(this, arguments);
-            };
-            detachList.push(function(){ manager.reportError = prev; });
-            attached = true;
-          }
-
-          if(manager && typeof manager.addError === 'function'){
-            const prev = manager.addError;
-            manager.addError = function(payload){
-              onError(payload);
-              return prev.apply(this, arguments);
-            };
-            detachList.push(function(){ manager.addError = prev; });
-            attached = true;
-          }
-
-          if(manager && ('error' in manager)){
-            const prevDescriptor = Object.getOwnPropertyDescriptor(manager, 'error');
-            let current = manager.error;
-            try {
-              Object.defineProperty(manager, 'error', {
-                configurable: true,
-                enumerable: true,
-                get: function(){ return current; },
-                set: function(value){
-                  current = value;
-                  if(Array.isArray(value) && value.length > 0){
-                    onError(value[0]);
-                  }else if(value){
-                    onError(value);
-                  }
-                }
-              });
-              detachList.push(function(){
-                try {
-                  if(prevDescriptor){
-                    Object.defineProperty(manager, 'error', prevDescriptor);
-                  }else{
-                    delete manager.error;
-                    manager.error = current;
-                  }
-                } catch(e) {}
-              });
-              attached = true;
-            } catch(e) {
-              // ignore and continue to array hook
-            }
-          }
-
-          if(manager && Array.isArray(manager.error)){
-            const arr = manager.error;
-            if(typeof arr.push === 'function'){
-              const prevPush = arr.push;
-              arr.push = function(){
-                for(let i = 0; i < arguments.length; i += 1){
-                  onError(arguments[i]);
-                }
-                return prevPush.apply(this, arguments);
-              };
-              detachList.push(function(){ arr.push = prevPush; });
-              attached = true;
-            }
-          }
-
-          if(attached){
-            detachFn = function(){
-              for(let i = 0; i < detachList.length; i += 1){
-                try { detachList[i](); } catch(e) {}
-              }
-            };
-            return true;
-          }
-
-          return false;
-        }
-
-        function detach(){
-          if(typeof detachFn === 'function'){
-            detachFn();
-            detachFn = null;
-          }
-        }
-
-        return { attach, detach, reset, getErrorCount, getErrors };
-      }
-
       function stringifyCoqPayload(payload){
         try {
           if(typeof payload === 'string') return payload;
@@ -1392,127 +1217,6 @@
         }
       }
 
-      function extractCoqErrorFromPayload(payload, sourceText, manager){
-        let message = '';
-        let location = null;
-        const pprint = manager && manager.pprint && typeof manager.pprint.pp2Text === 'function'
-          ? manager.pprint
-          : null;
-        if(payload && typeof payload === 'object'){
-          message = pickCoqMessage(payload);
-          if(!message && payload.err && typeof payload.err === 'object'){
-            message = pickCoqMessage(payload.err);
-          }
-          if(!message && payload.feedback && Array.isArray(payload.feedback)){
-            const fb = payload.feedback.find((item)=> item && item.level === 'Error') || payload.feedback[0];
-            if(fb){
-              if(!message && pprint && fb.msg){
-                try {
-                  const text = pprint.pp2Text(fb.msg);
-                  if(text) message = text;
-                } catch(e) {}
-              }
-              if(!message && fb.msg){
-                try { message = typeof fb.msg === 'string' ? fb.msg : JSON.stringify(fb.msg); } catch(e) {}
-              }
-              if(!message && fb.message) message = String(fb.message);
-            }
-          }
-          if(!message && pprint && payload.msg){
-            try {
-              const text = pprint.pp2Text(payload.msg);
-              if(text) message = text;
-            } catch(e) {}
-          }
-          if(!message && pprint && payload.err && payload.err.msg){
-            try {
-              const text = pprint.pp2Text(payload.err.msg);
-              if(text) message = text;
-            } catch(e) {}
-          }
-          const locCandidates = [];
-          if(payload.loc) locCandidates.push(payload.loc);
-          if(payload.location) locCandidates.push(payload.location);
-          if(payload.range) locCandidates.push(payload.range);
-          if(payload.pploc) locCandidates.push(payload.pploc);
-          if(payload.pos) locCandidates.push(payload.pos);
-          if(payload.position) locCandidates.push(payload.position);
-          if(payload.span) locCandidates.push(payload.span);
-          if(payload.feedback && Array.isArray(payload.feedback)){
-            const fb = payload.feedback.find((item)=> item && item.level === 'Error') || payload.feedback[0];
-            if(fb){
-              if(fb.loc) locCandidates.push(fb.loc);
-              if(fb.location) locCandidates.push(fb.location);
-              if(fb.pploc) locCandidates.push(fb.pploc);
-              if(fb.range) locCandidates.push(fb.range);
-            }
-          }
-          if(payload.err && payload.err.loc) locCandidates.push(payload.err.loc);
-          if(payload.err && payload.err.location) locCandidates.push(payload.err.location);
-          if(payload.err && payload.err.range) locCandidates.push(payload.err.range);
-
-          for(const loc of locCandidates){
-            const resolved = normalizeCoqLocation(loc, sourceText);
-            if(resolved){
-              location = resolved;
-              break;
-            }
-          }
-        } else if(typeof payload === 'string'){
-          message = payload;
-        }
-
-        if(!message){
-          message = '';
-        }
-
-        return { message, location };
-      }
-
-      function pickCoqMessage(obj){
-        if(!obj || typeof obj !== 'object') return '';
-        if(typeof obj.message === 'string') return obj.message;
-        if(typeof obj.msg === 'string') return obj.msg;
-        if(typeof obj.error === 'string') return obj.error;
-        if(obj.error && typeof obj.error.message === 'string') return obj.error.message;
-        if(typeof obj.text === 'string') return obj.text;
-        if(typeof obj.pp === 'string') return obj.pp;
-        if(obj.pp && typeof obj.pp === 'string') return obj.pp;
-        if(obj.msg && typeof obj.msg === 'object'){
-          try { return JSON.stringify(obj.msg); } catch(e) {}
-        }
-        if(obj.message && typeof obj.message === 'object'){
-          try { return JSON.stringify(obj.message); } catch(e) {}
-        }
-        if(obj.error && typeof obj.error === 'object'){
-          try { return JSON.stringify(obj.error); } catch(e) {}
-        }
-        return '';
-      }
-
-      function parseCoqErrorMessage(msg){
-        if(!msg) return {};
-        const parsed = { line: null, charFrom: null, charTo: null, summary: null };
-
-        let m = msg.match(/line\s+(\d+)(?:[,\s]+characters\s+(\d+)(?:-(\d+))?)?/i);
-        if(m){
-          parsed.line = Number(m[1]);
-          if(m[2]) parsed.charFrom = Number(m[2]);
-          if(m[3]) parsed.charTo = Number(m[3]);
-        } else {
-          m = msg.match(/at\s+line\s+(\d+)(?:\s*,\s*char(?:acter)?s?\s*(\d+))?/i);
-          if(m){
-            parsed.line = Number(m[1]);
-            if(m[2]) parsed.charFrom = Number(m[2]);
-          }
-        }
-
-        m = msg.match(/(?:Error|error|Fail):?\s*(.+?)(?:\n|$)/i);
-        if(m) parsed.summary = m[1].trim();
-        if(!parsed.summary) parsed.summary = (msg.length > 200 ? msg.slice(0, 200) + '…' : msg);
-        return parsed;
-      }
-
       function sanitizeCoqMessage(msg){
         const trimmed = String(msg || '').trim();
         if(!trimmed) return '';
@@ -1520,219 +1224,6 @@
         if(/^\[\s*\]$/.test(trimmed)) return '';
         if(/^\{\s*\}$/.test(trimmed)) return '';
         return trimmed;
-      }
-
-      function isMeaningfulCoqError(derived, msg, parsed){
-        if(derived && derived.location) return true;
-        const summary = parsed && parsed.summary ? sanitizeCoqMessage(parsed.summary) : '';
-        if(summary) return true;
-        const raw = sanitizeCoqMessage(msg);
-        return !!raw;
-      }
-
-      function pickBestCoqError(errors){
-        if(!Array.isArray(errors) || errors.length === 0) return null;
-        for(let i = errors.length - 1; i >= 0; i -= 1){
-          const err = errors[i];
-          if(!err) continue;
-          const derived = err.derived || {};
-          const parsed = err.parsed || {};
-          if(isMeaningfulCoqError(derived, err.msg, parsed)) return err;
-        }
-        return null;
-      }
-
-      function formatCoqPayloadError(payload, sourceText, manager){
-        if(payload === null || payload === undefined) return '';
-        const derived = extractCoqErrorFromPayload(payload, sourceText, manager);
-        const msg = derived.message || stringifyCoqPayload(payload);
-        const parsed = parseCoqErrorMessage(msg);
-        const derivedMsg = sanitizeCoqMessage(derived.message);
-        const parsedMsg = sanitizeCoqMessage(parsed.summary);
-        const rawMsg = sanitizeCoqMessage(msg);
-        const summary = derivedMsg || parsedMsg || rawMsg;
-        if(!summary) return '';
-        if(derived.location && Number.isFinite(derived.location.line) && Number.isFinite(derived.location.col)){
-          return derived.location.line + ':' + derived.location.col + ' ' + summary;
-        }
-        return summary;
-      }
-
-      function pickBestCoqManagerError(errors, sourceText, manager){
-        if(!Array.isArray(errors) || errors.length === 0) return '';
-        for(let i = errors.length - 1; i >= 0; i -= 1){
-          const msg = formatCoqPayloadError(errors[i], sourceText, manager);
-          if(msg) return msg;
-        }
-        return '';
-      }
-
-      function coqSentenceText(stm){
-        if(!stm || typeof stm !== 'object') return '';
-        const candidates = [
-          stm.text,
-          stm.sentence,
-          stm.s,
-          stm.raw,
-          stm.content,
-          stm.stmt
-        ];
-        for(let i = 0; i < candidates.length; i += 1){
-          if(typeof candidates[i] === 'string' && candidates[i].trim()) return candidates[i];
-        }
-        return '';
-      }
-
-      function coqSentenceStatus(stm){
-        const phase = String(stm && stm.phase ? stm.phase : '').toLowerCase();
-        const sid = pickNumber(
-          stm && stm.coq_sid,
-          stm && stm.state_id,
-          stm && stm.state,
-          stm && stm.sid,
-          stm && stm.sentence_id
-        );
-        const processed = (Number.isFinite(sid) && sid > 0)
-          || phase === 'processed'
-          || phase === 'done'
-          || phase === 'complete'
-          || phase === 'checked';
-        const pending = phase === 'pending'
-          || phase === 'adding'
-          || phase === 'added'
-          || phase === 'processing';
-        return { processed, pending, phase, sid };
-      }
-
-      function coqSentenceHasError(stm){
-        if(!stm || typeof stm !== 'object') return false;
-        if(stm.err || stm.error) return true;
-        if(Array.isArray(stm.feedback) && stm.feedback.some(coqFeedbackIsError)) return true;
-        const phase = String(stm.phase || '').toLowerCase();
-        if(phase === 'error' || phase === 'failed') return true;
-        return false;
-      }
-
-      function summarizeCoqExecution(manager, sourceText){
-        const sentences = manager && manager.doc && Array.isArray(manager.doc.sentences)
-          ? manager.doc.sentences
-          : [];
-        const summary = {
-          total: 0,
-          processed: 0,
-          pending: 0,
-          hasError: false
-        };
-        for(let i = 0; i < sentences.length; i += 1){
-          const stm = sentences[i];
-          const text = coqSentenceText(stm);
-          if(!text) continue;
-          summary.total += 1;
-          const status = coqSentenceStatus(stm);
-          if(status.processed) summary.processed += 1;
-          if(status.pending) summary.pending += 1;
-          if(coqSentenceHasError(stm)) summary.hasError = true;
-        }
-        if(summary.total === 0 && typeof sourceText === 'string' && sourceText.trim()){
-          summary.hasError = summary.hasError || false;
-        }
-        return summary;
-      }
-
-      function getLastCoqSid(manager){
-        if(!manager || !manager.doc || !Array.isArray(manager.doc.sentences)) return null;
-        let maxSid = null;
-        for(let i = 0; i < manager.doc.sentences.length; i += 1){
-          const stm = manager.doc.sentences[i];
-          const sid = pickNumber(stm && stm.coq_sid, stm && stm.state_id, stm && stm.state, stm && stm.sid);
-          if(Number.isFinite(sid)){
-            if(maxSid === null || sid > maxSid) maxSid = sid;
-          }
-        }
-        return maxSid;
-      }
-
-      function unwrapGoalsResponse(res){
-        if(!res || typeof res !== 'object') return res;
-        if(res.data) return res.data;
-        if(res.answer) return res.answer;
-        if(res.result) return res.result;
-        if(res.value) return res.value;
-        return res;
-      }
-
-      function countGoalsFromResponse(res, depth){
-        if(res === null || res === undefined) return null;
-        const level = Number.isFinite(depth) ? depth : 0;
-        if(level > 6) return null;
-        if(typeof res === 'string'){
-          if(/no\s+more\s+goals/i.test(res)) return 0;
-          if(/not\s+in\s+proof\s+mode/i.test(res)) return 0;
-          if(/no\s+focused\s+proof/i.test(res)) return 0;
-          return null;
-        }
-        if(typeof res === 'number'){
-          return Number.isFinite(res) ? res : null;
-        }
-        if(Array.isArray(res)){
-          let total = 0;
-          let saw = false;
-          for(let i = 0; i < res.length; i += 1){
-            const inner = countGoalsFromResponse(res[i], level + 1);
-            if(inner !== null){
-              total += inner;
-              saw = true;
-            }
-          }
-          return saw ? total : null;
-        }
-        if(typeof res === 'object'){
-          // unwrap common wrappers
-          const wrappers = ['data','value','result','answer','payload','msg','message','text'];
-          for(let i = 0; i < wrappers.length; i += 1){
-            if(res[wrappers[i]] !== undefined){
-              const inner = countGoalsFromResponse(res[wrappers[i]], level + 1);
-              if(inner !== null) return inner;
-            }
-          }
-
-          let count = 0;
-          let saw = false;
-          const fields = [
-            'goals','goal','fg_goals','bg_goals',
-            'shelf','shelved','stack','given_up','givenUp',
-            'aborted','admitted','admit'
-          ];
-          for(let i = 0; i < fields.length; i += 1){
-            const key = fields[i];
-            if(!Object.prototype.hasOwnProperty.call(res, key)) continue;
-            const val = res[key];
-            if(Array.isArray(val)){
-              count += val.length;
-              saw = true;
-            } else if(val && typeof val === 'object'){
-              const inner = countGoalsFromResponse(val, level + 1);
-              if(inner !== null){
-                count += inner;
-                saw = true;
-              }
-            } else if(key === 'goal' && val){
-              count += 1;
-              saw = true;
-            }
-          }
-          if(saw) return count;
-
-          // last resort: look for any key containing "goal"
-          const keys = Object.keys(res);
-          for(let i = 0; i < keys.length; i += 1){
-            const key = keys[i];
-            if(!/goal/i.test(key)) continue;
-            const inner = countGoalsFromResponse(res[key], level + 1);
-            if(inner !== null) return inner;
-          }
-        }
-        return null;
       }
 
       async function resolveMaybePromise(fn){
@@ -1745,49 +1236,32 @@
         }
       }
 
-      async function getCoqGoalsCountOnce(manager){
-        const targets = [];
-        const sid = manager ? getLastCoqSid(manager) : null;
-        if(typeof window !== 'undefined' && window.jsCoq) {
-          targets.push({ obj: window.jsCoq, sid: null });
-        }
-        if(manager) targets.push({ obj: manager, sid: sid });
-        if(manager && manager.coq) targets.push({ obj: manager.coq, sid: sid });
-        if(manager && manager.provider && manager.provider.coq) targets.push({ obj: manager.provider.coq, sid: sid });
+      function normalizeGoalsResponse(res){
+        if(!res || typeof res !== 'object') return res;
+        if(res.data !== undefined) return res.data;
+        if(res.answer !== undefined) return res.answer;
+        if(res.result !== undefined) return res.result;
+        return res;
+      }
 
-        const calls = [];
-        for(let i = 0; i < targets.length; i += 1){
-          const obj = targets[i].obj;
-          const objSid = targets[i].sid;
-          if(!obj || typeof obj !== 'object') continue;
-          if(typeof obj.goals === 'function') calls.push(() => (objSid !== null ? obj.goals(objSid) : obj.goals()));
-          if(typeof obj.Goals === 'function') calls.push(() => (objSid !== null ? obj.Goals(objSid) : obj.Goals()));
-          if(typeof obj.getGoals === 'function') calls.push(() => (objSid !== null ? obj.getGoals(objSid) : obj.getGoals()));
-          if(typeof obj.query === 'function') {
-            if(objSid !== null) {
-              calls.push(() => obj.query(objSid, 'Goals'));
-              calls.push(() => obj.query(objSid, 'Goals.'));
-              calls.push(() => obj.query(objSid, { query: 'Goals' }));
-              calls.push(() => obj.query(objSid, { query: 'Goals.' }));
-            }
-            calls.push(() => obj.query('Goals'));
-            calls.push(() => obj.query('Goals.'));
-            calls.push(() => obj.query({ query: 'Goals' }));
-            calls.push(() => obj.query({ query: 'Goals.' }));
-          }
-          if(typeof obj.exec === 'function') {
-            calls.push(() => obj.exec('Goals.'));
-            calls.push(() => obj.exec('Goals'));
-          }
+      function countGoalsSimple(res){
+        if(res === null || res === undefined) return null;
+        if(typeof res === 'string'){
+          if(/no\s+more\s+goals/i.test(res)) return 0;
+          if(/not\s+in\s+proof\s+mode/i.test(res)) return 0;
+          if(/no\s+focused\s+proof/i.test(res)) return 0;
+          return null;
         }
-
-        for(let i = 0; i < calls.length; i += 1){
-          const res = await resolveMaybePromise(calls[i]);
-          if(res !== null && res !== undefined){
-            const normalized = unwrapGoalsResponse(res);
-            const count = countGoalsFromResponse(normalized);
-            if(count !== null) return count;
-          }
+        if(Array.isArray(res)) return res.length;
+        if(typeof res === 'object'){
+          if(Array.isArray(res.goals)) return res.goals.length;
+          if(Array.isArray(res.fg_goals)) return res.fg_goals.length;
+          if(Array.isArray(res.bg_goals)) return res.bg_goals.length;
+          if(Array.isArray(res.shelf)) return res.shelf.length;
+          if(Array.isArray(res.shelved)) return res.shelved.length;
+          if(Array.isArray(res.given_up)) return res.given_up.length;
+          if(Array.isArray(res.givenUp)) return res.givenUp.length;
+          if(typeof res.goals === 'number' && Number.isFinite(res.goals)) return res.goals;
         }
         return null;
       }
@@ -1796,116 +1270,40 @@
         const opts = options || {};
         const timeoutMs = pickNumber(opts.timeoutMs, 4000);
         const intervalMs = pickNumber(opts.intervalMs, 50);
-        const stableSamples = pickNumber(opts.stableSamples, 2);
         const maxWait = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 4000;
         const step = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 50;
-        const neededStable = Number.isFinite(stableSamples) && stableSamples > 0
-          ? Math.floor(stableSamples)
-          : 2;
 
-        let last = null;
-        let stable = 0;
+        const coq = (typeof window !== 'undefined' && window.jsCoq)
+          || (manager && manager.coq)
+          || (manager && manager.provider && manager.provider.coq);
+
+        if(!coq) return null;
+
+        const calls = [];
+        if(typeof coq.goals === 'function') calls.push(() => coq.goals());
+        if(typeof coq.Goals === 'function') calls.push(() => coq.Goals());
+        if(typeof coq.getGoals === 'function') calls.push(() => coq.getGoals());
+        if(typeof coq.query === 'function') {
+          calls.push(() => coq.query('Goals'));
+          calls.push(() => coq.query('Goals.'));
+        }
+        if(typeof coq.exec === 'function') {
+          calls.push(() => coq.exec('Goals.'));
+        }
+
         const start = Date.now();
         while(Date.now() - start < maxWait){
-          const count = await getCoqGoalsCountOnce(manager);
-          if(count !== null){
-            if(count === last){
-              stable += 1;
-            } else {
-              last = count;
-              stable = 1;
+          for(let i = 0; i < calls.length; i += 1){
+            const res = await resolveMaybePromise(calls[i]);
+            if(res !== null && res !== undefined){
+              const normalized = normalizeGoalsResponse(res);
+              const count = countGoalsSimple(normalized);
+              if(count !== null) return count;
             }
-            if(stable >= neededStable) return count;
           }
           await sleep(step);
         }
-        return last;
-      }
-
-      function coqFeedbackIsError(feedback){
-        if(!feedback) return false;
-        if(typeof feedback.is_error === 'boolean') return feedback.is_error;
-        if(typeof feedback.sev === 'number' && feedback.sev >= 2) return true;
-        if(typeof feedback.severity === 'number' && feedback.severity >= 2) return true;
-        const level = String(feedback.level || feedback.severity || feedback.sev || '').toLowerCase();
-        if(level === 'error' || level === 'err' || level === 'fatal') return true;
-        return false;
-      }
-
-      function collectCoqErrorCandidates(manager){
-        const payloads = [];
-        let hasSignal = false;
-        if(manager && Array.isArray(manager.error) && manager.error.length > 0){
-          hasSignal = true;
-          payloads.push(...manager.error);
-        }
-
-        const sentences = manager && manager.doc && Array.isArray(manager.doc.sentences)
-          ? manager.doc.sentences
-          : null;
-        if(sentences){
-          for(let i = 0; i < sentences.length; i += 1){
-            const stm = sentences[i];
-            if(!stm) continue;
-            if(stm.err || stm.error){
-              hasSignal = true;
-              payloads.push(stm.err || stm.error);
-            }
-            if(typeof stm.phase === 'string' && /error|failed/i.test(stm.phase)){
-              hasSignal = true;
-              payloads.push(stm);
-            }
-            if(Array.isArray(stm.feedback)){
-              const errorFeedback = stm.feedback.filter(coqFeedbackIsError);
-              if(errorFeedback.length){
-                hasSignal = true;
-                payloads.push(...errorFeedback);
-              }
-            }
-          }
-        }
-
-        return { payloads, hasSignal };
-      }
-
-      function formatCollectedCoqError(err){
-        if(!err) return '';
-        const parsed = err.parsed || {};
-        const derived = err.derived || {};
-        const derivedLoc = derived.location || null;
-        const derivedMsg = sanitizeCoqMessage(derived.message);
-        const parsedMsg = sanitizeCoqMessage(parsed.summary);
-        const rawMsg = sanitizeCoqMessage(err.msg);
-        const summary = derivedMsg || parsedMsg || rawMsg;
-        if(!summary) return '';
-        if(derivedLoc && Number.isFinite(derivedLoc.line) && Number.isFinite(derivedLoc.col)){
-          return derivedLoc.line + ':' + derivedLoc.col + ' ' + summary;
-        }
-        return summary;
-      }
-
-      function getCoqErrorDetails(manager, collector, sourceText){
-        const candidates = collectCoqErrorCandidates(manager);
-        let hasError = candidates.hasSignal;
-
-        for(let i = 0; i < candidates.payloads.length; i += 1){
-          const msg = formatCoqPayloadError(candidates.payloads[i], sourceText, manager);
-          if(msg) return { hasError: true, message: msg };
-        }
-
-        const collectorBest = collector ? pickBestCoqError(collector.getErrors()) : null;
-        if(collectorBest){
-          hasError = true;
-          const collectorMsg = formatCollectedCoqError(collectorBest);
-          if(collectorMsg) return { hasError: true, message: collectorMsg };
-        }
-
-        if(hasError){
-          const fallback = manager ? sanitizeCoqMessage(extractCoqError(manager, sourceText)) : '';
-          if(fallback) return { hasError: true, message: fallback };
-        }
-
-        return { hasError, message: '' };
+        return null;
       }
 
       function safeJsonReplacer(){
@@ -2696,7 +2094,7 @@
         const isCoqInScrolledMode = selectedLanguage === 'Coq' && initPayload.sourceState === 1;
 
         if (isCoqMode) {
-          // jsCoq初期化を確実に待つ
+          // jsCoq初期化を確実に征E��
           if(jscoqInitPromise) {
             try { await jscoqInitPromise; } catch(e) {}
           }
@@ -2709,12 +2107,12 @@
           }
           if(!jscoqReady) {
             setStatus('jsCoq未初期化', true);
-            outputEl.textContent = '[Coq Validation]\njsCoqの初期化に失敗しました。\n詳細: ' + (jscoqInitError || '(unknown)');
+            outputEl.textContent = '[Coq Validation]\njsCoqの初期化に失敗しました。詳細: ' + (jscoqInitError || '(unknown)');
             running = false;
             runBtn.disabled = false;
             return;
           }
-          // Coqモードの場合、jsCoqで判定のみ
+          // Coqモード�E場合、jsCoqで判定�Eみ
           await validateCoqProof(code);
           running = false;
           runBtn.disabled = false;
@@ -2734,7 +2132,7 @@
           }
           if(!lean4Ready){
             setStatus('Lean 4未初期化', true);
-            outputEl.textContent = '[Lean Validation]\nLean 4の初期化に失敗しました。\n詳細: ' + (lean4InitError || '(unknown)');
+            outputEl.textContent = '[Lean Validation]\nLean 4の初期化に失敗しました。詳細: ' + (lean4InitError || '(unknown)');
             running = false;
             runBtn.disabled = false;
             return;
@@ -3011,14 +2409,12 @@
           }
         });
       }
-
-    })();
+  })();
   </script>
   <div id="coq" aria-hidden="true"></div>
   <div id="ide-wrapper" aria-hidden="true"></div>
   <script>
-    // jsCoq initialization for Coq validation（自動化＆Promise管理）
-    const JSCOQ_VERSION = '0.17.1';
+    // jsCoq initialization for Coq validation�E��E動化�E�Eromise管琁E��E    const JSCOQ_VERSION = '0.17.1';
     const hasHttpOrigin = !!(window.location && window.location.origin && window.location.origin !== 'null');
     const PROXY_BASE = hasHttpOrigin ? new URL('/api/jscoq/', window.location.origin).toString() : null;
     const CDN_BASE = 'https://cdn.jsdelivr.net/npm/jscoq@' + JSCOQ_VERSION + '/';
@@ -3781,3 +3177,8 @@
   </script>
 </body>
 </html>
+
+
+
+
+
