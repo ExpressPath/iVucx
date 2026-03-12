@@ -3078,7 +3078,8 @@
           prelude: true,
           implicit_libs: true,
           init_pkgs: ['init'],
-          all_pkgs: ['coq']
+          all_pkgs: ['coq'],
+          flags: {}
         });
 
         await waitForManagerReady(jscoqManager);
