@@ -3079,7 +3079,7 @@
           implicit_libs: true,
           init_pkgs: ['init'],
           all_pkgs: ['coq'],
-          flags: {}
+          flags: { debug: false }
         });
 
         await waitForManagerReady(jscoqManager);
