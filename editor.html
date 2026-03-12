@@ -3284,8 +3284,15 @@
       }
 
       for (let i = 0; i < resetSteps.length; i += 1) {
-        await resolveMaybePromise(resetSteps[i]);
-        didReset = true;
+        try {
+          const res = resetSteps[i]();
+          if (res && typeof res.then === 'function') {
+            await res;
+          }
+          didReset = true;
+        } catch (err) {
+          // continue to next reset strategy
+        }
       }
 
       if (!didReset && provider && typeof provider.load === 'function') {
