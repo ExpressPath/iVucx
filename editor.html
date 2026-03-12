@@ -875,7 +875,7 @@
 
         try {
           // 実行ごとに環境をリセットして前回の定義を残さない。
-          await jscoqInstance.execute('Reset Initial.\n' + code);
+          await jscoqInstance.execute(code);
           
 
           if (closure.proofState === 'YY') {
@@ -3240,6 +3240,7 @@
           if(!manager || !manager.provider || typeof manager.provider.load !== 'function') {
             throw new Error('jsCoq manager provider is unavailable');
           }
+          await resetCoqSession(manager);
           manager.provider.load(String(code || ''), 'Main.v', true);
           if(typeof manager.provider.focus === 'function') {
             manager.provider.focus();
@@ -3260,6 +3261,47 @@
           return true;
         }
       };
+    }
+
+    async function resetCoqSession(manager) {
+      if (!manager) return;
+      const provider = manager.provider;
+      const coq = manager.coq || (provider && provider.coq);
+      const resetSteps = [];
+      let didReset = false;
+
+      if (provider && typeof provider.reset === 'function') {
+        resetSteps.push(() => provider.reset());
+      }
+      if (provider && typeof provider.clear === 'function') {
+        resetSteps.push(() => provider.clear());
+      }
+      if (typeof manager.reset === 'function') {
+        resetSteps.push(() => manager.reset());
+      }
+      if (coq && typeof coq.reset === 'function') {
+        resetSteps.push(() => coq.reset());
+      }
+
+      for (let i = 0; i < resetSteps.length; i += 1) {
+        await resolveMaybePromise(resetSteps[i]);
+        didReset = true;
+      }
+
+      if (!didReset && provider && typeof provider.load === 'function') {
+        provider.load('', 'Main.v', true);
+        if (typeof provider.focus === 'function') {
+          provider.focus();
+        }
+        await waitForManagerIdle(manager, Date.now());
+      }
+
+      if (manager.error && Array.isArray(manager.error)) {
+        manager.error.length = 0;
+      }
+      if (manager.doc && Array.isArray(manager.doc.sentences)) {
+        manager.doc.sentences.length = 0;
+      }
     }
 
     async function waitForManagerIdle(manager, startedAt, timeoutMs = 45000) {
