@@ -1745,7 +1745,7 @@
         }
       }
 
-      async function getCoqGoalsCount(manager){
+      async function getCoqGoalsCountOnce(manager){
         const targets = [];
         const sid = manager ? getLastCoqSid(manager) : null;
         if(typeof window !== 'undefined' && window.jsCoq) {
@@ -1790,6 +1790,36 @@
           }
         }
         return null;
+      }
+
+      async function getCoqGoalsCount(manager, options){
+        const opts = options || {};
+        const timeoutMs = pickNumber(opts.timeoutMs, 4000);
+        const intervalMs = pickNumber(opts.intervalMs, 50);
+        const stableSamples = pickNumber(opts.stableSamples, 2);
+        const maxWait = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 4000;
+        const step = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 50;
+        const neededStable = Number.isFinite(stableSamples) && stableSamples > 0
+          ? Math.floor(stableSamples)
+          : 2;
+
+        let last = null;
+        let stable = 0;
+        const start = Date.now();
+        while(Date.now() - start < maxWait){
+          const count = await getCoqGoalsCountOnce(manager);
+          if(count !== null){
+            if(count === last){
+              stable += 1;
+            } else {
+              last = count;
+              stable = 1;
+            }
+            if(stable >= neededStable) return count;
+          }
+          await sleep(step);
+        }
+        return last;
       }
 
       function coqFeedbackIsError(feedback){
