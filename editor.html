@@ -123,25 +123,7 @@
       background:var(--accent-dark);
       border-color:var(--accent-dark);
     }
-
-    .runner-input{
-      width:min(44vw, 380px);
-      min-width:180px;
-      height:34px;
-      border-radius:8px;
-      border:1px solid #374151;
-      background:rgba(17,24,39,0.8);
-      color:#e6edf3;
-      font-size:12px;
-      padding:0 10px;
-      outline:none;
-    }
-
-    .runner-input::placeholder{
-      color:#8b96a5;
-    }
-
-    .workspace{
+.workspace{
       flex:1;
       min-height:0;
       display:grid;
@@ -266,10 +248,6 @@
         justify-content:space-between;
       }
 
-      .runner-input{
-        width:100%;
-        min-width:0;
-      }
     }
   </style>
 </head>
@@ -282,13 +260,6 @@
       <div class="file-name" id="fileName">Main.lean</div>
     </div>
     <div class="right-cluster">
-      <input
-        class="runner-input"
-        id="runnerEndpoint"
-        type="text"
-        placeholder="Runner endpoint (e.g. https://example.com/api/run)"
-        autocomplete="off"
-      />
       <button class="btn btn-run" id="runBtn" type="button">Run</button>
     </div>
   </header>
@@ -315,17 +286,16 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script src="CoqRunner.js"></script>
   <script>
     (function(){
       const INIT_STORAGE_KEY = 'ivucxEditorInit';
       const EDITOR_RETURN_KEY = 'ivucxEditorReturn';
-      const RUNNER_STORAGE_KEY = 'ivucxRunnerEndpoint';
 
       const langBadgeEl = document.getElementById('langBadge');
       const fileNameEl = document.getElementById('fileName');
       const outputEl = document.getElementById('outputPanel');
       const statusEl = document.getElementById('statusText');
-      const runnerEndpointEl = document.getElementById('runnerEndpoint');
       const runBtn = document.getElementById('runBtn');
       const backBtn = document.getElementById('backBtn');
       const fallbackEditor = document.getElementById('fallbackEditor');
@@ -387,16 +357,11 @@
       const params = new URLSearchParams(window.location.search);
       const selectedLanguage = resolveLanguage(params.get('lang') || initPayload.proofAssistant || 'Lean');
       const selectedConfig = languageConfig[selectedLanguage];
-      window.__ivucxNeedsJsCoq = selectedLanguage === 'Coq';
-      window.__ivucxNeedsLean4 = selectedLanguage === 'Lean';
 
       langBadgeEl.textContent = selectedLanguage;
       fileNameEl.textContent = selectedConfig.fileName;
 
-      updateRunnerInputVisibility(selectedLanguage);
 
-      const restoredRunner = params.get('runner') || safeStorageGet(localStorage, RUNNER_STORAGE_KEY);
-      runnerEndpointEl.value = restoredRunner;
 
       const summaryText = typeof initPayload.summary === 'string'
         ? initPayload.summary
@@ -412,32 +377,17 @@
       let useFallbackEditor = false;
       let monacoRef = null;
       let running = false;
-      let jscoqReady = false;
-      let jscoqInitPromise = null;
-      let jscoqInitError = '';
-      let lean4Ready = false;
-      let lean4InitPromise = null;
-      let lean4InitError = '';
 
 
       setStatus('Ready');
-      setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, restoredRunner, summaryText);
 
-      // Initialize local runtimes for Coq / Lean.
-      if(selectedLanguage === 'Coq') {
-        initializeCoqRuntime();
-      }
-      if(selectedLanguage === 'Lean') {
-        initializeLeanRuntime();
-      }
+      setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, summaryText);
+
 
       backBtn.addEventListener('click', ()=>{
         handleBackNavigation();
       });
 
-      runnerEndpointEl.addEventListener('change', ()=>{
-        safeStorageSet(localStorage, RUNNER_STORAGE_KEY, runnerEndpointEl.value.trim());
-      });
 
       runBtn.addEventListener('click', ()=>{
         runProof();
@@ -508,102 +458,12 @@
         statusEl.classList.toggle('error', !!isError);
       }
 
-      function updateRunnerInputVisibility(language){
-        const isLocalValidationMode = language === 'Coq' || language === 'Lean';
-        runnerEndpointEl.style.display = isLocalValidationMode ? 'none' : 'block';
-      }
 
-      function waitForAutoInitJsCoq(timeoutMs = 20000){
-        if(typeof autoInitJsCoq === 'function') return Promise.resolve();
-        return new Promise((resolve, reject)=>{
-          const started = Date.now();
-          function check(){
-            if(typeof autoInitJsCoq === 'function'){
-              resolve();
-              return;
-            }
-            if(Date.now() - started > timeoutMs){
-              reject(new Error('autoInitJsCoq is not available'));
-              return;
-            }
-            setTimeout(check, 50);
-          }
-          check();
-        });
-      }
 
-      function initializeCoqRuntime(forceRetry = false){
-        if(jscoqInitPromise && !forceRetry){
-          return jscoqInitPromise;
-        }
-        jscoqReady = false;
-        runBtn.disabled = true;
-        jscoqInitPromise = waitForAutoInitJsCoq()
-          .then(()=>{
-            if(typeof autoInitJsCoq !== 'function'){
-              throw new Error('autoInitJsCoq is not defined');
-            }
-            return autoInitJsCoq();
-          })
-          .then(()=>{
-            jscoqInitError = '';
-            jscoqReady = true;
-            runBtn.disabled = false;
-          })
-          .catch((err)=>{
-            jscoqInitError = err && err.message ? err.message : String(err);
-            setStatus('jsCoq initialization failed', true);
-            runBtn.disabled = true;
-          });
-        return jscoqInitPromise;
-      }
 
-      function waitForAutoInitLean4(timeoutMs = 20000){
-        if(typeof autoInitLean4 === 'function') return Promise.resolve();
-        return new Promise((resolve, reject)=>{
-          const started = Date.now();
-          function check(){
-            if(typeof autoInitLean4 === 'function'){
-              resolve();
-              return;
-            }
-            if(Date.now() - started > timeoutMs){
-              reject(new Error('autoInitLean4 is not available'));
-              return;
-            }
-            setTimeout(check, 50);
-          }
-          check();
-        });
-      }
 
-      function initializeLeanRuntime(forceRetry = false){
-        if(lean4InitPromise && !forceRetry){
-          return lean4InitPromise;
-        }
-        lean4Ready = false;
-        runBtn.disabled = true;
-        lean4InitPromise = waitForAutoInitLean4()
-          .then(()=>{
-            if(typeof autoInitLean4 !== 'function'){
-              throw new Error('autoInitLean4 is not defined');
-            }
-            return autoInitLean4();
-          })
-          .then(()=>{
-            lean4InitError = '';
-            lean4Ready = true;
-            runBtn.disabled = false;
-          })
-          .catch((err)=>{
-            lean4InitError = err && err.message ? err.message : String(err);
-            setStatus('Lean 4 initialization failed', true);
-            runBtn.disabled = true;
-          });
-        return lean4InitPromise;
-      }
 
-      function setInitialOutputMessage(language, fileName, payload, runnerEndpoint, summary){
+      function setInitialOutputMessage(language, fileName, payload, summary){
         const lines = [
           'Editor initialized.',
           'Language: ' + language,
@@ -614,18 +474,14 @@
           lines.push('Summary is stored separately (' + summary.length + ' chars).');
         }
 
-        // files螟画焚縺ｯ譛ｪ螳夂ｾｩ縺ｮ縺溘ａ蜑企勁
-
-        if(language === 'Coq' || language === 'Lean'){
-          lines.push('Local runtime validation mode is enabled.');
-        } else if(runnerEndpoint){
-          lines.push('Runner endpoint: ' + runnerEndpoint);
+        if(language === 'Coq'){
+          lines.push('Coq YY proofs are verified via CoqRunner.');
         } else {
-          lines.push('Runner endpoint is empty. Set endpoint and press Run.');
+          lines.push('Runner is disabled for this language.');
         }
 
         lines.push('Shortcut: Ctrl/Cmd + Enter');
-        outputEl.textContent = lines.join('\n');
+        outputEl.textContent = lines.join("\n");
       }
 
       function initializeEditor(initialText, language){
@@ -802,22 +658,10 @@
       }
 
 
-      async function waitJsCoqReady(timeoutMs = 10000) {
-        // jscoqInstance縺後そ繝・・ｽ・ｽ縺輔ｌ繧九∪縺ｧ蠕・・ｽ・ｽ
-        return new Promise((resolve, reject) => {
-          const start = Date.now();
-          function check() {
-            if(jscoqInstance) return resolve();
-            if(Date.now() - start > timeoutMs) return reject(new Error('jsCoq initialization timed out'));
-            setTimeout(check, 100);
-          }
-          check();
-        });
-      }
 
       async function validateCoqProof(code){
         setStatus('Validating Coq proof...');
-        outputEl.textContent = 'jsCoq縺ｧ險ｼ譏弱ｒ讀懆ｨｼ荳ｭ...\n';
+        outputEl.textContent = 'Checking Coq proof...\n';
         const normalized = stripCoqCommentsAndStrings(code);
         const libraryCatalog = buildCoqLibraryCatalog(initPayload);
         const libraryCheck = validateCoqLibraryUsage(normalized, libraryCatalog);
@@ -828,16 +672,14 @@
         }
         const axiomConflict = detectCoqAxiomConflict(normalized, libraryCatalog);
         if(axiomConflict){
-          const conflictLines = [
-            'Library axiom conflicts with proof axiom: ' + axiomConflict.name
-          ];
+          const conflictLines = ['Library axiom conflicts with proof axiom: ' + axiomConflict.name];
           if(axiomConflict.libraryStatement){
             conflictLines.push('Library axiom: ' + axiomConflict.libraryStatement);
           }
           if(axiomConflict.proofStatement){
             conflictLines.push('Proof axiom: ' + axiomConflict.proofStatement);
           }
-          const conflictMessage = conflictLines.join('\n');
+          const conflictMessage = conflictLines.join("\n");
           setStatus('Coq validation failed', true);
           outputEl.textContent = '[Coq Validation]\n' + conflictMessage;
           return { status: 'rejected', proof_state: 'NN', reason: conflictMessage };
@@ -849,72 +691,53 @@
           return { status: 'rejected', proof_state: 'NN', reason: closure.reason };
         }
 
-        // jsCoq蛻晄悄蛹悶ｒ遒ｺ螳溘↓蠕・・ｽ・ｽ
-        
-        if(jscoqManager && Array.isArray(jscoqManager.error)) {
-          jscoqManager.error.length = 0;
-        }
-        try {
-          if(!jscoqInstance) {
-            await waitJsCoqReady();
-          }
-        } catch(e) {
-          setStatus('Coq validation failed', true);
-          outputEl.textContent = '[Coq Validation]\njsCoq is not initialized. Reload the page and try again.';
-          return { status: 'error', proof_state: 'NN', reason: 'jsCoq not initialized' };
+        if(closure.proofState === 'NY'){
+          setStatus('Coq proof accepted (NY)');
+          outputEl.textContent = '[Coq Validation Success]\nProof ends with ' + closure.closer + ' (NY).';
+          return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
         }
 
-        if (!jscoqInstance) {
-          setStatus('Coq validation failed', true);
-          outputEl.textContent = '[Coq Validation]\njsCoq is not initialized. Reload the page and try again.';
-          return { status: 'error', proof_state: 'NN', reason: 'jsCoq not initialized' };
+        const soundnessIssue = findCoqUnsoundToken(code);
+        if(soundnessIssue){
+          setStatus('Coq soundness failed', true);
+          outputEl.textContent = '[Coq Soundness]\n' + soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ')';
+          return { status: 'rejected', proof_state: 'YN', reason: soundnessIssue.message };
         }
 
-        try {
-          // Execute the proof in jsCoq.
-          await jscoqInstance.execute(code);
-          
+        if(typeof checkProofText !== 'function'){
+          const summary = 'CoqRunner.js is not available.';
+          setStatus('Coq soundness failed', true);
+          outputEl.textContent = '[Coq Soundness]\n' + summary;
+          return { status: 'error', proof_state: 'YN', reason: summary };
+        }
 
-          if (closure.proofState === 'YY') {
-            const soundnessIssue = findCoqUnsoundToken(code);
-            if(soundnessIssue){
-              setStatus('Coq soundness failed', true);
-              outputEl.textContent = '[Coq Soundness]\n' + soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ')';
-              return { status: 'rejected', proof_state: 'YN', reason: soundnessIssue.message };
-            }
-            
-            const goalsCount = await getCoqGoalsCount(jscoqManager);
-            if(goalsCount === null){
-              const summary = 'Coq goals check unavailable (jsCoq API mismatch).';
-              setStatus('Coq soundness failed', true);
-              outputEl.textContent = '[Coq Soundness]\n' + summary;
-              return { status: 'rejected', proof_state: 'YN', reason: summary };
-            }
-            if(goalsCount > 0){
-              const summary = 'Coq proof not complete (remaining goals: ' + goalsCount + ').';
-              setStatus('Coq soundness failed', true);
-              outputEl.textContent = '[Coq Soundness]\n' + summary;
-              return { status: 'rejected', proof_state: 'YN', reason: summary };
-            }
+        try{
+          const result = await checkProofText(code);
+          if(result && result.ok){
             setStatus('Coq proof verified (YY)');
-            outputEl.textContent = '[Coq Validation Success]\n險ｼ譏趣ｿｽE ' + closure.closer + ' 縺ｧ螳鯉ｿｽE縺励※縺・・ｽ・ｽ縺・(YY迥ｶ諷・';
+            outputEl.textContent = '[Coq Validation Success]\nProof verified by CoqRunner (' + closure.closer + ').';
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
           }
-          if (closure.proofState === 'NY') {
-            setStatus('Coq proof accepted (NY)');
-            outputEl.textContent = '[Coq Validation Success]\n險ｼ譏趣ｿｽE ' + closure.closer + ' 縺ｧ證ｫ螳壼女縺托ｿｽE繧後〒縺・(NY迥ｶ諷・';
-            return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
+          const err = result && result.error ? result.error : null;
+          let summary = 'Coq proof validation failed.';
+          if(err){
+            if(err.timeout){
+              summary = 'CoqRunner timed out while checking the proof.';
+            } else if(typeof err.remaining === "number"){
+              summary = 'Coq proof not complete (remaining goals: ' + err.remaining + ').';
+            } else if(Array.isArray(err.summaries) && err.summaries.length > 0){
+              summary = 'CoqRunner failed: ' + err.summaries.join(' | ');
+            }
           }
-
-          setStatus('Coq validation failed', true);
-          outputEl.textContent = '[Coq Validation]\n險ｼ譏弱′ Qed. / Defined. / Admitted. / Conjecture 縺ｧ邨ゅｏ縺｣縺ｦ縺・・ｽ・ｽ縺帙ｓ';
-          return { status: 'rejected', proof_state: 'NN', reason: 'Proof not closed' };
+          setStatus('Coq soundness failed', true);
+          outputEl.textContent = '[Coq Soundness]\n' + summary;
+          return { status: 'rejected', proof_state: 'YN', reason: summary };
         } catch (err) {
-          setStatus('Coq validation failed', true);
           const errorMsg = err && err.message ? err.message : String(err);
-          outputEl.textContent = '[Coq Validation]\njsCoq螳溯｡後お繝ｩ繝ｼ:\n' + errorMsg;
-          const proofState = closure.proofState === 'YY' ? 'YN' : 'NN';
-          return { status: 'rejected', proof_state: proofState, reason: 'Coq execution error: ' + errorMsg };
+          const summary = 'CoqRunner error: ' + errorMsg;
+          setStatus('Coq soundness failed', true);
+          outputEl.textContent = '[Coq Soundness]\n' + summary;
+          return { status: 'error', proof_state: 'YN', reason: summary };
         }
       }
 
@@ -2094,141 +1917,23 @@
       async function runProof(){
         if(running) return;
 
-        const isCoqMode = selectedLanguage === 'Coq';
-        const isLeanMode = selectedLanguage === 'Lean';
-        const isLocalValidationMode = isCoqMode || isLeanMode;
-        const endpoint = isLocalValidationMode ? '' : runnerEndpointEl.value.trim();
-        if (!isLocalValidationMode) {
-          safeStorageSet(localStorage, RUNNER_STORAGE_KEY, endpoint);
-        }
-
-        if(!isLocalValidationMode && !endpoint){
-          setStatus('Runner endpoint required', true);
-          outputEl.textContent = [
-            '[Configuration]',
-            'Runner endpoint is empty.',
-            'Set the endpoint URL in the top input and run again.'
-          ].join('\n');
-          return;
-        }
-
         running = true;
         runBtn.disabled = true;
         setStatus('Running...');
 
         const code = getEditorCode();
-        const isCoqInScrolledMode = selectedLanguage === 'Coq' && initPayload.sourceState === 1;
 
-        if (isCoqMode) {
-          // jsCoq蛻晄悄蛹悶ｒ遒ｺ螳溘↓蠕・・ｽ・ｽ
-          if(jscoqInitPromise) {
-            try { await jscoqInitPromise; } catch(e) {}
-          }
-          if(!jscoqReady){
-            try{
-              await initializeCoqRuntime(true);
-            }catch(e){
-              // handled by initializeCoqRuntime status update
-            }
-          }
-          if(!jscoqReady) {
-            setStatus('jsCoq not initialized', true);
-            outputEl.textContent = '[Coq Validation]\njsCoq縺ｮ蛻晄悄蛹悶↓螟ｱ謨励＠縺ｾ縺励◆縲りｩｳ邏ｰ: ' + (jscoqInitError || '(unknown)');
-            running = false;
-            runBtn.disabled = false;
-            return;
-          }
-          // Coq繝｢繝ｼ繝会ｿｽE蝣ｴ蜷医）sCoq縺ｧ蛻､螳夲ｿｽE縺ｿ
+        if(selectedLanguage !== 'Coq'){
+          setStatus('Runner disabled', true);
+          outputEl.textContent = '[Configuration]\nOnly Coq YY validation is supported in this editor.';
+          running = false;
+          runBtn.disabled = false;
+          return;
+        }
+
+        try {
           await validateCoqProof(code);
-          running = false;
-          runBtn.disabled = false;
-          return;
-        }
-
-        if (isLeanMode) {
-          if(lean4InitPromise){
-            try { await lean4InitPromise; } catch(e) {}
-          }
-          if(!lean4Ready){
-            try{
-              await initializeLeanRuntime(true);
-            }catch(e){
-              // handled by initializeLeanRuntime status update
-            }
-          }
-          if(!lean4Ready){
-            setStatus('Lean 4 not initialized', true);
-            outputEl.textContent = '[Lean Validation]\nLean 4縺ｮ蛻晄悄蛹悶↓螟ｱ謨励＠縺ｾ縺励◆縲りｩｳ邏ｰ: ' + (lean4InitError || '(unknown)');
-            running = false;
-            runBtn.disabled = false;
-            return;
-          }
-
-          await validateLeanProof(code);
-          running = false;
-          runBtn.disabled = false;
-          return;
-        }
-
-        if (isCoqInScrolledMode) {
-          const validation = await validateCoqProof(code);
-          if (validation.status !== 'allowed') {
-            running = false;
-            runBtn.disabled = false;
-            return;
-          }
-        }
-
-        const payload = {
-          proofAssistant: selectedLanguage,
-          language: selectedLanguage.toLowerCase(),
-          fileName: selectedConfig.fileName,
-          summary: summaryText,
-          code: code,
-          context: {
-            draftCreatedAt: initPayload.createdAt || null,
-            attachedFileNames: Array.isArray(initPayload.attachedFileNames) ? initPayload.attachedFileNames : [],
-            summaryLength: summaryText.length
-          }
-        };
-
-        if (isCoqInScrolledMode) {
-          payload.proof_state = 'YY';
-        }
-
-        try{
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          });
-
-          const raw = await response.text();
-          if(!response.ok){
-            throw new Error('HTTP ' + response.status + ' ' + response.statusText + '\n' + raw.slice(0, 1200));
-          }
-
-          let result = null;
-          const contentType = response.headers.get('content-type') || '';
-          if(contentType.includes('application/json')){
-            try{
-              result = JSON.parse(raw);
-            }catch(err){
-              result = { stdout: raw };
-            }
-          } else {
-            result = { stdout: raw };
-          }
-
-          outputEl.textContent = formatRunResponse(result);
-          setStatus('Run completed');
-        }catch(err){
-          const msg = err && err.message ? err.message : String(err);
-          outputEl.textContent = '[Run Error]\n' + msg;
-          setStatus('Run failed', true);
-        }finally{
+        } finally {
           running = false;
           runBtn.disabled = false;
         }
@@ -2436,727 +2141,6 @@
         });
       }
   })();
-  </script>
-  <div id="coq" aria-hidden="true"></div>
-  <div id="ide-wrapper" aria-hidden="true"></div>
-  <script>
-    // jsCoq initialization for Coq validation.
-    const JSCOQ_VERSION = '0.17.1';
-    const hasHttpOrigin = !!(window.location && window.location.origin && window.location.origin !== 'null');
-    const PROXY_BASE = hasHttpOrigin ? new URL('/api/jscoq/', window.location.origin).toString() : null;
-    const CDN_BASE = 'https://cdn.jsdelivr.net/npm/jscoq@' + JSCOQ_VERSION + '/';
-    const UNPKG_BASE = 'https://unpkg.com/jscoq@' + JSCOQ_VERSION + '/';
-    const JSCOQ_CANDIDATES = (function(){
-      const list = [];
-      if(PROXY_BASE){
-        list.push({
-          id: 'proxy',
-          moduleUrl: PROXY_BASE + 'jscoq.js',
-          basePath: PROXY_BASE
-        });
-      }
-      list.push({
-        id: 'jsdelivr',
-        moduleUrl: CDN_BASE + 'jscoq.js',
-        basePath: CDN_BASE
-      });
-      list.push({
-        id: 'unpkg',
-        moduleUrl: UNPKG_BASE + 'jscoq.js',
-        basePath: UNPKG_BASE
-      });
-      return list;
-    })();
-
-    let jscoqInstance = null;
-    let jscoqManager = null;
-    let jscoqInitGlobalPromise = null;
-    let jscoqModulePromise = null;
-    let jscoqResolvedBasePath = PROXY_BASE || CDN_BASE;
-    let jscoqWorkerShimInstalled = false;
-    let jscoqWorkerBlobMap = new Map();
-    const LEAN4_WEBSOCKET_URL = 'wss://live.lean-lang.org/websocket/MathlibDemo';
-    const LEAN4_DOCUMENT_URI = 'file:///MathlibDemo/Main.lean';
-    let lean4Instance = null;
-    let lean4InitGlobalPromise = null;
-
-    async function autoInitJsCoq() {
-      if (!window.__ivucxNeedsJsCoq) return null;
-      if (jscoqInitGlobalPromise) return jscoqInitGlobalPromise;
-
-      jscoqInitGlobalPromise = (async () => {
-        const mod = await loadJsCoqModule();
-        const JsCoqApi = mod && mod.JsCoq;
-        if (!JsCoqApi || typeof JsCoqApi.start !== 'function') {
-          throw new Error('JsCoq.start 縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ');
-        }
-
-        jscoqManager = await JsCoqApi.start(['coq'], {
-          wrapper_id: 'ide-wrapper',
-          base_path: jscoqResolvedBasePath,
-          prelaunch: true,
-          show: false,
-          focus: false,
-          replace: false,
-          prelude: true,
-          implicit_libs: true,
-          init_pkgs: ['init'],
-          all_pkgs: ['coq'],
-          flags: { debug: false }
-        });
-
-        await waitForManagerReady(jscoqManager);
-        if (typeof window !== 'undefined') {
-          if (!window.jsCoq && jscoqManager && jscoqManager.coq) {
-            window.jsCoq = jscoqManager.coq;
-          } else if (!window.jsCoq && jscoqManager && jscoqManager.provider && jscoqManager.provider.coq) {
-            window.jsCoq = jscoqManager.provider.coq;
-          }
-        }
-        jscoqInstance = createJsCoqExecutor(jscoqManager);
-        return jscoqInstance;
-      })().catch((err) => {
-        jscoqInitGlobalPromise = null;
-        throw err;
-      });
-
-      return jscoqInitGlobalPromise;
-    }
-
-    async function autoInitLean4() {
-      if (!window.__ivucxNeedsLean4) return null;
-      if (lean4InitGlobalPromise) return lean4InitGlobalPromise;
-
-      lean4InitGlobalPromise = (async () => {
-        const executor = createLean4Executor({
-          websocketUrl: LEAN4_WEBSOCKET_URL,
-          documentUri: LEAN4_DOCUMENT_URI
-        });
-        await executor.initialize();
-        lean4Instance = executor;
-        return lean4Instance;
-      })().catch((err) => {
-        lean4InitGlobalPromise = null;
-        throw err;
-      });
-
-      return lean4InitGlobalPromise;
-    }
-
-    async function loadJsCoqModule() {
-      if (jscoqModulePromise) return jscoqModulePromise;
-
-      jscoqModulePromise = (async () => {
-        let lastError = null;
-        for (const candidate of JSCOQ_CANDIDATES) {
-          try {
-            const mod = await import(candidate.moduleUrl);
-            await prepareJsCoqWorkerRuntime(candidate.basePath);
-            jscoqResolvedBasePath = candidate.basePath;
-            return mod;
-          } catch (err) {
-            const detail = err && err.message ? err.message : String(err);
-            lastError = new Error('[' + candidate.id + '] ' + detail);
-          }
-        }
-        throw lastError || new Error('jsCoq繝｢繧ｸ繝･繝ｼ繝ｫ繧定ｪｭ縺ｿ霎ｼ繧√∪縺帙ｓ縺ｧ縺励◆');
-      })();
-
-      return jscoqModulePromise;
-    }
-
-    async function prepareJsCoqWorkerRuntime(basePath) {
-      const workerEntries = [
-        'backend/jsoo/jscoq_worker.bc.js',
-        'dist/wacoq_worker.js'
-      ];
-
-      for (const entry of workerEntries) {
-        const absolute = new URL(entry, basePath).href;
-        if (!isCrossOriginUrl(absolute)) continue;
-        if (jscoqWorkerBlobMap.has(absolute)) continue;
-
-        const response = await fetch(absolute, { method: 'GET', mode: 'cors' });
-        if (!response.ok) {
-          throw new Error('worker fetch failed: ' + response.status + ' ' + absolute);
-        }
-
-        const source = await response.text();
-        const blob = new Blob([source + '\n//# sourceURL=' + absolute], { type: 'text/javascript' });
-        const blobUrl = URL.createObjectURL(blob);
-        jscoqWorkerBlobMap.set(absolute, blobUrl);
-      }
-
-      installWorkerShim();
-    }
-
-    function isCrossOriginUrl(url) {
-      try {
-        const target = new URL(url, window.location.href);
-        return target.origin !== window.location.origin;
-      } catch (err) {
-        return false;
-      }
-    }
-
-    function installWorkerShim() {
-      if (jscoqWorkerShimInstalled) return;
-      if (typeof window.Worker !== 'function') return;
-
-      const NativeWorker = window.Worker;
-      const WrappedWorker = function(scriptURL, options) {
-        let resolvedURL = scriptURL;
-        try {
-          const absolute = new URL(String(scriptURL), window.location.href).href;
-          if (jscoqWorkerBlobMap.has(absolute)) {
-            resolvedURL = jscoqWorkerBlobMap.get(absolute);
-          }
-        } catch (err) {
-          // Keep original URL if normalization fails.
-        }
-
-        return new NativeWorker(resolvedURL, options);
-      };
-
-      WrappedWorker.prototype = NativeWorker.prototype;
-      Object.setPrototypeOf(WrappedWorker, NativeWorker);
-      window.Worker = WrappedWorker;
-      jscoqWorkerShimInstalled = true;
-    }
-
-    async function waitForManagerReady(manager, timeoutMs = 45000) {
-      if (!manager) {
-        throw new Error('jsCoq manager is unavailable');
-      }
-
-      const whenReady = manager.when_ready && manager.when_ready.promise
-        ? manager.when_ready.promise
-        : null;
-
-      if (whenReady && typeof whenReady.then === 'function') {
-        await Promise.race([
-          whenReady,
-          sleep(timeoutMs).then(() => {
-            throw new Error('jsCoq manager ready timeout');
-          })
-        ]);
-      } else {
-        const start = Date.now();
-        while (true) {
-          const sid = manager && manager.doc && manager.doc.sentences && manager.doc.sentences[0] && manager.doc.sentences[0].coq_sid;
-          const isReady = !!(manager.navEnabled && sid && Number(sid) > 1);
-          if (isReady) break;
-          if (Date.now() - start > timeoutMs) {
-            throw new Error('jsCoq manager ready timeout');
-          }
-          await sleep(100);
-        }
-      }
-
-      return manager && manager.doc && manager.doc.sentences && manager.doc.sentences[0]
-        ? manager.doc.sentences[0].coq_sid
-        : null;
-    }
-
-    function createJsCoqExecutor(manager) {
-      return {
-        execute: async function(code) {
-          if(!manager || !manager.provider || typeof manager.provider.load !== 'function') {
-            throw new Error('jsCoq manager provider is unavailable');
-          }
-          if (manager.error && Array.isArray(manager.error)) {
-            manager.error.length = 0;
-          }
-          const docName = 'Main_' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.v';
-          const loadOpts = { reset: true, flags: {} };
-          manager.provider.load(String(code || ''), docName, loadOpts);
-          if(typeof manager.provider.focus === 'function') {
-            manager.provider.focus();
-          }
-
-          const started = Date.now();
-          while (true) {
-            const advanced = typeof manager.goNext === 'function' ? manager.goNext(false) : false;
-            await waitForManagerIdle(manager, started);
-
-            if (manager.error && manager.error.length > 0) {
-              throw new Error(extractCoqError(manager, code));
-            }
-
-            if (!advanced) break;
-          }
-
-          return true;
-        }
-      };
-    }
-
-    async function waitForManagerIdle(manager, startedAt, timeoutMs = 45000) {
-      while (true) {
-        if (manager.error && manager.error.length > 0) return;
-
-        const hasBusy = !!(manager.doc && Array.isArray(manager.doc.sentences) && manager.doc.sentences.some((stm) => {
-          if (!stm || !stm.phase) return false;
-          return stm.phase === 'pending' || stm.phase === 'adding' || stm.phase === 'added' || stm.phase === 'processing';
-        }));
-
-        if (!hasBusy) return;
-        if (Date.now() - startedAt > timeoutMs) {
-          throw new Error('jsCoq execution timeout');
-        }
-        await sleep(60);
-      }
-    }
-
-    function extractCoqError(manager, sourceText) {
-      try {
-        const stm = manager.error && manager.error[0];
-        if (!stm) return 'Coq validation error';
-
-        const feedback = Array.isArray(stm.feedback)
-          ? stm.feedback.find((item) => item && item.level === 'Error')
-          : null;
-
-        let message = '';
-        if (feedback && manager.pprint && typeof manager.pprint.pp2Text === 'function') {
-          const text = manager.pprint.pp2Text(feedback.msg);
-          if (text) message = text;
-        }
-
-        if (!message && feedback && feedback.msg) {
-          message = stringifyCoqPayload(feedback.msg);
-        }
-
-        if (!message && stm && stm.msg) {
-          message = typeof stm.msg === 'string' ? stm.msg : stringifyCoqPayload(stm.msg);
-        }
-
-        message = sanitizeCoqMessage(message);
-
-        const location = resolveCoqErrorLocation(stm, feedback, sourceText);
-        if (location) {
-          return location.line + ':' + location.col + ' ' + (message || 'Coq validation error');
-        }
-
-        if (message) return message;
-      } catch (err) {
-        // fall through to generic message
-      }
-
-      return 'Coq validation error';
-    }
-
-    function resolveCoqErrorLocation(stm, feedback, sourceText) {
-      const candidates = [];
-      if (feedback && feedback.loc) candidates.push(feedback.loc);
-      if (feedback && feedback.location) candidates.push(feedback.location);
-      if (stm && stm.loc) candidates.push(stm.loc);
-      if (stm && stm.location) candidates.push(stm.location);
-      if (stm && stm.pploc) candidates.push(stm.pploc);
-
-      for (const loc of candidates) {
-        const resolved = normalizeCoqLocation(loc, sourceText);
-        if (resolved) return resolved;
-      }
-      return null;
-    }
-
-    function normalizeCoqLocation(loc, sourceText) {
-      if (!loc || typeof loc !== 'object') return null;
-
-      if (Array.isArray(loc)) {
-        if (loc.length > 0 && typeof loc[0] === 'object') {
-          return normalizeCoqLocation(loc[0], sourceText);
-        }
-        if (loc.length >= 2 && Number.isFinite(loc[0]) && typeof sourceText === 'string') {
-          return indexToLineCol(sourceText, loc[0]);
-        }
-      }
-
-      const lineRaw = pickNumber(loc.line, loc.lineno, loc.startLine);
-      const colRaw = pickNumber(loc.column, loc.col, loc.character, loc.char, loc.startCol);
-      if (Number.isFinite(lineRaw) && Number.isFinite(colRaw)) {
-        return {
-          line: lineRaw <= 0 ? lineRaw + 1 : lineRaw,
-          col: colRaw <= 0 ? colRaw + 1 : colRaw
-        };
-      }
-
-      const start = loc.start && typeof loc.start === 'object' ? loc.start : null;
-      if (start) {
-        const sLine = pickNumber(start.line, start.lineno);
-        const sCol = pickNumber(start.column, start.col, start.character, start.char);
-        if (Number.isFinite(sLine) && Number.isFinite(sCol)) {
-          return {
-            line: sLine <= 0 ? sLine + 1 : sLine,
-            col: sCol <= 0 ? sCol + 1 : sCol
-          };
-        }
-      }
-
-      const bp = pickNumber(loc.bp, loc.startPos, loc.startOffset);
-      if (Number.isFinite(bp) && typeof sourceText === 'string') {
-        return indexToLineCol(sourceText, bp);
-      }
-
-      return null;
-    }
-
-    function pickNumber() {
-      for (let i = 0; i < arguments.length; i += 1) {
-        const value = arguments[i];
-        if (Number.isFinite(value)) return value;
-        if (typeof value === 'string') {
-          const trimmed = value.trim();
-          if (!trimmed) continue;
-          const num = Number(trimmed);
-          if (Number.isFinite(num)) return num;
-        }
-      }
-      return null;
-    }
-
-    function indexToLineCol(text, index) {
-      if (!text || !Number.isFinite(index) || index < 0) return null;
-      let line = 1;
-      let col = 1;
-      const limit = Math.min(text.length, index);
-      for (let i = 0; i < limit; i += 1) {
-        const ch = text[i];
-        if (ch === '\n') {
-          line += 1;
-          col = 1;
-          continue;
-        }
-        if (ch === '\r') {
-          if (text[i + 1] === '\n') {
-            i += 1;
-          }
-          line += 1;
-          col = 1;
-          continue;
-        }
-        col += 1;
-      }
-      return { line, col };
-    }
-
-      function createLean4Executor(options) {
-      const websocketUrl = options.websocketUrl;
-      const documentUri = options.documentUri;
-
-      let socket = null;
-      let nextId = 1;
-      let version = 0;
-      let initialized = false;
-      let opened = false;
-      let lastDiagnostics = {
-        version: -1,
-        diagnostics: [],
-        receivedAt: 0
-      };
-      let closedError = null;
-      const pending = new Map();
-
-      function ensureOpenSocket() {
-        if (!socket || socket.readyState !== WebSocket.OPEN) {
-          throw new Error('Lean 4 WebSocket is not connected');
-        }
-      }
-
-      function rejectAllPending(error) {
-        const err = error instanceof Error ? error : new Error(String(error || 'Lean 4 request failed'));
-        for (const entry of pending.values()) {
-          entry.reject(err);
-        }
-        pending.clear();
-      }
-
-      function sendRaw(message) {
-        ensureOpenSocket();
-        socket.send(JSON.stringify(message));
-      }
-
-      function sendNotification(method, params) {
-        sendRaw({
-          jsonrpc: '2.0',
-          method: method,
-          params: params || {}
-        });
-      }
-
-      function sendRequest(method, params, timeoutMs = 15000) {
-        return new Promise((resolve, reject) => {
-          ensureOpenSocket();
-          const id = nextId++;
-          const timer = setTimeout(() => {
-            if (!pending.has(id)) return;
-            pending.delete(id);
-            reject(new Error('Lean 4 request timeout: ' + method));
-          }, timeoutMs);
-
-          pending.set(id, {
-            resolve: (result) => {
-              clearTimeout(timer);
-              resolve(result);
-            },
-            reject: (error) => {
-              clearTimeout(timer);
-              reject(error);
-            }
-          });
-
-          sendRaw({
-            jsonrpc: '2.0',
-            id: id,
-            method: method,
-            params: params || {}
-          });
-        });
-      }
-
-      function handleServerMessage(message) {
-        if (!message || typeof message !== 'object') return;
-
-        if (typeof message.id !== 'undefined' && pending.has(message.id)) {
-          const deferred = pending.get(message.id);
-          pending.delete(message.id);
-          if (Object.prototype.hasOwnProperty.call(message, 'error')) {
-            deferred.reject(new Error(formatLeanRpcError(message.error)));
-          } else {
-            deferred.resolve(message.result);
-          }
-          return;
-        }
-
-        if (message.method === 'textDocument/publishDiagnostics') {
-          const params = message.params || {};
-          if (params.uri === documentUri) {
-            lastDiagnostics = {
-              version: typeof params.version === 'number' ? params.version : version,
-              diagnostics: Array.isArray(params.diagnostics) ? params.diagnostics : [],
-              receivedAt: Date.now()
-            };
-          }
-          return;
-        }
-
-        // Reply to server requests we do not actively handle.
-        if (typeof message.id !== 'undefined' && typeof message.method === 'string') {
-          try {
-            sendRaw({
-              jsonrpc: '2.0',
-              id: message.id,
-              result: null
-            });
-          } catch (err) {
-            // Ignore response failures on shutdown.
-          }
-        }
-      }
-
-      function handleIncoming(payloadText) {
-        let parsed = null;
-        try {
-          parsed = JSON.parse(payloadText);
-        } catch (err) {
-          return;
-        }
-
-        if (Array.isArray(parsed)) {
-          for (const entry of parsed) {
-            handleServerMessage(entry);
-          }
-        } else {
-          handleServerMessage(parsed);
-        }
-      }
-
-      async function connect(timeoutMs = 15000) {
-        if (socket && socket.readyState === WebSocket.OPEN) return;
-
-        await new Promise((resolve, reject) => {
-          const ws = new WebSocket(websocketUrl);
-          let settled = false;
-          const timer = setTimeout(() => {
-            if (settled) return;
-            settled = true;
-            try { ws.close(); } catch (err) {}
-            reject(new Error('Lean 4 WebSocket connection timeout'));
-          }, timeoutMs);
-
-          ws.addEventListener('open', () => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            socket = ws;
-            closedError = null;
-
-            ws.addEventListener('message', async (event) => {
-              let data = '';
-              if (typeof event.data === 'string') {
-                data = event.data;
-              } else if (event.data && typeof event.data.text === 'function') {
-                try {
-                  data = await event.data.text();
-                } catch (err) {
-                  data = '';
-                }
-              } else if (typeof ArrayBuffer !== 'undefined' && event.data instanceof ArrayBuffer) {
-                data = new TextDecoder().decode(event.data);
-              }
-              if (!data) return;
-              handleIncoming(data);
-            });
-            ws.addEventListener('error', () => {
-              if (!closedError) {
-                closedError = new Error('Lean 4 WebSocket error');
-              }
-            });
-            ws.addEventListener('close', (event) => {
-              if (!closedError) {
-                closedError = new Error('Lean 4 WebSocket closed: ' + String(event.code || 'unknown'));
-              }
-              socket = null;
-              initialized = false;
-              opened = false;
-              rejectAllPending(closedError);
-            });
-
-            resolve();
-          });
-
-          ws.addEventListener('error', () => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            reject(new Error('Lean 4 WebSocket connection failed'));
-          });
-        });
-      }
-
-      async function initialize() {
-        if (initialized) return true;
-        await connect();
-
-        await sendRequest('initialize', {
-          processId: null,
-          rootUri: 'file:///',
-          capabilities: {},
-          workspaceFolders: null,
-          clientInfo: {
-            name: 'ivucx',
-            version: '1.0'
-          },
-          trace: 'off'
-        }, 20000);
-
-        sendNotification('initialized', {});
-        initialized = true;
-        return true;
-      }
-
-      async function waitForDiagnostics(targetVersion, timeoutMs = 20000) {
-        const requestedAt = Date.now();
-        return waitForDiagnosticsSince(targetVersion, requestedAt, timeoutMs);
-      }
-
-      async function waitForDiagnosticsSince(targetVersion, requestedAt, timeoutMs = 20000) {
-        const started = Date.now();
-        while (true) {
-          if (closedError) throw closedError;
-
-          if (lastDiagnostics.version >= targetVersion && lastDiagnostics.receivedAt >= requestedAt) {
-            return lastDiagnostics.diagnostics;
-          }
-
-          if (Date.now() - started > timeoutMs) {
-            throw new Error('Lean 4 diagnostics timeout');
-          }
-
-          await sleep(80);
-        }
-      }
-
-      async function execute(code) {
-        await initialize();
-        version += 1;
-        const text = String(code || '');
-        const requestedAt = Date.now();
-        lastDiagnostics = {
-          version: -1,
-          diagnostics: [],
-          receivedAt: 0
-        };
-
-        if (opened) {
-          sendNotification('textDocument/didClose', {
-            textDocument: {
-              uri: documentUri
-            }
-          });
-          opened = false;
-        }
-
-        sendNotification('textDocument/didOpen', {
-          textDocument: {
-            uri: documentUri,
-            languageId: 'lean',
-            version: version,
-            text: text
-          }
-        });
-        opened = true;
-
-        return waitForDiagnosticsSince(version, requestedAt, 25000);
-      }
-
-      function dispose() {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-          try {
-            socket.close();
-          } catch (err) {
-            // ignore close failures
-          }
-        }
-        socket = null;
-        initialized = false;
-        opened = false;
-        pending.clear();
-      }
-
-      return {
-        initialize,
-        execute,
-        dispose
-      };
-    }
-
-    function formatLeanRpcError(error) {
-      if (!error) return 'Lean 4 RPC error';
-      if (typeof error === 'string') return error;
-      if (typeof error.message === 'string' && error.message.length > 0) return error.message;
-      try {
-        return JSON.stringify(error);
-      } catch (err) {
-        return String(error);
-      }
-    }
-
-    function sleep(ms) {
-      return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-
-    if (window.__ivucxNeedsJsCoq) {
-      autoInitJsCoq().catch(() => {
-        // Initialization errors are surfaced via status/output panel.
-      });
-    }
-    if (window.__ivucxNeedsLean4) {
-      autoInitLean4().catch(() => {
-        // Initialization errors are surfaced via status/output panel.
-      });
-    }
   </script>
 </body>
 </html>
