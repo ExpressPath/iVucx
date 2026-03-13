@@ -1242,6 +1242,10 @@
         if(res.data !== undefined) return res.data;
         if(res.answer !== undefined) return res.answer;
         if(res.result !== undefined) return res.result;
+        if(res.value !== undefined) return res.value;
+        if(res.msg !== undefined) return res.msg;
+        if(res.message !== undefined) return res.message;
+        if(res.payload !== undefined) return res.payload;
         return res;
       }
 
@@ -1253,15 +1257,34 @@
           if(/no\s+focused\s+proof/i.test(res)) return 0;
           return null;
         }
-        if(Array.isArray(res)) return res.length;
+        if(Array.isArray(res)){
+          if(res.length === 0) return 0;
+          const first = res[0];
+          if(first && typeof first === 'object'){
+            if('goal' in first || 'hyp' in first || 'hyps' in first || 'type' in first) return res.length;
+          }
+          for(const item of res){
+            const nested = countGoalsSimple(item);
+            if(nested !== null) return nested;
+          }
+          return null;
+        }
         if(typeof res === 'object'){
           if(Array.isArray(res.goals)) return res.goals.length;
+          if(res.goals && typeof res.goals === 'object'){
+            const nestedGoals = countGoalsSimple(res.goals);
+            if(nestedGoals !== null) return nestedGoals;
+          }
+          if(Array.isArray(res.fg)) return res.fg.length;
           if(Array.isArray(res.fg_goals)) return res.fg_goals.length;
+          if(Array.isArray(res.bg)) return res.bg.length;
           if(Array.isArray(res.bg_goals)) return res.bg_goals.length;
+          if(Array.isArray(res.focused)) return res.focused.length;
           if(Array.isArray(res.shelf)) return res.shelf.length;
           if(Array.isArray(res.shelved)) return res.shelved.length;
           if(Array.isArray(res.given_up)) return res.given_up.length;
           if(Array.isArray(res.givenUp)) return res.givenUp.length;
+          if(Array.isArray(res.stack)) return res.stack.length;
           if(typeof res.goals === 'number' && Number.isFinite(res.goals)) return res.goals;
         }
         return null;
@@ -1282,8 +1305,10 @@
 
         const calls = [];
         if(typeof coq.goals === 'function') calls.push(() => coq.goals());
+        if(typeof coq.goal === 'function') calls.push(() => coq.goal());
         if(typeof coq.Goals === 'function') calls.push(() => coq.Goals());
         if(typeof coq.getGoals === 'function') calls.push(() => coq.getGoals());
+        if(typeof coq.getGoal === 'function') calls.push(() => coq.getGoal());
         if(typeof coq.query === 'function') {
           calls.push(() => coq.query('Goals'));
           calls.push(() => coq.query('Goals.'));
