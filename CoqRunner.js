@@ -583,10 +583,15 @@
       if (!/\S/.test(sentence)) continue;
       coq.add(1, sid, sentence);
       const execP = coq.execPromise(sid);
-      await Promise.race([
-        execP,
-        sleep(timeoutMs).then(() => { throw new Error('jsCoq execution timeout'); })
-      ]);
+      try {
+        await Promise.race([
+          execP,
+          sleep(timeoutMs).then(() => { throw new Error('jsCoq execution timeout'); })
+        ]);
+      } catch (e) {
+        markRestart(manager);
+        throw e;
+      }
       executed += 1;
       const feedback = collectFeedback(manager);
       if (feedback.errors.length > 0) break;
@@ -815,6 +820,12 @@
 
   async function waitForManagerIdle(manager, startedAt, timeoutMs = 45000) {
     while (true) {
+      if (manager && Array.isArray(manager.__coqRunnerCoqExnMessages) && manager.__coqRunnerCoqExnMessages.length) {
+        throw new Error('Coq exception: ' + manager.__coqRunnerCoqExnMessages[0]);
+      }
+      if (manager && Array.isArray(manager.__coqRunnerJsonExnMessages) && manager.__coqRunnerJsonExnMessages.length) {
+        throw new Error('Coq JSON exception: ' + manager.__coqRunnerJsonExnMessages[0]);
+      }
       if (manager.error && manager.error.length > 0) return;
       const hasBusy = !!(manager.doc && Array.isArray(manager.doc.sentences) && manager.doc.sentences.some((stm) => {
         if (!stm || !stm.phase) return false;
@@ -871,6 +882,39 @@
     }
     if (out.summaries.length === 0) out.summaries.push(allText.slice(0, 200));
     return out;
+  }
+
+  function snapshotManagerState(manager) {
+    const snapshot = {
+      sentences: 0,
+      busy: 0,
+      pending: 0,
+      adding: 0,
+      added: 0,
+      processing: 0,
+      processed: 0,
+      navEnabled: !!(manager && manager.navEnabled),
+      errorCount: manager && Array.isArray(manager.error) ? manager.error.length : 0,
+      lastSid: null,
+      providerSnippets: manager && manager.provider && Array.isArray(manager.provider.snippets) ? manager.provider.snippets.length : 0
+    };
+    if (manager && manager.doc && Array.isArray(manager.doc.sentences)) {
+      snapshot.sentences = manager.doc.sentences.length;
+      for (const stm of manager.doc.sentences) {
+        if (!stm || !stm.phase) continue;
+        if (stm.phase === 'pending') snapshot.pending += 1;
+        else if (stm.phase === 'adding') snapshot.adding += 1;
+        else if (stm.phase === 'added') snapshot.added += 1;
+        else if (stm.phase === 'processing') snapshot.processing += 1;
+        else if (stm.phase === 'processed') snapshot.processed += 1;
+      }
+      snapshot.busy = snapshot.pending + snapshot.adding + snapshot.added + snapshot.processing;
+    }
+    try {
+      const last = manager && typeof manager.lastAdded === 'function' ? manager.lastAdded() : null;
+      if (last && last.coq_sid) snapshot.lastSid = last.coq_sid;
+    } catch (e) {}
+    return snapshot;
   }
 
   function countGoalsFromResponse(res, goalInfoSeen) {
@@ -989,7 +1033,26 @@
       while (true) {
         const advanced = typeof manager.goNext === 'function' ? manager.goNext(false) : false;
         if (advanced) advancedAny = true;
-        await waitForManagerIdle(manager, started, timeoutMs);
+        try {
+          await waitForManagerIdle(manager, started, timeoutMs);
+        } catch (e) {
+          markRestart(manager);
+          const details = buildRunDetails(manager, null);
+          details.input = analyzeInputText(text);
+          details.tokenSummary = summarizeTokens(manager);
+          details.snapshot = snapshotManagerState(manager);
+          details.snapshot = snapshotManagerState(manager);
+          const msg = e && e.message ? e.message : String(e);
+          const summaries = [msg];
+          return {
+            ok: false,
+            details,
+            error: {
+              remaining: -1,
+              summaries
+            }
+          };
+        }
         if (manager.error && manager.error.length > 0) break;
         if (!advanced) break;
       }
@@ -998,6 +1061,7 @@
         const details = buildRunDetails(manager, null);
         details.input = analyzeInputText(text);
         details.tokenSummary = summarizeTokens(manager);
+        details.snapshot = snapshotManagerState(manager);
         const hints = [];
         if (details.input.asciiPeriodCount === 0) {
           if (details.input.fullWidthPeriodCount > 0) {
@@ -1038,6 +1102,9 @@
             const goalsCount = fallback.goalsCount;
             const fb = fallback.feedback;
             const fallbackDetails = fallback.details;
+            if (!fallbackDetails.snapshot) {
+              fallbackDetails.snapshot = snapshotManagerState(manager);
+            }
             if ((fallbackDetails.coqExceptions && fallbackDetails.coqExceptions.length) ||
                 (fallbackDetails.jsonExceptions && fallbackDetails.jsonExceptions.length)) {
               markRestart(manager);
@@ -1118,6 +1185,10 @@
       );
 
       const details = buildRunDetails(manager, goalsCount);
+
+      if (!details.snapshot) {
+        details.snapshot = snapshotManagerState(manager);
+      }
 
       if ((details.coqExceptions && details.coqExceptions.length) ||
           (details.jsonExceptions && details.jsonExceptions.length)) {

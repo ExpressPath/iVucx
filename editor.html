@@ -783,6 +783,14 @@
               }
             }
           }
+          if(details.snapshot){
+            const s = details.snapshot;
+            lines.push('Snapshot sentences: ' + s.sentences + ' (busy ' + s.busy + ', pending ' + s.pending + ', adding ' + s.adding + ', added ' + s.added + ', processing ' + s.processing + ', processed ' + s.processed + ')');
+            lines.push('Snapshot navEnabled: ' + s.navEnabled + ', errorCount: ' + s.errorCount + ', providerSnippets: ' + s.providerSnippets);
+            if(s.lastSid){
+              lines.push('Snapshot lastSid: ' + s.lastSid);
+            }
+          }
           if(details.fallbackUsed){
             lines.push('Fallback tokenizer: yes');
             if(typeof details.fallbackSentenceCount === 'number'){
