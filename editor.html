@@ -721,6 +721,9 @@
           if(details.lastSid){
             lines.push('Last statement sid: ' + details.lastSid);
           }
+          if(details.editorMode){
+            lines.push('Editor mode: ' + details.editorMode);
+          }
           if(typeof details.goalInfoSeen === 'boolean'){
             const goalInfoNote = details.goalInfoSeen ? 'seen' : 'not seen';
             const emptyNote = details.goalInfoEmpty ? ' (empty)' : '';
@@ -731,6 +734,22 @@
               ? ' (count ' + details.goalsRawCount + ')'
               : '';
             lines.push('GoalInfo raw: ' + details.goalsRawType + countNote);
+          }
+          if(details.input){
+            const input = details.input;
+            lines.push('Input length: ' + input.length);
+            lines.push('Non-empty lines: ' + input.nonEmptyLines);
+            lines.push('ASCII periods: ' + input.asciiPeriodCount);
+            lines.push('Full-width periods: ' + input.fullWidthPeriodCount);
+            if(input.bulletLines){
+              lines.push('Bullet lines: ' + input.bulletLines);
+            }
+            if(input.hasProofLike){
+              lines.push('Proof keywords detected: yes');
+            }
+            if(input.hasQedLike){
+              lines.push('Proof closer detected: yes');
+            }
           }
           if(Array.isArray(details.errors) && details.errors.length){
             lines.push('Errors (' + details.errors.length + '):');

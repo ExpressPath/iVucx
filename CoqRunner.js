@@ -307,18 +307,53 @@
     const last = manager && typeof manager.lastAdded === 'function' ? manager.lastAdded() : null;
     const goalRaw = manager ? manager.__coqRunnerLastGoals : null;
     const goalInfoSeen = !!(manager && manager.__coqRunnerGoalInfoSeen);
+    let editorMode = null;
+    try {
+      const snippet = manager && manager.provider && manager.provider.snippets && manager.provider.snippets[0];
+      const modeOpt = snippet && snippet.editor && typeof snippet.editor.getOption === 'function'
+        ? snippet.editor.getOption('mode')
+        : null;
+      if (typeof modeOpt === 'string') editorMode = modeOpt;
+      else if (modeOpt && typeof modeOpt === 'object' && typeof modeOpt.name === 'string') editorMode = modeOpt.name;
+      else if (modeOpt) editorMode = String(modeOpt);
+    } catch (e) {}
     const details = {
       processedCount,
       lastSid: last && last.coq_sid ? last.coq_sid : null,
       goalInfoSeen,
       goalInfoEmpty: goalInfoSeen && (goalRaw === null || goalRaw === undefined),
       goalsRawType: goalRaw === null ? 'null' : Array.isArray(goalRaw) ? 'array' : typeof goalRaw,
-      goalsRawCount: typeof goalsCount === 'number' ? goalsCount : null
+      goalsRawCount: typeof goalsCount === 'number' ? goalsCount : null,
+      editorMode
     };
     const feedback = collectFeedback(manager);
     if (feedback.errors.length) details.errors = feedback.errors;
     if (feedback.warnings.length) details.warnings = feedback.warnings;
     return details;
+  }
+
+  function analyzeInputText(text) {
+    const content = String(text || '');
+    const lines = content.split(/\r?\n/);
+    let nonEmptyLines = 0;
+    let bulletLines = 0;
+    for (const line of lines) {
+      if (/\S/.test(line)) nonEmptyLines += 1;
+      if (/^\s*[-+*]\s+\S/.test(line)) bulletLines += 1;
+    }
+    const asciiPeriodCount = (content.match(/\./g) || []).length;
+    const fullWidthPeriodCount = (content.match(/[。．｡]/g) || []).length;
+    const hasQedLike = /\b(Qed|Defined|Admitted|Abort)\b/.test(content);
+    const hasProofLike = /\b(Goal|Theorem|Lemma|Proof)\b/.test(content);
+    return {
+      length: content.length,
+      nonEmptyLines,
+      asciiPeriodCount,
+      fullWidthPeriodCount,
+      bulletLines,
+      hasQedLike,
+      hasProofLike
+    };
   }
 
   async function ensureJsCoq(opts = {}) {
@@ -358,7 +393,10 @@
               all_pkgs: ['coq'],
               show: false,
               focus: false,
-              replace: false
+              replace: false,
+              editor: {
+                mode: { name: 'coq', singleLineStringErrors: false }
+              }
             };
             if (pkgPath) {
               options.pkg_path = pkgPath;
@@ -598,12 +636,29 @@
 
       if (!advancedAny && /\S/.test(String(text || ''))) {
         const details = buildRunDetails(manager, null);
+        details.input = analyzeInputText(text);
+        const hints = [];
+        if (details.input.asciiPeriodCount === 0) {
+          if (details.input.fullWidthPeriodCount > 0) {
+            hints.push('Found full-width period characters (。/．/｡). Replace with "."');
+          } else {
+            hints.push('No "." found. Coq sentences must end with "."');
+          }
+        }
+        if (details.input.nonEmptyLines === 0) {
+          hints.push('Input is empty or whitespace-only.');
+        }
+        if (details.input.asciiPeriodCount > 0 && details.editorMode !== 'coq') {
+          hints.push('Editor mode is not Coq; tokenization may be missing.');
+        }
         return {
           ok: false,
           details,
           error: {
             remaining: -1,
-            summaries: ['No Coq statements were processed (check for missing periods).']
+            summaries: hints.length
+              ? ['No Coq statements were processed.', ...hints]
+              : ['No Coq statements were processed (check for missing periods).']
           }
         };
       }
