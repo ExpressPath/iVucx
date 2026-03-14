@@ -9,12 +9,7 @@
 
   // sensible default candidates (local-first)
   const DEFAULT_CANDIDATES = [
-    './jscoq/jscoq.js',
-    './jscoq/dist/jscoq.js',
-    './jscoq/package/dist/jscoq.js',
-    './jscoq-0.17.1/dist/jscoq.js',
-    // last resort (network)
-    'https://cdn.jsdelivr.net/npm/jscoq@0.17.1/dist/jscoq.js'
+    './jscoq/dist/frontend/index.js'
   ];
 
   // helper: fetch text safely
@@ -45,6 +40,7 @@
         const blob = new Blob([text], { type: 'text/javascript' });
         const blobUrl = URL.createObjectURL(blob);
         const mod = await import(/* webpackIgnore: true */ blobUrl);
+        window.jsCoq = mod;
         URL.revokeObjectURL(blobUrl);
 
         // if module exported init or default that has init, normalize it
