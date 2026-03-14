@@ -284,6 +284,48 @@
     }
   }
 
+  function coqExnToText(manager, payload) {
+    if (!payload) return 'Coq exception';
+    try {
+      if (payload.pp && manager && manager.pprint && typeof manager.pprint.pp2Text === 'function') {
+        const text = manager.pprint.pp2Text(payload.pp);
+        if (text) return text;
+      }
+    } catch (e) {}
+    if (payload.msg) return stringifyCoqPayload(payload.msg);
+    return stringifyCoqPayload(payload);
+  }
+
+  function attachExceptionSpy(manager) {
+    if (manager.__coqRunnerExnSpy) return;
+    manager.__coqRunnerExnSpy = true;
+    manager.__coqRunnerCoqExnMessages = [];
+    manager.__coqRunnerJsonExnMessages = [];
+
+    if (typeof manager.coqCoqExn === 'function') {
+      const original = manager.coqCoqExn.bind(manager);
+      manager.coqCoqExn = function (payload) {
+        try {
+          const msg = coqExnToText(manager, payload);
+          if (msg) manager.__coqRunnerCoqExnMessages.push(msg);
+          markRestart(manager);
+        } catch (e) {}
+        return original(payload);
+      };
+    }
+    if (typeof manager.coqJsonExn === 'function') {
+      const original = manager.coqJsonExn.bind(manager);
+      manager.coqJsonExn = function (payload) {
+        try {
+          const msg = coqExnToText(manager, payload);
+          if (msg) manager.__coqRunnerJsonExnMessages.push(msg);
+          markRestart(manager);
+        } catch (e) {}
+        return original(payload);
+      };
+    }
+  }
+
   function formatLoc(loc) {
     if (!loc) return '';
     if (typeof loc === 'string') return loc;
@@ -386,6 +428,12 @@
       bundleUrl: cache.scriptUrl || null,
       assetBase: cache.basePath || null
     };
+    if (manager && Array.isArray(manager.__coqRunnerCoqExnMessages) && manager.__coqRunnerCoqExnMessages.length) {
+      details.coqExceptions = manager.__coqRunnerCoqExnMessages.slice(0, 5);
+    }
+    if (manager && Array.isArray(manager.__coqRunnerJsonExnMessages) && manager.__coqRunnerJsonExnMessages.length) {
+      details.jsonExceptions = manager.__coqRunnerJsonExnMessages.slice(0, 5);
+    }
     const feedback = collectFeedback(manager);
     if (feedback.errors.length) details.errors = feedback.errors;
     if (feedback.warnings.length) details.warnings = feedback.warnings;
@@ -900,12 +948,15 @@
     const { manager } = await ensureJsCoq(opts);
     attachGoalSpy(manager);
     attachFeedbackSpy(manager);
+    attachExceptionSpy(manager);
     await acquireLock();
 
     try {
       manager.__coqRunnerLastGoals = null;
       manager.__coqRunnerLastGoalsAt = 0;
       manager.__coqRunnerGoalInfoSeen = false;
+      if (manager.__coqRunnerCoqExnMessages) manager.__coqRunnerCoqExnMessages.length = 0;
+      if (manager.__coqRunnerJsonExnMessages) manager.__coqRunnerJsonExnMessages.length = 0;
 
       const providerReady = await waitForProviderReady(manager, Math.min(5000, timeoutMs));
       if (!providerReady) {
@@ -987,6 +1038,21 @@
             const goalsCount = fallback.goalsCount;
             const fb = fallback.feedback;
             const fallbackDetails = fallback.details;
+            if ((fallbackDetails.coqExceptions && fallbackDetails.coqExceptions.length) ||
+                (fallbackDetails.jsonExceptions && fallbackDetails.jsonExceptions.length)) {
+              markRestart(manager);
+              const summaries = [];
+              if (fallbackDetails.coqExceptions) summaries.push(...fallbackDetails.coqExceptions);
+              if (fallbackDetails.jsonExceptions) summaries.push(...fallbackDetails.jsonExceptions);
+              return {
+                ok: false,
+                details: fallbackDetails,
+                error: {
+                  remaining: typeof goalsCount === 'number' ? goalsCount : -1,
+                  summaries
+                }
+              };
+            }
             if (fb.errors.length > 0) {
               markRestart(manager);
               return {
@@ -1053,6 +1119,22 @@
 
       const details = buildRunDetails(manager, goalsCount);
 
+      if ((details.coqExceptions && details.coqExceptions.length) ||
+          (details.jsonExceptions && details.jsonExceptions.length)) {
+        markRestart(manager);
+        const summaries = [];
+        if (details.coqExceptions) summaries.push(...details.coqExceptions);
+        if (details.jsonExceptions) summaries.push(...details.jsonExceptions);
+        return {
+          ok: false,
+          details,
+          error: {
+            remaining: typeof goalsCount === 'number' ? goalsCount : -1,
+            summaries
+          }
+        };
+      }
+
       if (manager.error && manager.error.length > 0) {
         markRestart(manager);
         const msg = extractCoqError(manager);
@@ -1112,7 +1194,8 @@
 
   async function resetManagerDoc(manager, timeoutMs) {
     const needsRestart = !!(manager && manager.__coqRunnerNeedsRestart);
-    if (needsRestart && manager && manager.coq && typeof manager.coq.restart === 'function') {
+    const shouldRestart = needsRestart || hasBusySentences(manager);
+    if (shouldRestart && manager && manager.coq && typeof manager.coq.restart === 'function') {
       try { await manager.coq.restart(); } catch (e) {}
       try { await waitForManagerReady(manager, Math.min(15000, timeoutMs || 15000)); } catch (e) {}
     } else {

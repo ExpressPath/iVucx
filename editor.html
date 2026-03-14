@@ -802,6 +802,26 @@
               lines.push('...and ' + (details.errors.length - cap) + ' more.');
             }
           }
+          if(Array.isArray(details.coqExceptions) && details.coqExceptions.length){
+            lines.push('Coq Exceptions (' + details.coqExceptions.length + '):');
+            const cap = Math.min(details.coqExceptions.length, 3);
+            for(let i = 0; i < cap; i++){
+              lines.push('Exception ' + (i + 1) + ': ' + details.coqExceptions[i]);
+            }
+            if(details.coqExceptions.length > cap){
+              lines.push('...and ' + (details.coqExceptions.length - cap) + ' more.');
+            }
+          }
+          if(Array.isArray(details.jsonExceptions) && details.jsonExceptions.length){
+            lines.push('JSON Exceptions (' + details.jsonExceptions.length + '):');
+            const cap = Math.min(details.jsonExceptions.length, 3);
+            for(let i = 0; i < cap; i++){
+              lines.push('Exception ' + (i + 1) + ': ' + details.jsonExceptions[i]);
+            }
+            if(details.jsonExceptions.length > cap){
+              lines.push('...and ' + (details.jsonExceptions.length - cap) + ' more.');
+            }
+          }
           if(Array.isArray(details.warnings) && details.warnings.length){
             lines.push('Warnings (' + details.warnings.length + '):');
             const cap = Math.min(details.warnings.length, 3);
