@@ -432,6 +432,17 @@
     }
   }
 
+  async function waitForProviderReady(manager, timeoutMs = 5000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (manager && manager.provider && Array.isArray(manager.provider.snippets) && manager.provider.snippets.length > 0) {
+        return true;
+      }
+      await sleep(50);
+    }
+    return false;
+  }
+
   async function waitForGoalsUpdate(manager, sinceTs, timeoutMs = 2000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -548,6 +559,22 @@
       manager.__coqRunnerLastGoals = null;
       manager.__coqRunnerLastGoalsAt = 0;
       manager.__coqRunnerGoalInfoSeen = false;
+
+      const providerReady = await waitForProviderReady(manager, Math.min(5000, timeoutMs));
+      if (!providerReady) {
+        const details = buildRunDetails(manager, null);
+        return {
+          ok: false,
+          details,
+          error: {
+            remaining: -1,
+            summaries: ['Coq provider not ready (snippet missing).']
+          }
+        };
+      }
+      if (manager.provider && Array.isArray(manager.provider.snippets) && manager.provider.snippets[0]) {
+        manager.provider.currentFocus = manager.provider.snippets[0];
+      }
 
       if (!manager || !manager.provider || typeof manager.provider.load !== 'function') {
         throw new Error('jsCoq manager provider is unavailable');
