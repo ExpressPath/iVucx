@@ -10,7 +10,8 @@
   const SNIPPET_ID = 'coq-runner-snippet';
 
   const DEFAULT_CANDIDATES = [
-    './jscoq/jscoq.js'
+    'https://cdn.jsdelivr.net/npm/jscoq@0.17.1/jscoq.js',
+    'https://unpkg.com/jscoq@0.17.1/jscoq.js'
   ];
 
   function ensureRunnerDom() {
@@ -87,7 +88,7 @@
 
     try {
       const mod = await import(/* webpackIgnore: true */ absUrl);
-      const candidate = mod.JsCoq || mod.default || mod;
+      const candidate = mod.JsCoq || (mod.default && mod.default.JsCoq) || mod.default || mod;
       if (candidate && (typeof candidate.init === 'function' || typeof candidate.start === 'function')) {
         window.jsCoq = candidate;
         cache.scriptUrl = absUrl;
@@ -101,6 +102,8 @@
       const s = document.createElement('script');
       s.src = absUrl;
       s.async = true;
+      s.type = 'module';
+      s.crossOrigin = 'anonymous';
       s.onload = () => resolve();
       s.onerror = () => reject(new Error('script load error: ' + absUrl));
       document.head.appendChild(s);
@@ -154,38 +157,22 @@
 
   async function resolveAssetRoot(scriptBase) {
     const normalized = scriptBase.endsWith('/') ? scriptBase : scriptBase + '/';
-    const candidates = [
-      { base: normalized + 'package/', requireImages: true },
-      { base: normalized, requireImages: false }
-    ];
+    const baseSet = new Set([
+      normalized,
+      normalized.endsWith('package/') ? normalized.slice(0, -8) : normalized + 'package/'
+    ]);
 
     const tried = [];
-    for (const entry of candidates) {
-      const baseAbs = resolveUrl(entry.base);
+    for (const base of baseSet) {
+      const baseAbs = resolveUrl(base);
       const jsWorker = new URL('backend/jsoo/jscoq_worker.bc.js', baseAbs).href;
-      const splash = new URL('frontend/classic/images/jscoq-splash.png', baseAbs).href;
-
       const jsOk = await checkUrlExists(jsWorker);
-      const splashOk = entry.requireImages ? await checkUrlExists(splash) : null;
-
-      tried.push({
-        base: baseAbs,
-        jsWorker,
-        splash,
-        jsOk,
-        splashOk,
-        requireImages: entry.requireImages
-      });
-
-      if (jsOk && (!entry.requireImages || splashOk)) {
-        return { basePath: baseAbs };
-      }
+      tried.push({ base: baseAbs, jsWorker, jsOk });
+      if (jsOk) return { basePath: baseAbs };
     }
 
     const detail = tried.map((t) => {
-      return t.base + ' -> ' +
-        'jsWorker=' + (t.jsOk ? 'ok' : 'missing') + ', ' +
-        'splash=' + (t.requireImages ? (t.splashOk ? 'ok' : 'missing') : 'skip');
+      return t.base + ' -> jsWorker=' + (t.jsOk ? 'ok' : 'missing');
     }).join(' | ');
 
     throw new Error('Missing jsCoq assets for any base path. Tried: ' + detail);
@@ -353,7 +340,9 @@
       goalInfoEmpty: goalInfoSeen && (goalRaw === null || goalRaw === undefined),
       goalsRawType: goalRaw === null ? 'null' : Array.isArray(goalRaw) ? 'array' : typeof goalRaw,
       goalsRawCount: typeof goalsCount === 'number' ? goalsCount : null,
-      editorMode
+      editorMode,
+      bundleUrl: cache.scriptUrl || null,
+      assetBase: cache.basePath || null
     };
     const feedback = collectFeedback(manager);
     if (feedback.errors.length) details.errors = feedback.errors;
@@ -624,6 +613,12 @@
     return summary;
   }
 
+  function callJsCoq(startFn, basePath, ids, options) {
+    const arity = typeof startFn.length === 'number' ? startFn.length : 0;
+    if (arity <= 2) return startFn(ids, options);
+    return startFn(basePath, ids, options);
+  }
+
   async function ensureJsCoq(opts = {}) {
     if (cache.manager && findJsCoqGlobal()) {
       return { manager: cache.manager, basePath: cache.basePath };
@@ -672,9 +667,9 @@
 
             let manager;
             if (typeof api.start === 'function') {
-              manager = await api.start(basePath, [SNIPPET_ID], options);
+              manager = await callJsCoq(api.start, basePath, [SNIPPET_ID], options);
             } else if (typeof api.init === 'function') {
-              manager = await api.init(basePath, [SNIPPET_ID], options);
+              manager = await callJsCoq(api.init, basePath, [SNIPPET_ID], options);
             } else {
               throw new Error('jsCoq found but no start()/init()');
             }
@@ -696,7 +691,9 @@
           }
         }
 
-        throw new Error('failed to load jsCoq bundle: ' + (lastErr && lastErr.message));
+        const list = candidates.join(', ');
+        const lastMsg = lastErr && lastErr.message ? lastErr.message : String(lastErr);
+        throw new Error('failed to load jsCoq bundle. Tried: ' + list + '. Last error: ' + lastMsg);
       })();
     }
 

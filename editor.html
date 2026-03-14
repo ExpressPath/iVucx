@@ -724,6 +724,12 @@
           if(details.editorMode){
             lines.push('Editor mode: ' + details.editorMode);
           }
+          if(details.bundleUrl){
+            lines.push('Bundle URL: ' + details.bundleUrl);
+          }
+          if(details.assetBase){
+            lines.push('Asset base: ' + details.assetBase);
+          }
           if(typeof details.goalInfoSeen === 'boolean'){
             const goalInfoNote = details.goalInfoSeen ? 'seen' : 'not seen';
             const emptyNote = details.goalInfoEmpty ? ' (empty)' : '';
