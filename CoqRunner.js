@@ -70,7 +70,7 @@
         // determine base path from scriptSrc (strip "jscoq.js")
         const basePath = scriptSrc.replace(/jscoq\.js(\?.*)?$/i, '');
 
-        window.jsCoq = window.jsCoq || window.JsCoq || window.JSCoq;
+        window.jsCoq = window.jsCoq || window.JsCoq || window.JSCoq || window.jscoq;
 
         if (!window.jsCoq || typeof window.jsCoq.init !== 'function') {
           throw new Error('jsCoq is not available after loading script');
