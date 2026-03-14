@@ -628,10 +628,10 @@
     return summary;
   }
 
-  function callJsCoq(startFn, basePath, ids, options) {
+  function callJsCoq(startFn, basePath, ids, options, ctx) {
     const arity = typeof startFn.length === 'number' ? startFn.length : 0;
-    if (arity <= 2) return startFn(ids, options);
-    return startFn(basePath, ids, options);
+    if (arity <= 2) return startFn.call(ctx, ids, options);
+    return startFn.call(ctx, basePath, ids, options);
   }
 
   async function ensureJsCoq(opts = {}) {
@@ -682,9 +682,9 @@
 
             let manager;
             if (typeof api.start === 'function') {
-              manager = await callJsCoq(api.start, basePath, [SNIPPET_ID], options);
+              manager = await callJsCoq(api.start, basePath, [SNIPPET_ID], options, api);
             } else if (typeof api.init === 'function') {
-              manager = await callJsCoq(api.init, basePath, [SNIPPET_ID], options);
+              manager = await callJsCoq(api.init, basePath, [SNIPPET_ID], options, api);
             } else {
               throw new Error('jsCoq found but no start()/init()');
             }
