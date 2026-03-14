@@ -2061,8 +2061,17 @@
         try {
           await validateCoqProof(code);
         } finally {
+          setStatus('Resetting Coq environment...');
+          if(typeof CoqRunner !== 'undefined' && CoqRunner && typeof CoqRunner.resetEnvironment === 'function'){
+            try{
+              await CoqRunner.resetEnvironment({ timeoutMs: 15000 });
+            }catch(err){
+              console.warn('CoqRunner reset failed', err);
+            }
+          }
           running = false;
           runBtn.disabled = false;
+          setStatus('Ready');
         }
       }
 

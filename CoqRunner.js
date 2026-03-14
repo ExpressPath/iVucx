@@ -1229,6 +1229,29 @@
   }
 
   CoqRunner.checkProofText = checkProofText;
+  CoqRunner.resetEnvironment = async function resetEnvironment(opts = {}) {
+    const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 15000;
+    try {
+      const { manager } = await ensureJsCoq(opts);
+      await acquireLock();
+      try {
+        markRestart(manager);
+        await resetManagerDoc(manager, timeoutMs);
+        if (manager && manager.provider && typeof manager.provider.load === 'function') {
+          manager.provider.load('', 'Reset_' + Date.now() + '.v');
+          if (typeof manager.provider.focus === 'function') manager.provider.focus();
+        }
+      } finally {
+        releaseLock();
+      }
+    } catch (e) {
+      cache.manager = null;
+      cache.initting = null;
+      cache.basePath = null;
+      cache.scriptUrl = null;
+      throw e;
+    }
+  };
   if (!global.CoqRunner) global.CoqRunner = CoqRunner;
   if (!global.checkProofText) global.checkProofText = (text, opts) => CoqRunner.checkProofText(text, opts);
 
