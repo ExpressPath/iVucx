@@ -31,10 +31,7 @@
   async function tryLoadLocalJsCoq() {
     // candidate locations relative to repo root (common layouts)
     const candidates = [
-        './jscoq/package/jscoq.js',
-        './jscoq/package/jscoq.js',
-        './jscoq/package/jscoq.js',
-        './jscoq/package/dist/jscoq.js'
+        "./jscoq/jscoq.js",
     ];
     for (const c of candidates) {
       try {
