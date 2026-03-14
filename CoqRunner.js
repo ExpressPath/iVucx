@@ -70,11 +70,54 @@
         // determine base path from scriptSrc (strip "jscoq.js")
         const basePath = scriptSrc.replace(/jscoq\.js(\?.*)?$/i, '');
 
-        window.jsCoq = window.jsCoq || window.JsCoq || window.JSCoq || window.jscoq;
-
-        if (!window.jsCoq || typeof window.jsCoq.init !== 'function') {
-          throw new Error('jsCoq is not available after loading script');
+        // robust lookup: find any global whose name contains "coq" and has an init function
+        function findJsCoqGlobal() {
+          try {
+            const keys = Object.keys(window);
+            for (const k of keys) {
+              if (k.toLowerCase().includes('coq')) {
+                const val = window[k];
+                if (val && typeof val.init === 'function') return { name: k, lib: val };
+              }
+            }
+          } catch (e) { /* ignore */ }
+          // try some common variants as fallback
+          const variants = ['jsCoq', 'JsCoq', 'JSCoq', 'jscoq'];
+          for (const v of variants) {
+            if (window[v] && typeof window[v].init === 'function') return { name: v, lib: window[v] };
+          }
+          return null;
         }
+        
+        let found = findJsCoqGlobal();
+        // wait a short while (max WAIT_MS) for the global to appear (some bundles define it asynchronously)
+        const WAIT_MS = 5000;
+        const POLL = 100;
+        const startWait = Date.now();
+        while (!found && (Date.now() - startWait) < WAIT_MS) {
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise(r => setTimeout(r, POLL));
+          found = findJsCoqGlobal();
+        }
+        
+        if (!found) {
+          // final hint: show some diagnostics in console to help debugging
+          console.error('CoqRunner: no jsCoq global found. window keys containing "coq":',
+            Object.keys(window).filter(k => k.toLowerCase().includes('coq')));
+          throw new Error('jsCoq is not available after loading script: no global with init() found. Check that jscoq.js is the proper bundle.');
+        }
+        
+        // normalize to window.jsCoq so rest of CoqRunner can use it
+        window.jsCoq = found.lib;
+        console.log('CoqRunner: using jsCoq global name =', found.name);
+        
+        // now proceed to initialize
+        if (typeof window.jsCoq.init !== 'function') {
+          throw new Error('jsCoq found but has no init() function');
+        }
+
+
+
         // init with safe defaults; use local basePath
         const sid = window.jsCoq.init({
           base_path_: basePath,
