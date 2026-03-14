@@ -212,16 +212,32 @@
 
   function attachGoalSpy(manager) {
     if (manager.__coqRunnerGoalSpy) return;
-    if (typeof manager.coqGoalInfo !== 'function') return;
-    const original = manager.coqGoalInfo.bind(manager);
     manager.__coqRunnerGoalSpy = true;
     manager.__coqRunnerLastGoals = null;
     manager.__coqRunnerLastGoalsAt = 0;
-    manager.coqGoalInfo = function (sid, goals) {
+    manager.__coqRunnerGoalInfoSeen = false;
+
+    const record = (goals) => {
       manager.__coqRunnerLastGoals = goals;
       manager.__coqRunnerLastGoalsAt = Date.now();
-      return original(sid, goals);
+      manager.__coqRunnerGoalInfoSeen = true;
     };
+
+    let observed = false;
+    if (manager.coq && Array.isArray(manager.coq.observers)) {
+      manager.coq.observers.push({
+        coqGoalInfo: function (sid, goals) { record(goals); }
+      });
+      observed = true;
+    }
+
+    if (!observed && typeof manager.coqGoalInfo === 'function') {
+      const original = manager.coqGoalInfo.bind(manager);
+      manager.coqGoalInfo = function (sid, goals) {
+        record(goals);
+        return original(sid, goals);
+      };
+    }
   }
 
   async function ensureJsCoq(opts = {}) {
@@ -370,8 +386,8 @@
     return out;
   }
 
-  function countGoalsFromResponse(res) {
-    if (res === null || res === undefined) return null;
+  function countGoalsFromResponse(res, goalInfoSeen) {
+    if (res === null || res === undefined) return goalInfoSeen ? 0 : null;
     if (typeof res === 'string') {
       const parsed = parseGoalsFromText(res);
       return parsed && typeof parsed.remaining === 'number' ? parsed.remaining : null;
@@ -383,7 +399,7 @@
         if ('goal' in first || 'hyp' in first || 'hyps' in first || 'type' in first) return res.length;
       }
       for (const item of res) {
-        const nested = countGoalsFromResponse(item);
+        const nested = countGoalsFromResponse(item, goalInfoSeen);
         if (nested !== null) return nested;
       }
       return null;
@@ -391,7 +407,7 @@
     if (typeof res === 'object') {
       if (Array.isArray(res.goals)) return res.goals.length;
       if (res.goals && typeof res.goals === 'object') {
-        const nestedGoals = countGoalsFromResponse(res.goals);
+        const nestedGoals = countGoalsFromResponse(res.goals, goalInfoSeen);
         if (nestedGoals !== null) return nestedGoals;
       }
       if (Array.isArray(res.fg)) return res.fg.length;
@@ -447,22 +463,38 @@
     await acquireLock();
 
     try {
+      manager.__coqRunnerLastGoals = null;
+      manager.__coqRunnerLastGoalsAt = 0;
+      manager.__coqRunnerGoalInfoSeen = false;
+
       if (!manager || !manager.provider || typeof manager.provider.load !== 'function') {
         throw new Error('jsCoq manager provider is unavailable');
       }
       if (manager.error && Array.isArray(manager.error)) manager.error.length = 0;
 
       const docName = 'Main_' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.v';
-      const loadOpts = { reset: true, flags: {} };
-      manager.provider.load(String(text || ''), docName, loadOpts);
+      resetManagerDoc(manager);
+      manager.provider.load(String(text || ''), docName);
       if (typeof manager.provider.focus === 'function') manager.provider.focus();
 
       const started = Date.now();
+      let advancedAny = false;
       while (true) {
         const advanced = typeof manager.goNext === 'function' ? manager.goNext(false) : false;
+        if (advanced) advancedAny = true;
         await waitForManagerIdle(manager, started, timeoutMs);
         if (manager.error && manager.error.length > 0) break;
         if (!advanced) break;
+      }
+
+      if (!advancedAny && /\S/.test(String(text || ''))) {
+        return {
+          ok: false,
+          error: {
+            remaining: -1,
+            summaries: ['No Coq statements were processed (check for missing periods).']
+          }
+        };
       }
 
       const goalRequestAt = Date.now();
@@ -472,7 +504,10 @@
         await waitForGoalsUpdate(manager, goalRequestAt, 2000);
       }
 
-      const goalsCount = countGoalsFromResponse(manager.__coqRunnerLastGoals);
+      const goalsCount = countGoalsFromResponse(
+        manager.__coqRunnerLastGoals,
+        manager.__coqRunnerGoalInfoSeen
+      );
 
       if (manager.error && manager.error.length > 0) {
         const msg = extractCoqError(manager);
@@ -500,12 +535,42 @@
         ok: false,
         error: {
           remaining: -1,
-          summaries: ['Goals could not be determined']
+          summaries: [
+            manager.__coqRunnerGoalInfoSeen
+              ? 'Goals could not be determined (empty GoalInfo)'
+              : 'Goals could not be determined (no GoalInfo)'
+          ]
         }
       };
     } finally {
       releaseLock();
     }
+  }
+
+  function resetManagerDoc(manager) {
+    try {
+      if (manager && manager.provider && typeof manager.provider.retract === 'function') {
+        manager.provider.retract();
+      }
+    } catch (e) {}
+    try {
+      if (manager && manager.coq && typeof manager.coq.cancel === 'function') {
+        manager.coq.cancel(2);
+      }
+    } catch (e) {}
+
+    try {
+      if (manager && manager.doc && Array.isArray(manager.doc.sentences) && manager.doc.sentences[0]) {
+        const dummy = manager.doc.sentences[0];
+        manager.doc.sentences = [dummy];
+        manager.doc.stm_id = [, dummy];
+        manager.doc.goals = [];
+      }
+    } catch (e) {}
+
+    try {
+      if (manager && Array.isArray(manager.error)) manager.error.length = 0;
+    } catch (e) {}
   }
 
   CoqRunner.checkProofText = checkProofText;
