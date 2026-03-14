@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <meta name="description" content="An Online IDE for the Coq Theorem Prover" />
+    <link rel="icon" href="../../frontend/classic/images/favicon.png">
+
+    <title>jsCoq Tests — Pretty-print gallery</title>
+    <style>
+      #pprint {
+        font-family: Courier, monospace;
+        table-layout:fixed;
+        padding: 9px;
+        width: 100%;
+      }
+      #pprint td {
+        vertical-align: top;
+        overflow: auto;
+      }
+      #pprint td > div {
+        background-color: #eee;
+        outline: 2px solid #eee;
+        white-space: pre;
+      }
+      #pprint .coq-env {
+        padding-left: 1.25em;
+      }
+    </style>
+    <script src="./gallery.js"></script>
+  </head>
+
+<body class="jscoq-main">
+  <div id="ide-wrapper" class="toggled" data-filename="scratchpad.v">
+    <table id="pprint">
+      <colgroup><col style="width: 50%"><col> </colgroup> 
+    </table>
+  </div>
+
+  <script type="module">
+    import { JsCoq } from "../../frontend/classic/js/index.js";
+    var jscoq_opts = {
+      jscoq_ids: [],
+        all_pkgs:  ['coq'],
+        editor: {mode: {'company-coq': true}}
+    };
+
+    /* Global reference */
+    var coq, gallery;
+
+    JsCoq.load([], jscoq_opts).then(opts => {
+      coq = {
+        pprint: new FormatPrettyPrint(),
+        company_coq: new CodeMirror.CompanyCoq()
+      };
+      gallery = new Gallery($('#pprint'), coq);
+      gallery.showAll();
+    });
+  </script>
+</body>
+</html>

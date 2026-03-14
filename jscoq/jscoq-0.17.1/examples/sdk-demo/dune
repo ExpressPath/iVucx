@@ -1,0 +1,10 @@
+
+(rule
+ (targets coq-pkgs)
+ (deps
+  (glob_files_rec "*.vo"))
+ (action
+  (run npx %{env:pkgtool=jscoq} build workdir --top GroupTheory
+       --package coq-pkgs/group-theory.coq-pkg)))
+
+(dirs workdir)

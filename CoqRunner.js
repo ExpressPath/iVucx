@@ -1,158 +1,203 @@
-// checkProofText.js
-// Usage: const res = await checkProofText(coqText, opts);
-// opts optional: { cdnUrl, timeoutMs, pollMs, basePathSuffix }
-// Default CDN/version chosen to match common jsCoq bundle.
+// CoqRunner.js — local jsCoq (jscoq-0.17.1) friendly proof checker
+// Exposes global `CoqRunner.checkProofText(text, opts)` returning a Promise that resolves to:
+//  { ok: true } or { ok: false, error: { remaining, summaries, raw, timeout? } }
 
-async function checkProofText(text, opts = {}) {
-  if (typeof text !== 'string') throw new TypeError('text must be string');
+// NOTE: This file is designed to prefer local ./jscoq/* copies of jsCoq (for GitHub Pages).
+// It will try multiple candidate paths and initialize jsCoq once.
 
-  const CDN = opts.cdnUrl || 'https://cdn.jsdelivr.net/npm/jscoq@8.20.0/dist/jscoq.js';
-  const basePath = (opts.basePathSuffix === undefined)
-    ? 'https://cdn.jsdelivr.net/npm/jscoq@8.20.0/dist/' 
-    : opts.basePathSuffix;
-  const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 30000;
-  const pollMs = typeof opts.pollMs === 'number' ? opts.pollMs : 50;
+(function(global){
+  const CoqRunner = {};
+  // internal cache across calls
+  const cache = { initing: null, sid: null, busy: false, scriptSrc: null };
 
-  // --- simple module-level cache (persist across calls) ---
-  window.__checkProofText_cache = window.__checkProofText_cache || {};
-  const cache = window.__checkProofText_cache;
+  // try loading a script, return loaded src
+  function loadScript(src){
+    return new Promise((resolve, reject) => {
+      // already loaded?
+      if (document.querySelector('script[data-src="'+src+'"]') || (window.jsCoq && cache.scriptSrc === src)) {
+        return resolve(src);
+      }
+      const s = document.createElement('script');
+      s.dataset.src = src;
+      s.src = src;
+      s.async = true;
+      s.onload = () => { cache.scriptSrc = src; resolve(src); };
+      s.onerror = () => reject(new Error('failed to load script: ' + src));
+      document.head.appendChild(s);
+    });
+  }
 
-  // load jsCoq script if needed
-  async function ensureJsCoq() {
-    if (window.jsCoq && cache.sid) return;
-    if (!cache._loading) {
-      cache._loading = (async () => {
-        if (!window.jsCoq) {
-          await new Promise((res, rej) => {
-            const s = document.createElement('script');
-            s.src = CDN;
-            s.onload = () => res();
-            s.onerror = (e) => rej(new Error('failed to load jsCoq script: ' + CDN));
-            document.head.appendChild(s);
-          });
-        }
-        // init jsCoq if not inited
-        if (!cache.sid) {
-          if (!window.jsCoq || typeof window.jsCoq.init !== 'function') {
-            throw new Error('jsCoq not available after loading script');
+  // try a list of candidate script paths sequentially
+  async function tryLoadLocalJsCoq() {
+    // candidate locations relative to repo root (common layouts)
+    const candidates = [
+      './jscoq/jscoq.js',
+      './jscoq-0.17.1/jscoq.js',
+      './jscoq/jscoq-0.17.1/jscoq.js',
+      './jscoq/dist/jscoq.js'
+    ];
+    for (const c of candidates) {
+      try {
+        await loadScript(c);
+        return c;
+      } catch (e) {
+        // try next
+      }
+    }
+    // if none succeeded, throw
+    throw new Error('failed to load local jsCoq; put jscoq bundle under ./jscoq/ or ./jscoq-0.17.1/');
+  }
+
+  // ensure jsCoq is loaded and initialized; returns { jsCoq, sid, basePath }
+  async function ensureJsCoq(opts = {}) {
+    if (cache.sid && window.jsCoq) return { jsCoq: window.jsCoq, sid: cache.sid, basePath: cache.basePath };
+    if (!cache.initing) {
+      cache.initing = (async () => {
+        // 1) try local copies first
+        let scriptSrc;
+        try {
+          scriptSrc = await tryLoadLocalJsCoq();
+        } catch (e) {
+          // fallback: try CDN (last resort)
+          const cdn = opts.cdnUrl || 'https://cdn.jsdelivr.net/npm/jscoq@0.17.1/dist/jscoq.js';
+          try {
+            await loadScript(cdn);
+            scriptSrc = cdn;
+          } catch (e2) {
+            throw new Error('failed to load jsCoq from local and CDN');
           }
-          // try init; use safe options
-          cache.sid = window.jsCoq.init({
-            base_path_: basePath,
-            init_pkgs: ['init'],
-            all_pkgs: true
-          });
         }
+        // determine base path from scriptSrc (strip "jscoq.js")
+        const basePath = scriptSrc.replace(/jscoq\.js(\?.*)?$/i, '');
+        if (!window.jsCoq || typeof window.jsCoq.init !== 'function') {
+          throw new Error('jsCoq is not available after loading script');
+        }
+        // init with safe defaults; use local basePath
+        const sid = window.jsCoq.init({
+          base_path_: basePath,
+          init_pkgs: ['init'],
+          all_pkgs: true
+        });
+        cache.sid = sid;
+        cache.basePath = basePath;
+        return { jsCoq: window.jsCoq, sid, basePath };
       })();
     }
-    return cache._loading;
+    return cache.initing;
   }
 
-  // simple serialization: avoid concurrent commits that confuse handlers
-  async function acquireBusy() {
-    while (cache._busy) await new Promise(r => setTimeout(r, 20));
-    cache._busy = true;
+  // simple lock to serialize commits (avoid concurrency)
+  async function acquireLock() {
+    while (cache.busy) await new Promise(r => setTimeout(r,20));
+    cache.busy = true;
   }
-  function releaseBusy() { cache._busy = false; }
+  function releaseLock(){ cache.busy = false; }
 
-  await ensureJsCoq();
-  await acquireBusy();
+  // core check function (awaits until finish)
+  async function checkProofText(text, opts = {}) {
+    if (typeof text !== 'string') throw new TypeError('text must be string');
+    const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 30000;
+    const pollMs = typeof opts.pollMs === 'number' ? opts.pollMs : 50;
 
-  // capture state
-  const jsCoq = window.jsCoq;
-  const sid = cache.sid;
-  const captured = [];
-  let finishedFlag = false;
-  let admittedSeen = false;
-  let errorSeen = false;
+    const { jsCoq, sid } = await ensureJsCoq(opts);
+    await acquireLock();
 
-  function capturePayload(p) {
-    const s = (typeof p === 'string') ? p : (() => { try { return JSON.stringify(p); } catch (e) { return String(p); } })();
-    captured.push(s);
-    const low = s.toLowerCase();
-    if (/\badmitted\b/.test(low)) admittedSeen = true;
-    if (/\berror\b|\bfail(ed)?\b/.test(low)) errorSeen = true;
-    if (/\b(no more subgoals|proof completed|qed|completed|done)\b/.test(low)) finishedFlag = true;
-  }
+    const captured = [];
+    let finishedFlag = false;
+    let admittedSeen = false;
+    let errorSeen = false;
 
-  // save old handlers then install ours (restore in finally)
-  const old = { onLog: jsCoq.onLog, onError: jsCoq.onError, onMessage: jsCoq.onMessage, onFeedback: jsCoq.onFeedback };
-  try {
-    try { jsCoq.onLog = capturePayload; } catch (e) {}
-    try { jsCoq.onError = capturePayload; } catch (e) {}
-    try { jsCoq.onMessage = capturePayload; } catch (e) {}
-    try { jsCoq.onFeedback = capturePayload; } catch (e) {}
-
-    // send the code
-    let node;
-    try {
-      node = jsCoq.add(sid, -1, text);
-      if (typeof jsCoq.edit === 'function') jsCoq.edit(node);
-      if (typeof jsCoq.commit === 'function') jsCoq.commit(node);
-    } catch (e) {
-      throw new Error('add/commit failed: ' + (e && e.message ? e.message : String(e)));
+    function capturePayload(p){
+      const s = (typeof p === 'string') ? p : (() => { try { return JSON.stringify(p); } catch(e){ return String(p); }})();
+      captured.push(s);
+      const low = s.toLowerCase();
+      if (/\badmitted\b/.test(low)) admittedSeen = true;
+      if (/\berror\b|\bfail(ed)?\b/.test(low)) errorSeen = true;
+      if (/\b(no more subgoals|proof completed|qed|completed|done)\b/.test(low)) finishedFlag = true;
     }
 
-    // wait loop: prefer jsCoq.goals() if available
-    const start = Date.now();
-    let lastRemaining = null;
-    let stableCount = 0;
+    // save old handlers and install ours as safely as possible
+    const old = { onLog: jsCoq.onLog, onError: jsCoq.onError, onMessage: jsCoq.onMessage, onFeedback: jsCoq.onFeedback };
+    try { try { jsCoq.onLog = capturePayload; } catch(e){} } catch(e){}
+    try { try { jsCoq.onError = capturePayload; } catch(e){} } catch(e){}
+    try { try { jsCoq.onMessage = capturePayload; } catch(e){} } catch(e){}
+    try { try { jsCoq.onFeedback = capturePayload; } catch(e){} } catch(e){}
 
-    while (true) {
-      // 1) precise path: jsCoq.goals()
+    try {
+      // send code
+      let node;
       try {
-        if (typeof jsCoq.goals === 'function') {
-          const g = jsCoq.goals();
-          if (g && Array.isArray(g.goals)) {
-            const rem = g.goals.length;
-            if (rem === lastRemaining) stableCount++; else { lastRemaining = rem; stableCount = 0; }
-            // require small stability to avoid transient reads
-            if (stableCount >= 1) {
-              const summaries = g.goals.map(x => (typeof x === 'string' ? x : JSON.stringify(x)).slice(0, 400));
-              if (rem === 0 && !errorSeen && !admittedSeen) return { ok: true, error: null };
-              return { ok: false, error: { remaining: rem, summaries, raw: captured.slice() } };
+        node = jsCoq.add(sid, -1, text);
+        if (typeof jsCoq.edit === 'function') jsCoq.edit(node);
+        if (typeof jsCoq.commit === 'function') jsCoq.commit(node);
+      } catch(e){
+        throw new Error('add/commit failed: ' + (e && e.message ? e.message : String(e)));
+      }
+
+      // wait loop: prefer jsCoq.goals() if available
+      const start = Date.now();
+      let lastRemaining = null;
+      let stableCount = 0;
+
+      while (true) {
+        // 1) precise path: jsCoq.goals()
+        try {
+          if (typeof jsCoq.goals === 'function') {
+            const g = jsCoq.goals();
+            if (g && Array.isArray(g.goals)) {
+              const rem = g.goals.length;
+              if (rem === lastRemaining) stableCount++; else { lastRemaining = rem; stableCount = 0; }
+              if (stableCount >= 1) {
+                const summaries = g.goals.map(x => (typeof x === 'string' ? x : JSON.stringify(x)).slice(0,400));
+                if (rem === 0 && !errorSeen && !admittedSeen) return { ok: true };
+                return { ok: false, error: { remaining: rem, summaries, raw: captured.slice() } };
+              }
             }
           }
+        } catch(e){
+          // ignore, fall back to feedback
         }
-      } catch (e) {
-        // ignore and fallback to feedback detection
+
+        // 2) feedback/completion detection
+        if (finishedFlag) {
+          const all = captured.join('\n');
+          const m = all.match(/(\d+)\s+(?:subgoals?|goals?)/i);
+          const rem = m ? Number(m[1]) : (admittedSeen ? 0 : null);
+          const summaries = captured.slice(-6);
+          if (rem === 0 && !errorSeen && !admittedSeen) return { ok: true };
+          return { ok: false, error: { remaining: rem, summaries, raw: captured.slice() } };
+        }
+
+        // 3) timeout
+        if (Date.now() - start > timeoutMs) {
+          return { ok: false, error: { remaining: lastRemaining, summaries: captured.slice(-6), raw: captured.slice(), timeout: true } };
+        }
+
+        await new Promise(r => setTimeout(r, pollMs));
       }
 
-      // 2) feedback/completion detection
-      if (finishedFlag) {
-        const all = captured.join('\n');
-        const m = all.match(/(\d+)\s+(?:subgoals?|goals?)/i);
-        const rem = m ? Number(m[1]) : (admittedSeen ? 0 : null);
-        const summaries = captured.slice(-6);
-        if (rem === 0 && !errorSeen && !admittedSeen) return { ok: true, error: null };
-        return { ok: false, error: { remaining: rem, summaries, raw: captured.slice() } };
-      }
-
-      // 3) timeout
-      if (Date.now() - start > timeoutMs) {
-        return { ok: false, error: { remaining: lastRemaining, summaries: captured.slice(-6), raw: captured.slice(), timeout: true } };
-      }
-
-      await new Promise(r => setTimeout(r, pollMs));
+    } finally {
+      // restore handlers and release lock
+      try { jsCoq.onLog = old.onLog; } catch(e){}
+      try { jsCoq.onError = old.onError; } catch(e){}
+      try { jsCoq.onMessage = old.onMessage; } catch(e){}
+      try { jsCoq.onFeedback = old.onFeedback; } catch(e){}
+      releaseLock();
     }
-
-  } finally {
-    // restore handlers and release busy lock
-    try { jsCoq.onLog = old.onLog; } catch (e) {}
-    try { jsCoq.onError = old.onError; } catch (e) {}
-    try { jsCoq.onMessage = old.onMessage; } catch (e) {}
-    try { jsCoq.onFeedback = old.onFeedback; } catch (e) {}
-    releaseBusy();
   }
-}
 
-// --- example usage ---
-// (1) await checkProofText(coqSource) to block until finished
-// (2) returns { ok: true } or { ok: false, error: { remaining, summaries, raw, timeout? } }
+  CoqRunner.checkProofText = checkProofText;
 
-// Example:
-// (async () => {
-//   const src = `Theorem t : 1 = 2. Proof. reflexivity. Qed.`;
-//   const res = await checkProofText(src);
-//   console.log(res);
-// })();
+  // export to global
+  global.CoqRunner = CoqRunner;
+
+})(window);
+
+/* Usage:
+  // ensure this script is included on your page AFTER the jscoq bundle is present or so it can auto-load it.
+  (async () => {
+    const text = `Theorem t : 1 = 2. Proof. reflexivity. Qed.`;
+    const res = await CoqRunner.checkProofText(text, { timeoutMs: 20000 });
+    console.log(res);
+  })();
+*/
