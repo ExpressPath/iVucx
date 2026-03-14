@@ -133,7 +133,7 @@
         
         // init
         const api = window.jsCoq.JsCoq || window.jsCoq;
-        if (typeof window.jsCoq.init !== 'function') {
+        if (typeof api.init !== 'function') {
           throw new Error('jsCoq found but no init()');
         }
         cache.sid = api.init({ base_path_: basePath, init_pkgs: ['init'], all_pkgs: true });
