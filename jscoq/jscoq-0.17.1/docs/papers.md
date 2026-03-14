@@ -10,7 +10,7 @@ proceedings. The recommended citation is:
 @Inproceedings{gallego:uitp2016,
   author    = {Gallego Arias, Emilio Jes\'us and Pin, Beno\^it and Jouvelot, Pierre},
   year      = {2017},
-  title     = {{jsCoq}: Towards Hybrid Theorem Proving Interfaces},
+  title     = {jsCoq: Towards Hybrid Theorem Proving Interfaces},
   editor    = {Autexier, Serge and Quaresma, Pedro},
   booktitle = {{\rmfamily Proceedings of the 12th Workshop on} User Interfaces for Theorem Provers,
                {\rmfamily Coimbra, Portugal, 2nd July 2016}},
