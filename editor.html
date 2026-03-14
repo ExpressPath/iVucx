@@ -750,6 +750,32 @@
             if(input.hasQedLike){
               lines.push('Proof closer detected: yes');
             }
+            if(typeof input.hasQedDot === 'boolean'){
+              lines.push('Proof closer with ".": ' + (input.hasQedDot ? 'yes' : 'no'));
+            }
+            if(typeof input.linesEndingWithPeriod === 'number'){
+              lines.push('Lines ending with ".": ' + input.linesEndingWithPeriod);
+            }
+            if(typeof input.commentDepth === 'number'){
+              lines.push('Comment depth: ' + input.commentDepth);
+            }
+            if(typeof input.extraCommentClosers === 'number' && input.extraCommentClosers > 0){
+              lines.push('Extra comment closers: ' + input.extraCommentClosers);
+            }
+          }
+          if(details.tokenSummary){
+            const t = details.tokenSummary;
+            lines.push('Token scan lines: ' + t.scannedLines + '/' + t.lineCount);
+            lines.push('Token counts: statementend=' + t.statementend + ', bullet=' + t.coqBullet + ', brace=' + t.brace + ', comment=' + t.comment + ', none=' + t.nullType);
+            if(Array.isArray(t.topTypes) && t.topTypes.length){
+              lines.push('Top token types: ' + t.topTypes.join(', '));
+            }
+            if(Array.isArray(t.samples) && t.samples.length){
+              lines.push('Token samples:');
+              for(let i = 0; i < t.samples.length; i++){
+                lines.push(t.samples[i]);
+              }
+            }
           }
           if(Array.isArray(details.errors) && details.errors.length){
             lines.push('Errors (' + details.errors.length + '):');

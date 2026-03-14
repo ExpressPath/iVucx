@@ -337,14 +337,18 @@
     const lines = content.split(/\r?\n/);
     let nonEmptyLines = 0;
     let bulletLines = 0;
+    let linesEndingWithPeriod = 0;
     for (const line of lines) {
       if (/\S/.test(line)) nonEmptyLines += 1;
       if (/^\s*[-+*]\s+\S/.test(line)) bulletLines += 1;
+      if (/\.\s*$/.test(line)) linesEndingWithPeriod += 1;
     }
     const asciiPeriodCount = (content.match(/\./g) || []).length;
     const fullWidthPeriodCount = (content.match(/[。．｡]/g) || []).length;
     const hasQedLike = /\b(Qed|Defined|Admitted|Abort)\b/.test(content);
+    const hasQedDot = /\b(Qed|Defined|Admitted|Abort)\b\s*\./.test(content);
     const hasProofLike = /\b(Goal|Theorem|Lemma|Proof)\b/.test(content);
+    const commentScan = scanCoqComments(content);
     return {
       length: content.length,
       nonEmptyLines,
@@ -352,8 +356,102 @@
       fullWidthPeriodCount,
       bulletLines,
       hasQedLike,
-      hasProofLike
+      hasQedDot,
+      linesEndingWithPeriod,
+      hasProofLike,
+      commentDepth: commentScan.depth,
+      extraCommentClosers: commentScan.extraClose
     };
+  }
+
+  function scanCoqComments(content) {
+    let depth = 0;
+    let extraClose = 0;
+    let inString = false;
+    for (let i = 0; i < content.length; i++) {
+      const ch = content[i];
+      const next = i + 1 < content.length ? content[i + 1] : '';
+      if (inString) {
+        if (ch === '"' && content[i - 1] !== '\\') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+      if (ch === '(' && next === '*') {
+        depth += 1;
+        i += 1;
+        continue;
+      }
+      if (ch === '*' && next === ')') {
+        if (depth > 0) depth -= 1;
+        else extraClose += 1;
+        i += 1;
+      }
+    }
+    return { depth, extraClose };
+  }
+
+  function summarizeTokens(manager, maxLines = 200) {
+    const summary = {
+      lineCount: 0,
+      scannedLines: 0,
+      statementend: 0,
+      coqBullet: 0,
+      brace: 0,
+      comment: 0,
+      nullType: 0,
+      topTypes: [],
+      samples: []
+    };
+
+    try {
+      const snippet = manager && manager.provider && manager.provider.snippets && manager.provider.snippets[0];
+      const editor = snippet && snippet.editor;
+      if (!editor || typeof editor.getLineTokens !== 'function') return summary;
+      const doc = editor.getDoc();
+      const lineCount = doc.lineCount();
+      summary.lineCount = lineCount;
+      const typeCounts = new Map();
+
+      const pushSample = (lineNo, lineText, tokens) => {
+        if (summary.samples.length >= 3) return;
+        const trimmed = lineText.length > 120 ? lineText.slice(0, 120) + '…' : lineText;
+        const tokenText = tokens.map(t => {
+          const tstr = t.string || '';
+          const tshort = tstr.length > 18 ? tstr.slice(0, 18) + '…' : tstr;
+          return tshort + '/' + (t.type || 'none');
+        }).join(' ');
+        summary.samples.push('L' + lineNo + ': ' + trimmed + ' => ' + tokenText);
+      };
+
+      const limit = Math.min(lineCount, maxLines);
+      for (let i = 0; i < limit; i++) {
+        const lineText = doc.getLine(i);
+        const tokens = editor.getLineTokens(i);
+        summary.scannedLines += 1;
+        if (lineText && /\S/.test(lineText)) {
+          pushSample(i + 1, lineText, tokens);
+        }
+        for (const tok of tokens) {
+          const type = tok.type || 'none';
+          typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+          if (!tok.type) summary.nullType += 1;
+          if (type.includes('comment')) summary.comment += 1;
+          if (type.includes('statementend')) summary.statementend += 1;
+          if (type.includes('coq-bullet')) summary.coqBullet += 1;
+          if (type.includes('brace')) summary.brace += 1;
+        }
+      }
+
+      const sorted = [...typeCounts.entries()].sort((a, b) => b[1] - a[1]);
+      summary.topTypes = sorted.slice(0, 6).map(([name, count]) => name + ':' + count);
+    } catch (e) {
+      return summary;
+    }
+
+    return summary;
   }
 
   async function ensureJsCoq(opts = {}) {
@@ -637,6 +735,7 @@
       if (!advancedAny && /\S/.test(String(text || ''))) {
         const details = buildRunDetails(manager, null);
         details.input = analyzeInputText(text);
+        details.tokenSummary = summarizeTokens(manager);
         const hints = [];
         if (details.input.asciiPeriodCount === 0) {
           if (details.input.fullWidthPeriodCount > 0) {
@@ -650,6 +749,28 @@
         }
         if (details.input.asciiPeriodCount > 0 && details.editorMode !== 'coq') {
           hints.push('Editor mode is not Coq; tokenization may be missing.');
+        }
+        if (details.input.commentDepth > 0) {
+          hints.push('Unclosed comment detected (missing "*)").');
+        }
+        if (details.input.extraCommentClosers > 0) {
+          hints.push('Extra comment terminator detected ("*)").');
+        }
+        if (details.input.hasQedLike && !details.input.hasQedDot) {
+          hints.push('Proof closer keyword is missing a terminating "." (e.g., "Qed.").');
+        }
+        if (details.input.linesEndingWithPeriod === 0 && details.input.asciiPeriodCount > 0) {
+          hints.push('No line ends with "."; periods may only appear inside identifiers or numbers.');
+        }
+        if (details.tokenSummary) {
+          if (details.tokenSummary.statementend === 0 && details.tokenSummary.coqBullet === 0) {
+            if (details.tokenSummary.nullType > 0 && details.tokenSummary.comment === 0) {
+              hints.push('Token types are missing; CodeMirror may not be tokenizing the input.');
+            }
+            if (details.tokenSummary.comment > 0 && details.tokenSummary.comment >= details.tokenSummary.nullType) {
+              hints.push('Most tokens are comments; the proof may be commented out.');
+            }
+          }
         }
         return {
           ok: false,
