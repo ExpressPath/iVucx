@@ -31,7 +31,10 @@
   async function tryLoadLocalJsCoq() {
     // candidate locations relative to repo root (common layouts)
     const candidates = [
-      "https://cdn.jsdelivr.net/npm/jscoq@0.17.1/dist/jscoq.js"
+        './jscoq/package/jscoq.js',
+        './jscoq/package/jscoq.js',
+        './jscoq/package/jscoq.js',
+        './jscoq/package/dist/jscoq.js'
     ];
     for (const c of candidates) {
       try {
