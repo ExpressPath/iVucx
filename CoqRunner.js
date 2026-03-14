@@ -10,10 +10,7 @@
   const SNIPPET_ID = 'coq-runner-snippet';
 
   const DEFAULT_CANDIDATES = [
-    './jscoq/jscoq.js',
-    './jscoq/package/dist/jscoq.js',
-    './jscoq-0.17.1/dist/jscoq.js',
-    'https://cdn.jsdelivr.net/npm/jscoq@0.17.1/dist/jscoq.js'
+    './jscoq/jscoq.js'
   ];
 
   function ensureRunnerDom() {
@@ -138,9 +135,9 @@
 
             let manager;
             if (typeof api.start === 'function') {
-              manager = await api.start(basePath, undefined, [SNIPPET_ID], options);
+              manager = await api.start(basePath, [SNIPPET_ID], options);
             } else if (typeof api.init === 'function') {
-              manager = await api.init(basePath, undefined, [SNIPPET_ID], options);
+              manager = await api.init(basePath, [SNIPPET_ID], options);
             } else {
               throw new Error('jsCoq found but no start()/init()');
             }
