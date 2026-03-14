@@ -4,7 +4,7 @@
 
 (function (global) {
   const CoqRunner = {};
-  const cache = { initting: null, manager: null, basePath: null, busy: false, scriptUrl: null, jsCoqLib: null };
+  const cache = { initting: null, manager: null, basePath: null, busy: false, scriptUrl: null, jsCoqLib: null, workerShim: false };
 
   const WRAPPER_ID = 'coq-runner-wrapper';
   const SNIPPET_ID = 'coq-runner-snippet';
@@ -205,11 +205,38 @@
       const baseAbs = resolveUrl(base);
       const coqJson = new URL('coq.json', baseAbs).href;
       if (await checkUrlExists(coqJson)) {
-        return baseAbs;
+        return baseAbs.replace(/\/+$/, '');
       }
     }
 
     return null;
+  }
+
+  function ensureWorkerShim() {
+    if (cache.workerShim) return;
+    if (typeof window === 'undefined' || typeof window.Worker !== 'function') return;
+    const OriginalWorker = window.Worker;
+    const shim = function WorkerShim(url, opts) {
+      try {
+        const href = url instanceof URL ? url.href : String(url);
+        const u = new URL(href, window.location.href);
+        const sameOrigin = u.origin === window.location.origin;
+        const isJsCoqWorker = /jscoq_worker\.bc\.js|wacoq_worker\.js/.test(u.pathname);
+        if (!sameOrigin && isJsCoqWorker) {
+          const blob = new Blob([`importScripts(${JSON.stringify(u.href)});`], { type: 'application/javascript' });
+          const blobUrl = URL.createObjectURL(blob);
+          const worker = new OriginalWorker(blobUrl);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+          return worker;
+        }
+      } catch (e) {
+        // fall back to native Worker
+      }
+      return new OriginalWorker(url, opts);
+    };
+    shim.prototype = OriginalWorker.prototype;
+    window.Worker = shim;
+    cache.workerShim = true;
   }
 
   function attachGoalSpy(manager) {
@@ -682,8 +709,10 @@
 
             let manager;
             if (typeof api.start === 'function') {
+              ensureWorkerShim();
               manager = await callJsCoq(api.start, basePath, [SNIPPET_ID], options, api);
             } else if (typeof api.init === 'function') {
+              ensureWorkerShim();
               manager = await callJsCoq(api.init, basePath, [SNIPPET_ID], options, api);
             } else {
               throw new Error('jsCoq found but no start()/init()');
