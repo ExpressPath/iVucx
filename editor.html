@@ -712,14 +712,59 @@
           return { status: 'error', proof_state: 'YN', reason: summary };
         }
 
+        function formatCoqRunnerDetails(details){
+          if(!details) return '';
+          const lines = [];
+          if(typeof details.processedCount === 'number'){
+            lines.push('Processed statements: ' + details.processedCount);
+          }
+          if(details.lastSid){
+            lines.push('Last statement sid: ' + details.lastSid);
+          }
+          if(typeof details.goalInfoSeen === 'boolean'){
+            const goalInfoNote = details.goalInfoSeen ? 'seen' : 'not seen';
+            const emptyNote = details.goalInfoEmpty ? ' (empty)' : '';
+            lines.push('GoalInfo: ' + goalInfoNote + emptyNote);
+          }
+          if(details.goalsRawType){
+            const countNote = (typeof details.goalsRawCount === 'number')
+              ? ' (count ' + details.goalsRawCount + ')'
+              : '';
+            lines.push('GoalInfo raw: ' + details.goalsRawType + countNote);
+          }
+          if(Array.isArray(details.errors) && details.errors.length){
+            lines.push('Errors (' + details.errors.length + '):');
+            const cap = Math.min(details.errors.length, 5);
+            for(let i = 0; i < cap; i++){
+              lines.push('Error ' + (i + 1) + ': ' + details.errors[i]);
+            }
+            if(details.errors.length > cap){
+              lines.push('...and ' + (details.errors.length - cap) + ' more.');
+            }
+          }
+          if(Array.isArray(details.warnings) && details.warnings.length){
+            lines.push('Warnings (' + details.warnings.length + '):');
+            const cap = Math.min(details.warnings.length, 3);
+            for(let i = 0; i < cap; i++){
+              lines.push('Warning ' + (i + 1) + ': ' + details.warnings[i]);
+            }
+            if(details.warnings.length > cap){
+              lines.push('...and ' + (details.warnings.length - cap) + ' more.');
+            }
+          }
+          return lines.length ? '\n' + lines.join('\n') : '';
+        }
+
         try{
           const result = await checkProofText(code);
           if(result && result.ok){
             setStatus('Coq proof verified (YY)');
-            outputEl.textContent = '[Coq Validation Success]\nProof verified by CoqRunner (' + closure.closer + ').';
+            const detailsText = formatCoqRunnerDetails(result.details);
+            outputEl.textContent = '[Coq Validation Success]\nProof verified by CoqRunner (' + closure.closer + ').' + detailsText;
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
           }
           const err = result && result.error ? result.error : null;
+          const detailsText = formatCoqRunnerDetails(result && result.details ? result.details : null);
           const remainingText = (err && typeof err.remaining === 'number' && err.remaining >= 0)
             ? String(err.remaining)
             : 'unknown';
@@ -732,7 +777,7 @@
             }
           }
           setStatus('Coq soundness failed', true);
-          outputEl.textContent = '[Coq Soundness]\n' + summary;
+          outputEl.textContent = '[Coq Soundness]\n' + summary + detailsText;
           return { status: 'rejected', proof_state: 'YN', reason: summary };
         } catch (err) {
           const errorMsg = err && err.message ? err.message : String(err);

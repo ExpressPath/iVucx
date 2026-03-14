@@ -240,6 +240,87 @@
     }
   }
 
+  function formatLoc(loc) {
+    if (!loc) return '';
+    if (typeof loc === 'string') return loc;
+    if (Array.isArray(loc)) {
+      const parts = loc.map((item) => formatLoc(item)).filter(Boolean);
+      if (parts.length) return parts.join('-');
+    }
+    if (typeof loc === 'object') {
+      const line = loc.line ?? loc.line_nb ?? loc.line_nb;
+      const col = loc.column ?? loc.col ?? loc.bp ?? loc.char_nb ?? loc.char;
+      if (Number.isFinite(line)) {
+        if (Number.isFinite(col)) return String(line) + ':' + String(col);
+        return String(line);
+      }
+    }
+    try {
+      return JSON.stringify(loc);
+    } catch (e) {
+      return String(loc);
+    }
+  }
+
+  function feedbackMsgToText(manager, msg) {
+    if (!msg) return '';
+    try {
+      if (manager && manager.pprint && typeof manager.pprint.pp2Text === 'function') {
+        const text = manager.pprint.pp2Text(msg);
+        if (text) return text;
+      }
+    } catch (e) {}
+    try {
+      return JSON.stringify(msg);
+    } catch (e) {
+      return String(msg);
+    }
+  }
+
+  function collectFeedback(manager) {
+    const out = { errors: [], warnings: [] };
+    const seen = new Set();
+    const sentences = manager && manager.doc && Array.isArray(manager.doc.sentences) ? manager.doc.sentences : [];
+    for (const stm of sentences) {
+      if (!stm || !Array.isArray(stm.feedback)) continue;
+      for (const fb of stm.feedback) {
+        if (!fb || !fb.level) continue;
+        const level = String(fb.level);
+        if (level !== 'Error' && level !== 'Warning') continue;
+        const msgText = feedbackMsgToText(manager, fb.msg);
+        const locText = formatLoc(fb.loc);
+        const full = (locText ? locText + ' ' : '') + (msgText || '(no message)');
+        const key = level + '|' + String(stm.coq_sid || '') + '|' + full;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (level === 'Error') out.errors.push(full);
+        else out.warnings.push(full);
+      }
+    }
+    return out;
+  }
+
+  function buildRunDetails(manager, goalsCount) {
+    const processedCount = manager && manager.doc && Array.isArray(manager.doc.sentences)
+      ? Math.max(0, manager.doc.sentences.length - 1)
+      : null;
+    const last = manager && typeof manager.lastAdded === 'function' ? manager.lastAdded() : null;
+    const goalRaw = manager ? manager.__coqRunnerLastGoals : null;
+    const goalInfoSeen = !!(manager && manager.__coqRunnerGoalInfoSeen);
+    const details = {
+      processedCount,
+      lastSid: last && last.coq_sid ? last.coq_sid : null,
+      goalInfoSeen,
+      goalInfoEmpty: goalInfoSeen && (goalRaw === null || goalRaw === undefined),
+      goalsRawType: goalRaw === null ? 'null' : Array.isArray(goalRaw) ? 'array' : typeof goalRaw,
+      goalsRawCount: typeof goalsCount === 'number' ? goalsCount : null
+    };
+    const feedback = collectFeedback(manager);
+    if (feedback.errors.length) details.errors = feedback.errors;
+    if (feedback.warnings.length) details.warnings = feedback.warnings;
+    return details;
+  }
+
   async function ensureJsCoq(opts = {}) {
     if (cache.manager && findJsCoqGlobal()) {
       return { manager: cache.manager, basePath: cache.basePath };
@@ -272,6 +353,7 @@
               prelaunch: true,
               prelude: true,
               implicit_libs: true,
+              debug: false,
               init_pkgs: ['init'],
               all_pkgs: ['coq'],
               show: false,
@@ -488,8 +570,10 @@
       }
 
       if (!advancedAny && /\S/.test(String(text || ''))) {
+        const details = buildRunDetails(manager, null);
         return {
           ok: false,
+          details,
           error: {
             remaining: -1,
             summaries: ['No Coq statements were processed (check for missing periods).']
@@ -509,10 +593,13 @@
         manager.__coqRunnerGoalInfoSeen
       );
 
+      const details = buildRunDetails(manager, goalsCount);
+
       if (manager.error && manager.error.length > 0) {
         const msg = extractCoqError(manager);
         return {
           ok: false,
+          details,
           error: {
             remaining: typeof goalsCount === 'number' ? goalsCount : -1,
             summaries: [msg]
@@ -521,9 +608,10 @@
       }
 
       if (typeof goalsCount === 'number') {
-        if (goalsCount === 0) return { ok: true };
+        if (goalsCount === 0) return { ok: true, details };
         return {
           ok: false,
+          details,
           error: {
             remaining: goalsCount,
             summaries: ['Remaining goals: ' + goalsCount]
@@ -533,6 +621,7 @@
 
       return {
         ok: false,
+        details,
         error: {
           remaining: -1,
           summaries: [
