@@ -129,11 +129,16 @@
         const found = findJsCoqGlobal();
         if (!found) throw new Error('no jsCoq global after loading bundle');
         window.jsCoq = found.lib; // normalize
+        
+        
         // init
+        const api = window.jsCoq.JsCoq || window.jsCoq;
         if (typeof window.jsCoq.init !== 'function') {
           throw new Error('jsCoq found but no init()');
         }
-        cache.sid = window.jsCoq.init({ base_path_: basePath, init_pkgs: ['init'], all_pkgs: true });
+        cache.sid = api.init({ base_path_: basePath, init_pkgs: ['init'], all_pkgs: true });
+        
+        
         cache.basePath = basePath;
         return { jsCoq: window.jsCoq, sid: cache.sid, basePath };
       })();
