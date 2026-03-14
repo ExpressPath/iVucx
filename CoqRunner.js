@@ -526,8 +526,7 @@
     }
 
     manager.__coqRunnerFeedback = [];
-
-    try { coq.cancel(2); } catch (e) {}
+    await resetManagerDoc(manager, timeoutMs);
 
     const sentences = splitCoqSentences(text);
     let sid = 2;
@@ -930,7 +929,7 @@
       if (manager.error && Array.isArray(manager.error)) manager.error.length = 0;
 
       const docName = 'Main_' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.v';
-      resetManagerDoc(manager);
+      await resetManagerDoc(manager, timeoutMs);
       manager.provider.load(String(text || ''), docName);
       if (typeof manager.provider.focus === 'function') manager.provider.focus();
 
@@ -989,6 +988,7 @@
             const fb = fallback.feedback;
             const fallbackDetails = fallback.details;
             if (fb.errors.length > 0) {
+              markRestart(manager);
               return {
                 ok: false,
                 details: fallbackDetails,
@@ -1054,6 +1054,7 @@
       const details = buildRunDetails(manager, goalsCount);
 
       if (manager.error && manager.error.length > 0) {
+        markRestart(manager);
         const msg = extractCoqError(manager);
         return {
           ok: false,
@@ -1089,20 +1090,43 @@
           ]
         }
       };
+    } catch (err) {
+      markRestart(manager);
+      throw err;
     } finally {
       releaseLock();
     }
   }
 
-  function resetManagerDoc(manager) {
+  function markRestart(manager) {
+    if (manager) manager.__coqRunnerNeedsRestart = true;
+  }
+
+  function hasBusySentences(manager) {
+    if (!manager || !manager.doc || !Array.isArray(manager.doc.sentences)) return false;
+    return manager.doc.sentences.some((stm) => {
+      if (!stm || !stm.phase) return false;
+      return stm.phase === 'pending' || stm.phase === 'adding' || stm.phase === 'added' || stm.phase === 'processing';
+    });
+  }
+
+  async function resetManagerDoc(manager, timeoutMs) {
+    const needsRestart = !!(manager && manager.__coqRunnerNeedsRestart);
+    if (needsRestart && manager && manager.coq && typeof manager.coq.restart === 'function') {
+      try { await manager.coq.restart(); } catch (e) {}
+      try { await waitForManagerReady(manager, Math.min(15000, timeoutMs || 15000)); } catch (e) {}
+    } else {
+      try {
+        if (manager && manager.coq && typeof manager.coq.cancel === 'function' && hasBusySentences(manager)) {
+          manager.coq.cancel(2);
+          await sleep(50);
+        }
+      } catch (e) {}
+    }
+
     try {
       if (manager && manager.provider && typeof manager.provider.retract === 'function') {
         manager.provider.retract();
-      }
-    } catch (e) {}
-    try {
-      if (manager && manager.coq && typeof manager.coq.cancel === 'function') {
-        manager.coq.cancel(2);
       }
     } catch (e) {}
 
@@ -1118,6 +1142,7 @@
     try {
       if (manager && Array.isArray(manager.error)) manager.error.length = 0;
     } catch (e) {}
+    if (manager) manager.__coqRunnerNeedsRestart = false;
   }
 
   CoqRunner.checkProofText = checkProofText;
