@@ -112,8 +112,8 @@
           try {
             await loadBundle(c);
 
-            let basePath = c.replace(/\/?[^/]*$/, '');
-            if (!basePath.endsWith('/')) basePath += '/';
+            const baseUrl = new URL(c, window.location.href);
+            let basePath = baseUrl.href.replace(/\/?[^/]*$/, '/');
 
             const found = findJsCoqGlobal();
             if (!found) throw new Error('no jsCoq global after loading bundle');
