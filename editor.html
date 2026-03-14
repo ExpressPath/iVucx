@@ -287,6 +287,20 @@
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
   <script src="CoqRunner.js"></script>
+
+  <!-- ↓ ここを追加（CoqRunner のメソッドをグローバル関数に束ねる） -->
+  <script>
+    // 最小ラッパー：editor が期待する checkProofText を定義する
+    if (typeof window.checkProofText !== 'function') {
+      window.checkProofText = async function(text, opts) {
+        if (!window.CoqRunner || typeof window.CoqRunner.checkProofText !== 'function') {
+          throw new Error('CoqRunner not loaded');
+        }
+        return await window.CoqRunner.checkProofText(text, opts);
+      };
+    }
+  </script>
+
   <script>
     (function(){
       const INIT_STORAGE_KEY = 'ivucxEditorInit';
