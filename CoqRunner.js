@@ -215,6 +215,42 @@
     return out;
   }
 
+  function countGoalsFromResponse(res) {
+    if (res === null || res === undefined) return null;
+    if (typeof res === 'string') {
+      const parsed = parseGoalsFromText(res);
+      return parsed && typeof parsed.remaining === 'number' ? parsed.remaining : null;
+    }
+    if (Array.isArray(res)) {
+      if (res.length === 0) return 0;
+      const first = res[0];
+      if (first && typeof first === 'object') {
+        if ('goal' in first || 'hyp' in first || 'hyps' in first || 'type' in first) return res.length;
+      }
+      for (const item of res) {
+        const nested = countGoalsFromResponse(item);
+        if (nested !== null) return nested;
+      }
+      return null;
+    }
+    if (typeof res === 'object') {
+      if (Array.isArray(res.goals)) return res.goals.length;
+      if (res.goals && typeof res.goals === 'object') {
+        const nestedGoals = countGoalsFromResponse(res.goals);
+        if (nestedGoals !== null) return nestedGoals;
+      }
+      if (Array.isArray(res.fg)) return res.fg.length;
+      if (Array.isArray(res.fg_goals)) return res.fg_goals.length;
+      if (Array.isArray(res.bg)) return res.bg.length;
+      if (Array.isArray(res.bg_goals)) return res.bg_goals.length;
+      if (Array.isArray(res.shelved)) return res.shelved.length;
+      if (Array.isArray(res.given_up)) return res.given_up.length;
+      if (Array.isArray(res.givenUp)) return res.givenUp.length;
+      if (typeof res.goals === 'number' && Number.isFinite(res.goals)) return res.goals;
+    }
+    return null;
+  }
+
   // safe getter for jsCoq handlers (may be undefined)
   function jsCoQ_safe(jsCoqObj, prop) {
     try { return jsCoqObj && jsCoqObj[prop]; } catch (e) { return undefined; }
@@ -271,12 +307,14 @@
         try {
           const goalsFn = runtime.goals || (runtime.JsCoq && runtime.JsCoq.goals) || (window.jsCoq && window.jsCoq.goals);
           if (typeof goalsFn === 'function') {
-            const g = goalsFn();
-            if (g && Array.isArray(g.goals)) {
-              const rem = g.goals.length;
+            const g = await Promise.resolve(goalsFn());
+            const rem = countGoalsFromResponse(g);
+            if (typeof rem === 'number') {
               if (rem === lastRemaining) stableCount++; else { lastRemaining = rem; stableCount = 0; }
               if (stableCount >= 1) {
-                const summaries = g.goals.map(x => (typeof x === 'string' ? x : JSON.stringify(x)).slice(0, 400));
+                const summaries = (g && Array.isArray(g.goals))
+                  ? g.goals.map(x => (typeof x === 'string' ? x : JSON.stringify(x)).slice(0, 400))
+                  : captured.slice(-6);
                 if (rem === 0 && !errorSeen && !admittedSeen) return { ok: true };
                 return { ok: false, error: { remaining: rem, summaries, raw: captured.slice() } };
               }
@@ -290,16 +328,19 @@
         if (finishedFlag) {
           const all = captured.join('\n\n');
           const parsed = parseGoalsFromText(all);
-          const rem = parsed && typeof parsed.remaining === 'number' ? parsed.remaining : (admittedSeen ? 0 : null);
+          const rem = parsed && typeof parsed.remaining === 'number'
+            ? parsed.remaining
+            : (admittedSeen ? 0 : null);
           const summaries = parsed ? parsed.summaries : captured.slice(-6);
           if (rem === 0 && !errorSeen && !admittedSeen) return { ok: true };
-          return { ok: false, error: { remaining: rem, summaries, raw: captured.slice() } };
+          return { ok: false, error: { remaining: (typeof rem === 'number' ? rem : -1), summaries, raw: captured.slice() } };
         }
 
         // 3) timeout
         if (Date.now() - start > timeoutMs) {
           const parsed = parseGoalsFromText(captured.join('\n\n'));
-          return { ok: false, error: { remaining: parsed ? parsed.remaining : lastRemaining, summaries: captured.slice(-6), raw: captured.slice(), timeout: true } };
+          const rem = parsed && typeof parsed.remaining === 'number' ? parsed.remaining : lastRemaining;
+          return { ok: false, error: { remaining: (typeof rem === 'number' ? rem : -1), summaries: captured.slice(-6), raw: captured.slice(), timeout: true } };
         }
 
         await new Promise(r => setTimeout(r, pollMs));

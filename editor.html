@@ -286,23 +286,7 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
-  <script type="module" src="./jscoq/jscoq.js"></script>
   <script src="CoqRunner.js"></script>
-
-
-  <!-- ↓ ここを追加（CoqRunner のメソッドをグローバル関数に束ねる） -->
-  <script>
-    // 最小ラッパー：editor が期待する checkProofText を定義する
-    if (typeof window.checkProofText !== 'function') {
-      window.checkProofText = async function(text, opts) {
-        if (!window.CoqRunner || typeof window.CoqRunner.checkProofText !== 'function') {
-          throw new Error('CoqRunner not loaded');
-        }
-        return await window.CoqRunner.checkProofText(text, opts);
-      };
-    }
-  </script>
-
   <script>
     (function(){
       const INIT_STORAGE_KEY = 'ivucxEditorInit';
@@ -715,13 +699,14 @@
 
         const soundnessIssue = findCoqUnsoundToken(code);
         if(soundnessIssue){
+          const summary = soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ') (remaining goals: unknown).';
           setStatus('Coq soundness failed', true);
-          outputEl.textContent = '[Coq Soundness]\n' + soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ')';
+          outputEl.textContent = '[Coq Soundness]\n' + summary;
           return { status: 'rejected', proof_state: 'YN', reason: soundnessIssue.message };
         }
 
         if(typeof checkProofText !== 'function'){
-          const summary = 'CoqRunner.js is not available.';
+          const summary = 'CoqRunner.js is not available (remaining goals: unknown).';
           setStatus('Coq soundness failed', true);
           outputEl.textContent = '[Coq Soundness]\n' + summary;
           return { status: 'error', proof_state: 'YN', reason: summary };
@@ -735,14 +720,15 @@
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
           }
           const err = result && result.error ? result.error : null;
-          let summary = 'Coq proof validation failed.';
+          const remainingText = (err && typeof err.remaining === 'number' && err.remaining >= 0)
+            ? String(err.remaining)
+            : 'unknown';
+          let summary = 'CoqRunner failed (remaining goals: ' + remainingText + ').';
           if(err){
             if(err.timeout){
-              summary = 'CoqRunner timed out while checking the proof.';
-            } else if(typeof err.remaining === "number"){
-              summary = 'Coq proof not complete (remaining goals: ' + err.remaining + ').';
+              summary = 'CoqRunner timed out (remaining goals: ' + remainingText + ').';
             } else if(Array.isArray(err.summaries) && err.summaries.length > 0){
-              summary = 'CoqRunner failed: ' + err.summaries.join(' | ');
+              summary = 'CoqRunner failed (remaining goals: ' + remainingText + '): ' + err.summaries.join(' | ');
             }
           }
           setStatus('Coq soundness failed', true);
@@ -750,7 +736,7 @@
           return { status: 'rejected', proof_state: 'YN', reason: summary };
         } catch (err) {
           const errorMsg = err && err.message ? err.message : String(err);
-          const summary = 'CoqRunner error: ' + errorMsg;
+          const summary = 'CoqRunner error: ' + errorMsg + ' (remaining goals: unknown).';
           setStatus('Coq soundness failed', true);
           outputEl.textContent = '[Coq Soundness]\n' + summary;
           return { status: 'error', proof_state: 'YN', reason: summary };
@@ -839,17 +825,17 @@
           }
           if(closure.proofState === 'NY'){
             setStatus('Lean proof accepted (NY)');
-            outputEl.textContent = '[Lean Validation Success]\n証明�E ' + closure.closer + ' を含むため暫定受け�EれでぁE(NY状慁E';
+            outputEl.textContent = '[Lean Validation Success]\n險ｼ譏趣ｿｽE ' + closure.closer + ' 繧貞性繧縺溘ａ證ｫ螳壼女縺托ｿｽE繧後〒縺・(NY迥ｶ諷・';
             return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
           }
 
           setStatus('Lean proof verified (YY)');
-          outputEl.textContent = '[Lean Validation Success]\nLean 4でエラーなく検証できました (YY状慁E';
+          outputEl.textContent = '[Lean Validation Success]\nLean 4縺ｧ繧ｨ繝ｩ繝ｼ縺ｪ縺乗､懆ｨｼ縺ｧ縺阪∪縺励◆ (YY迥ｶ諷・';
           return { status: 'allowed', proof_state: 'YY', reason: 'Lean 4 verified' };
         }catch(err){
           const errorMsg = err && err.message ? err.message : String(err);
           setStatus('Lean validation failed', true);
-          outputEl.textContent = '[Lean Validation]\nLean 4実行エラー:\n' + errorMsg;
+          outputEl.textContent = '[Lean Validation]\nLean 4螳溯｡後お繝ｩ繝ｼ:\n' + errorMsg;
           return { status: 'error', proof_state: 'NN', reason: 'Lean 4 execution error: ' + errorMsg };
         }
       }
@@ -1953,43 +1939,6 @@
           running = false;
           runBtn.disabled = false;
         }
-      }
-
-      function formatRunResponse(data){
-        if(typeof data === 'string') return data;
-        if(!data || typeof data !== 'object') return String(data);
-
-        const sections = [];
-
-        if(typeof data.stdout === 'string' && data.stdout.length > 0){
-          sections.push('[stdout]\n' + data.stdout);
-        }
-
-        if(typeof data.stderr === 'string' && data.stderr.length > 0){
-          sections.push('[stderr]\n' + data.stderr);
-        }
-
-        if(Array.isArray(data.diagnostics) && data.diagnostics.length > 0){
-          const diagnosticLines = data.diagnostics.map(function(item, index){
-            if(typeof item === 'string') return (index + 1) + '. ' + item;
-            const file = item.file ? item.file + ':' : '';
-            const line = item.line ? String(item.line) : '?';
-            const col = item.column ? String(item.column) : '?';
-            const message = item.message || JSON.stringify(item);
-            return (index + 1) + '. ' + file + line + ':' + col + ' ' + message;
-          });
-          sections.push('[diagnostics]\n' + diagnosticLines.join('\n'));
-        }
-
-        if(typeof data.result === 'string' && data.result.length > 0){
-          sections.push('[result]\n' + data.result);
-        }
-
-        if(sections.length === 0){
-          sections.push(JSON.stringify(data, null, 2));
-        }
-
-        return sections.join('\n\n');
       }
 
       function defineEditorTheme(monaco){
