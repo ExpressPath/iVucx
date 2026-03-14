@@ -777,6 +777,15 @@
               }
             }
           }
+          if(details.fallbackUsed){
+            lines.push('Fallback tokenizer: yes');
+            if(typeof details.fallbackSentenceCount === 'number'){
+              lines.push('Fallback sentences: ' + details.fallbackSentenceCount);
+            }
+            if(typeof details.fallbackExecutedCount === 'number'){
+              lines.push('Fallback executed: ' + details.fallbackExecutedCount);
+            }
+          }
           if(Array.isArray(details.errors) && details.errors.length){
             lines.push('Errors (' + details.errors.length + '):');
             const cap = Math.min(details.errors.length, 5);

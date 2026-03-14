@@ -240,6 +240,21 @@
     }
   }
 
+  function attachFeedbackSpy(manager) {
+    if (manager.__coqRunnerFeedbackSpy) return;
+    manager.__coqRunnerFeedbackSpy = true;
+    manager.__coqRunnerFeedback = [];
+    if (manager.coq && Array.isArray(manager.coq.observers)) {
+      manager.coq.observers.push({
+        feedMessage: function (sid, lvl, loc, msg) {
+          const level = Array.isArray(lvl) ? lvl[0] : lvl;
+          if (level !== 'Error' && level !== 'Warning') return;
+          manager.__coqRunnerFeedback.push({ sid, level, loc, msg });
+        }
+      });
+    }
+  }
+
   function formatLoc(loc) {
     if (!loc) return '';
     if (typeof loc === 'string') return loc;
@@ -296,6 +311,20 @@
         if (level === 'Error') out.errors.push(full);
         else out.warnings.push(full);
       }
+    }
+    const extra = manager && Array.isArray(manager.__coqRunnerFeedback) ? manager.__coqRunnerFeedback : [];
+    for (const fb of extra) {
+      if (!fb || !fb.level) continue;
+      const level = String(fb.level);
+      if (level !== 'Error' && level !== 'Warning') continue;
+      const msgText = feedbackMsgToText(manager, fb.msg);
+      const locText = formatLoc(fb.loc);
+      const full = (locText ? locText + ' ' : '') + (msgText || '(no message)');
+      const key = level + '|' + String(fb.sid || '') + '|' + full;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (level === 'Error') out.errors.push(full);
+      else out.warnings.push(full);
     }
     return out;
   }
@@ -362,6 +391,147 @@
       commentDepth: commentScan.depth,
       extraCommentClosers: commentScan.extraClose
     };
+  }
+
+  function splitCoqSentences(text) {
+    const src = String(text || '');
+    const out = [];
+    let i = 0;
+    let start = 0;
+    let depth = 0;
+    let inString = false;
+    let lineSawNonSpace = false;
+
+    const pushSlice = (from, to) => {
+      const slice = src.slice(from, to);
+      if (/\S/.test(slice)) out.push(slice);
+    };
+
+    while (i < src.length) {
+      const ch = src[i];
+      const next = i + 1 < src.length ? src[i + 1] : '';
+
+      if (ch === '\n') {
+        lineSawNonSpace = false;
+        i += 1;
+        continue;
+      }
+
+      if (inString) {
+        if (ch === '"' && src[i - 1] !== '\\') inString = false;
+        i += 1;
+        continue;
+      }
+
+      if (depth > 0) {
+        if (ch === '(' && next === '*') {
+          depth += 1;
+          i += 2;
+          continue;
+        }
+        if (ch === '*' && next === ')') {
+          depth -= 1;
+          i += 2;
+          continue;
+        }
+        i += 1;
+        continue;
+      }
+
+      if (!lineSawNonSpace) {
+        if (ch === ' ' || ch === '\t' || ch === '\r') {
+          i += 1;
+          continue;
+        }
+        lineSawNonSpace = true;
+        if (ch === '-' || ch === '+' || ch === '*' || ch === '{' || ch === '}') {
+          // Flush any pending sentence before the bullet.
+          if (i > start) pushSlice(start, i);
+          let j = i;
+          if (ch === '{' || ch === '}') {
+            j = i + 1;
+          } else {
+            while (j < src.length && (src[j] === '-' || src[j] === '+' || src[j] === '*')) j++;
+          }
+          pushSlice(i, j);
+          start = j;
+          i = j;
+          continue;
+        }
+      }
+
+      if (ch === '"') {
+        inString = true;
+        i += 1;
+        continue;
+      }
+
+      if (ch === '(' && next === '*') {
+        depth = 1;
+        i += 2;
+        continue;
+      }
+
+      if (ch === '.') {
+        const after = i + 1 < src.length ? src[i + 1] : '';
+        if (after === '' || /\s/.test(after)) {
+          pushSlice(start, i + 1);
+          start = i + 1;
+          i += 1;
+          continue;
+        }
+      }
+
+      i += 1;
+    }
+
+    return out;
+  }
+
+  async function execSentencesFallback(text, manager, timeoutMs) {
+    const coq = manager && manager.coq;
+    if (!coq || typeof coq.add !== 'function' || typeof coq.execPromise !== 'function') {
+      throw new Error('jsCoq worker is unavailable for fallback execution');
+    }
+
+    manager.__coqRunnerFeedback = [];
+
+    try { coq.cancel(2); } catch (e) {}
+
+    const sentences = splitCoqSentences(text);
+    let sid = 2;
+    let executed = 0;
+    for (const sentence of sentences) {
+      if (!/\S/.test(sentence)) continue;
+      coq.add(1, sid, sentence);
+      const execP = coq.execPromise(sid);
+      await Promise.race([
+        execP,
+        sleep(timeoutMs).then(() => { throw new Error('jsCoq execution timeout'); })
+      ]);
+      executed += 1;
+      const feedback = collectFeedback(manager);
+      if (feedback.errors.length > 0) break;
+      sid += 1;
+    }
+
+    const lastSid = sid - 1;
+    if (lastSid >= 2 && typeof coq.goals === 'function') {
+      const goalRequestAt = Date.now();
+      coq.goals(lastSid);
+      await waitForGoalsUpdate(manager, goalRequestAt, 2000);
+    }
+
+    const goalsCount = countGoalsFromResponse(
+      manager.__coqRunnerLastGoals,
+      manager.__coqRunnerGoalInfoSeen
+    );
+    const feedback = collectFeedback(manager);
+    const details = buildRunDetails(manager, goalsCount);
+    details.fallbackUsed = true;
+    details.fallbackSentenceCount = sentences.length;
+    details.fallbackExecutedCount = executed;
+    return { goalsCount, feedback, details };
   }
 
   function scanCoqComments(content) {
@@ -689,6 +859,7 @@
 
     const { manager } = await ensureJsCoq(opts);
     attachGoalSpy(manager);
+    attachFeedbackSpy(manager);
     await acquireLock();
 
     try {
@@ -762,6 +933,48 @@
         if (details.input.linesEndingWithPeriod === 0 && details.input.asciiPeriodCount > 0) {
           hints.push('No line ends with "."; periods may only appear inside identifiers or numbers.');
         }
+
+        const tokenMissing = details.tokenSummary &&
+          details.tokenSummary.statementend === 0 &&
+          details.tokenSummary.coqBullet === 0 &&
+          details.tokenSummary.brace === 0 &&
+          details.tokenSummary.comment === 0 &&
+          details.tokenSummary.nullType > 0;
+
+        if (tokenMissing) {
+          try {
+            const fallback = await execSentencesFallback(text, manager, timeoutMs);
+            const goalsCount = fallback.goalsCount;
+            const fb = fallback.feedback;
+            const fallbackDetails = fallback.details;
+            if (fb.errors.length > 0) {
+              return {
+                ok: false,
+                details: fallbackDetails,
+                error: {
+                  remaining: typeof goalsCount === 'number' ? goalsCount : -1,
+                  summaries: fb.errors
+                }
+              };
+            }
+            if (typeof goalsCount === 'number' && goalsCount === 0) {
+              return { ok: true, details: fallbackDetails };
+            }
+            if (typeof goalsCount === 'number') {
+              return {
+                ok: false,
+                details: fallbackDetails,
+                error: {
+                  remaining: goalsCount,
+                  summaries: ['Remaining goals: ' + goalsCount]
+                }
+              };
+            }
+          } catch (e) {
+            hints.push('Fallback tokenizer failed: ' + (e && e.message ? e.message : String(e)));
+          }
+        }
+
         if (details.tokenSummary) {
           if (details.tokenSummary.statementend === 0 && details.tokenSummary.coqBullet === 0) {
             if (details.tokenSummary.nullType > 0 && details.tokenSummary.comment === 0) {
@@ -772,6 +985,7 @@
             }
           }
         }
+
         return {
           ok: false,
           details,
