@@ -113,6 +113,45 @@
     return absUrl;
   }
 
+  async function checkUrlExists(url) {
+    try {
+      const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+      if (res.ok) return true;
+      if (res.status === 405 || res.status === 501) {
+        const res2 = await fetch(url, { method: 'GET', cache: 'no-store' });
+        return res2.ok;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function pickBackend(basePath) {
+    const jsWorker = new URL('backend/jsoo/jscoq_worker.bc.js', basePath).href;
+    const waWorker = new URL('dist/wacoq_worker.js', basePath).href;
+    const waBc = new URL('backend/wasm/wacoq_worker.bc', basePath).href;
+
+    const [jsOk, waOk, waBcOk] = await Promise.all([
+      checkUrlExists(jsWorker),
+      checkUrlExists(waWorker),
+      checkUrlExists(waBc)
+    ]);
+
+    if (waOk && waBcOk) {
+      return { backend: 'wa' };
+    }
+    if (jsOk) {
+      return { backend: 'js' };
+    }
+
+    const missing = [];
+    if (!jsOk) missing.push(jsWorker);
+    if (!waOk) missing.push(waWorker);
+    if (!waBcOk) missing.push(waBc);
+    throw new Error('Missing jsCoq assets: ' + missing.join(', '));
+  }
+
   function attachGoalSpy(manager) {
     if (manager.__coqRunnerGoalSpy) return;
     if (typeof manager.coqGoalInfo !== 'function') return;
@@ -148,9 +187,11 @@
             const api = found.lib;
             ensureRunnerDom();
 
+            const backendChoice = await pickBackend(basePath);
             const options = {
               wrapper_id: WRAPPER_ID,
               base_path: basePath,
+              backend: backendChoice.backend,
               prelaunch: true,
               prelude: true,
               implicit_libs: true,
