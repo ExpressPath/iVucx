@@ -21,6 +21,7 @@
       s.dataset.src = src;
       s.src = src;
       s.async = true;
+      s.type = "module";     // ← これを追加
       s.onload = () => { cache.scriptSrc = src; resolve(src); };
       s.onerror = () => reject(new Error('failed to load script: ' + src));
       document.head.appendChild(s);
