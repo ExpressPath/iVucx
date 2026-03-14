@@ -53,16 +53,45 @@
     return null;
   }
 
-  async function loadBundle(url) {
-    if (cache.scriptUrl === url && findJsCoqGlobal()) return url;
+  function resolveUrl(path) {
+    const bases = [];
+    if (typeof document !== 'undefined' && typeof document.baseURI === 'string' && document.baseURI) {
+      bases.push(document.baseURI);
+    }
+    if (typeof window !== 'undefined' && window.location && typeof window.location.href === 'string' && window.location.href) {
+      bases.push(window.location.href);
+    }
+    if (typeof window !== 'undefined' && window.location && typeof window.location.origin === 'string' && window.location.origin && window.location.origin !== 'null') {
+      bases.push(window.location.origin + '/');
+    }
+
+    for (const base of bases) {
+      try {
+        return new URL(path, base).href;
+      } catch (e) {
+        // try next base
+      }
+    }
 
     try {
-      const mod = await import(/* webpackIgnore: true */ url);
+      return new URL(path).href;
+    } catch (e) {
+      const detail = bases.length ? bases.join(', ') : '(none)';
+      throw new Error('Invalid base URL for ' + path + ' (bases: ' + detail + ')');
+    }
+  }
+
+  async function loadBundle(url) {
+    const absUrl = resolveUrl(url);
+    if (cache.scriptUrl === absUrl && findJsCoqGlobal()) return absUrl;
+
+    try {
+      const mod = await import(/* webpackIgnore: true */ absUrl);
       const candidate = mod.JsCoq || mod.default || mod;
       if (candidate && (typeof candidate.init === 'function' || typeof candidate.start === 'function')) {
         window.jsCoq = candidate;
-        cache.scriptUrl = url;
-        return url;
+        cache.scriptUrl = absUrl;
+        return absUrl;
       }
     } catch (e) {
       // fall back to classic script tag
@@ -70,18 +99,18 @@
 
     await new Promise((resolve, reject) => {
       const s = document.createElement('script');
-      s.src = url;
+      s.src = absUrl;
       s.async = true;
       s.onload = () => resolve();
-      s.onerror = () => reject(new Error('script load error: ' + url));
+      s.onerror = () => reject(new Error('script load error: ' + absUrl));
       document.head.appendChild(s);
     });
 
     const found = findJsCoqGlobal();
-    if (!found) throw new Error('script loaded but no jsCoq global found: ' + url);
+    if (!found) throw new Error('script loaded but no jsCoq global found: ' + absUrl);
     window.jsCoq = found.lib;
-    cache.scriptUrl = url;
-    return url;
+    cache.scriptUrl = absUrl;
+    return absUrl;
   }
 
   function attachGoalSpy(manager) {
@@ -110,10 +139,9 @@
 
         for (const c of candidates) {
           try {
-            await loadBundle(c);
+            const absUrl = await loadBundle(c);
 
-            const baseUrl = new URL(c, window.location.href);
-            let basePath = baseUrl.href.replace(/\/?[^/]*$/, '/');
+            let basePath = absUrl.replace(/\/?[^/]*$/, '/');
 
             const found = findJsCoqGlobal();
             if (!found) throw new Error('no jsCoq global after loading bundle');
