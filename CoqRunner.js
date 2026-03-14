@@ -4,7 +4,7 @@
 
 (function (global) {
   const CoqRunner = {};
-  const cache = { initting: null, manager: null, basePath: null, busy: false, scriptUrl: null };
+  const cache = { initting: null, manager: null, basePath: null, busy: false, scriptUrl: null, jsCoqLib: null };
 
   const WRAPPER_ID = 'coq-runner-wrapper';
   const SNIPPET_ID = 'coq-runner-snippet';
@@ -42,6 +42,9 @@
   }
 
   function findJsCoqGlobal() {
+    if (cache.jsCoqLib && (typeof cache.jsCoqLib.init === 'function' || typeof cache.jsCoqLib.start === 'function')) {
+      return { name: 'cache.jsCoqLib', lib: cache.jsCoqLib };
+    }
     if (window.jsCoq && window.jsCoq.JsCoq && (typeof window.jsCoq.JsCoq.init === 'function' || typeof window.jsCoq.JsCoq.start === 'function')) {
       return { name: 'jsCoq.JsCoq', lib: window.jsCoq.JsCoq };
     }
@@ -86,34 +89,46 @@
     const absUrl = resolveUrl(url);
     if (cache.scriptUrl === absUrl && findJsCoqGlobal()) return absUrl;
 
+    let importErr = null;
     try {
-      const mod = await import(/* webpackIgnore: true */ absUrl);
+      const mod = await withAmdDisabled(async () => {
+        return await import(/* webpackIgnore: true */ absUrl);
+      });
       const candidate = mod.JsCoq || (mod.default && mod.default.JsCoq) || mod.default || mod;
       if (candidate && (typeof candidate.init === 'function' || typeof candidate.start === 'function')) {
+        cache.jsCoqLib = candidate;
         window.jsCoq = candidate;
         cache.scriptUrl = absUrl;
         return absUrl;
       }
     } catch (e) {
-      // fall back to classic script tag
+      importErr = e;
     }
 
-    await new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = absUrl;
-      s.async = true;
-      s.type = 'module';
-      s.crossOrigin = 'anonymous';
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error('script load error: ' + absUrl));
-      document.head.appendChild(s);
-    });
+    if (importErr) {
+      const msg = importErr && importErr.message ? importErr.message : String(importErr);
+      throw new Error('module import failed: ' + msg);
+    }
 
-    const found = findJsCoqGlobal();
-    if (!found) throw new Error('script loaded but no jsCoq global found: ' + absUrl);
-    window.jsCoq = found.lib;
-    cache.scriptUrl = absUrl;
-    return absUrl;
+    throw new Error('module import failed: unknown error');
+  }
+
+  async function withAmdDisabled(fn) {
+    const saved = {
+      define: window.define,
+      require: window.require,
+      requirejs: window.requirejs
+    };
+    try {
+      window.define = undefined;
+      window.require = undefined;
+      window.requirejs = undefined;
+      return await fn();
+    } finally {
+      window.define = saved.define;
+      window.require = saved.require;
+      window.requirejs = saved.requirejs;
+    }
   }
 
   async function checkUrlExists(url) {
