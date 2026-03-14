@@ -256,22 +256,10 @@
     try { if ('onFeedback' in runtime) runtime.onFeedback = capturePayload; } catch (e) {}
 
     try {
-      // send code: adapt to different API names
-      let node;
-      try {
-        // some APIs expose add/edit/commit on runtime, others on a manager object; we try the common ones.
-        const addFn = runtime.add || (runtime.JsCoq && runtime.JsCoq.add) || (window.jsCoq && window.jsCoq.add);
-        const editFn = runtime.edit || (runtime.JsCoq && runtime.JsCoq.edit) || (window.jsCoq && window.jsCoq.edit);
-        const commitFn = runtime.commit || (runtime.JsCoq && runtime.JsCoq.commit) || (window.jsCoq && window.jsCoq.commit);
-
-        if (typeof addFn !== 'function') throw new Error('add() API not found on jsCoq runtime');
-        node = addFn(sid, -1, text);
-
-        if (typeof editFn === 'function') editFn(node);
-        if (typeof commitFn === 'function') commitFn(node);
-      } catch (e) {
-        throw new Error('add/commit failed: ' + (e && e.message ? e.message : String(e)));
-      }
+      // send code: exec/command APIで証明文を送信
+      const execFn = runtime.exec || runtime.command || (runtime.JsCoq && runtime.JsCoq.exec) || (window.jsCoq && window.jsCoq.exec);
+      if (typeof execFn !== 'function') throw new Error('exec() API not found on jsCoq runtime');
+      await execFn(sid, text);
 
       // wait loop: prefer runtime.goals() if available
       const start = Date.now();
