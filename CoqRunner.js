@@ -31,10 +31,7 @@
   async function tryLoadLocalJsCoq() {
     // candidate locations relative to repo root (common layouts)
     const candidates = [
-      './jscoq/jscoq.js',
-      './jscoq-0.17.1/jscoq.js',
-      './jscoq/jscoq-0.17.1/jscoq.js',
-      './jscoq/dist/jscoq.js'
+      "https://cdn.jsdelivr.net/npm/jscoq@0.17.1/dist/jscoq.js"
     ];
     for (const c of candidates) {
       try {
@@ -88,7 +85,7 @@
           }
           return null;
         }
-        
+
         let found = findJsCoqGlobal();
         // wait a short while (max WAIT_MS) for the global to appear (some bundles define it asynchronously)
         const WAIT_MS = 5000;
@@ -99,18 +96,18 @@
           await new Promise(r => setTimeout(r, POLL));
           found = findJsCoqGlobal();
         }
-        
+
         if (!found) {
           // final hint: show some diagnostics in console to help debugging
           console.error('CoqRunner: no jsCoq global found. window keys containing "coq":',
             Object.keys(window).filter(k => k.toLowerCase().includes('coq')));
           throw new Error('jsCoq is not available after loading script: no global with init() found. Check that jscoq.js is the proper bundle.');
         }
-        
+
         // normalize to window.jsCoq so rest of CoqRunner can use it
         window.jsCoq = found.lib;
         console.log('CoqRunner: using jsCoq global name =', found.name);
-        
+
         // now proceed to initialize
         if (typeof window.jsCoq.init !== 'function') {
           throw new Error('jsCoq found but has no init() function');
