@@ -1,4 +1,4 @@
-import * as jsCoq from './dist/frontend/index.js';
+import * as m from './dist/frontend/index.js';
 
-window.jsCoq = jsCoq;
-export default jsCoq;
+export const JsCoq = m.JsCoq;
+export default m;
