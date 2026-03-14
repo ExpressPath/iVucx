@@ -1,18 +1,24 @@
-// CoqRunner.js — robust single-file loader + proof checker
+// CoqRunner.js — improved, copy-paste replace (full file)
 // Usage: await CoqRunner.checkProofText(coqSource [, opts])
 // opts: { timeoutMs, pollMs, candidates }.
-// Place this file in your repo and ensure ./jscoq/... contains the built bundle (jscoq.js + dist/frontend + coq-worker.js).
+// Place this file in your repo. Ensure jsCoq build assets are available under ./jscoq/
+// (e.g. ./jscoq/dist/frontend/index.js and ./jscoq/coq-worker.js), or adjust candidates.
 
 (function (global) {
   const CoqRunner = {};
   const cache = { initting: null, sid: null, basePath: null, busy: false, scriptUrl: null };
 
-  // sensible default candidates (local-first)
+  // Try reasonable local candidates first, then fall back to CDN if needed.
   const DEFAULT_CANDIDATES = [
-    './jscoq/dist/frontend/index.js'
+    './jscoq/dist/frontend/index.js',
+    './jscoq/jscoq.js',
+    './jscoq/package/dist/jscoq.js',
+    './jscoq-0.17.1/dist/jscoq.js',
+    // last resort (network)
+    'https://cdn.jsdelivr.net/npm/jscoq@0.17.1/dist/jscoq.js'
   ];
 
-  // helper: fetch text safely
+  // helper: fetch text safely (returns null on failure)
   async function tryFetchText(url) {
     try {
       const r = await fetch(url, { cache: 'no-store' });
@@ -23,46 +29,86 @@
     }
   }
 
-  // load script: UMD by script tag, module by dynamic import or script[type=module]
-  async function loadBundle(url, asModuleHint) {
-    // if we already loaded this url, resolve
-    if (cache.scriptUrl === url && (window.jsCoq || window.JsCoq || window.JSCoq)) return url;
+  // find any global object with an init/start function
+  function findJsCoqGlobal() {
+    // direct case: wasm/UMD or module placed object at window.jsCoq.JsCoq
+    if (window.jsCoq && window.jsCoq.JsCoq && (typeof window.jsCoq.JsCoq.init === 'function' || typeof window.jsCoq.JsCoq.start === 'function')) {
+      return { name: 'jsCoq.JsCoq', lib: window.jsCoq.JsCoq };
+    }
+    // if a module namespace was assigned directly to window.jsCoq with init/start
+    if (window.jsCoq && (typeof window.jsCoq.init === 'function' || typeof window.jsCoq.start === 'function')) {
+      return { name: 'jsCoq', lib: window.jsCoq };
+    }
 
-    // if the fetched content looks like module (starts with 'export' or contains "export ")
+    try {
+      const keys = Object.keys(window);
+      for (const k of keys) {
+        if (k.toLowerCase().includes('coq')) {
+          const v = window[k];
+          if (v && (typeof v.init === 'function' || typeof v.start === 'function')) return { name: k, lib: v };
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    // known common variants (safety)
+    const variants = ['jsCoq', 'JsCoq', 'JSCoq', 'jscoq'];
+    for (const v of variants) {
+      if (window[v] && (typeof window[v].init === 'function' || typeof window[v].start === 'function')) return { name: v, lib: window[v] };
+      // also if window[v].JsCoq exists
+      if (window[v] && window[v].JsCoq && (typeof window[v].JsCoq.init === 'function' || typeof window[v].JsCoq.start === 'function')) return { name: v + '.JsCoq', lib: window[v].JsCoq };
+    }
+    return null;
+  }
+
+  // loadBundle: detect module vs UMD; load accordingly.
+  async function loadBundle(url, asModuleHint) {
+    if (cache.scriptUrl === url && findJsCoqGlobal()) return url;
+
+    // fetch to decide whether content exists and if it's module-like
     const text = await tryFetchText(url);
     if (text === null) throw new Error('fetch failed: ' + url);
 
-    const looksModule = /^\s*export\s+/i.test(text) || /\bexport\s+\*/.test(text) || asModuleHint;
+    // heuristics for module: import.meta, import(...), import ... from, export ...
+    const looksModule = /\b(import\.meta|import\s*\(|\bfrom\s+['"]|^\s*import\s+|^\s*export\s+)/im.test(text) || asModuleHint;
 
     if (looksModule) {
-      // dynamic import: convert to absolute blob URL to allow CORS-free import
-      try {
-        const blob = new Blob([text], { type: 'text/javascript' });
-        const blobUrl = URL.createObjectURL(blob);
-        const mod = await import(/* webpackIgnore: true */ blobUrl);
-        window.jsCoq = mod;
-        URL.revokeObjectURL(blobUrl);
+      // Preferred: insert <script type="module"> so import.meta and relative imports behave correctly.
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = url;
+        s.type = 'module';
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('module script load error: ' + url));
+        document.head.appendChild(s);
+      });
 
-        // if module exported init or default that has init, normalize it
-        if (mod && typeof mod.init === 'function') {
-          window.jsCoq = mod;
-        } else if (mod && mod.default && typeof mod.default.init === 'function') {
-          window.jsCoq = mod.default;
-        } else {
-          // module may re-export to window internally (check)
-          const found = findJsCoqGlobal();
-          if (!found) {
-            throw new Error('module loaded but no jsCoq export found');
-          }
-          window.jsCoq = found.lib;
-        }
+      // try to find a global created by that module (some bundles export to window)
+      let found = findJsCoqGlobal();
+      if (found) {
+        window.jsCoq = found.lib;
         cache.scriptUrl = url;
         return url;
-      } catch (e) {
-        throw new Error('dynamic import failed: ' + e.message);
       }
+
+      // fallback: try dynamic import of the same URL (works if same-origin & CORS allows)
+      try {
+        const mod = await import(/* webpackIgnore: true */ url);
+        // normalize common shapes
+        const candidate = mod.JsCoq || mod.default || mod;
+        if (candidate && (typeof candidate.init === 'function' || typeof candidate.start === 'function')) {
+          window.jsCoq = candidate;
+          cache.scriptUrl = url;
+          return url;
+        }
+      } catch (e) {
+        // dynamic import failed as fallback; we will throw below
+      }
+
+      // no global or usable export found
+      throw new Error('script loaded but no jsCoq global found: ' + url);
     } else {
-      // UMD path: insert script tag (non-module)
+      // UMD: load as classic script tag
       await new Promise((resolve, reject) => {
         const s = document.createElement('script');
         s.src = url;
@@ -71,7 +117,6 @@
         s.onerror = () => reject(new Error('script load error: ' + url));
         document.head.appendChild(s);
       });
-      // try to find jsCoq global
       const found = findJsCoqGlobal();
       if (!found) throw new Error('script loaded but no jsCoq global found: ' + url);
       window.jsCoq = found.lib;
@@ -80,33 +125,15 @@
     }
   }
 
-  // find any global object with init()
-  function findJsCoqGlobal() {
-
-    if (window.jsCoq && window.jsCoq.JsCoq) {
-      return { name: "jsCoq", lib: window.jsCoq.JsCoq };
-    }
-
-    try {
-      const keys = Object.keys(window);
-      for (const k of keys) {
-        if (k.toLowerCase().includes('coq')) {
-          const v = window[k];
-          if (v && typeof v.init === 'function') return { name: k, lib: v };
-        }
-      }
-    } catch (e) { /* ignore */ }
-    // known variants
-    const variants = ['jsCoq', 'JsCoq', 'JSCoq', 'jscoq'];
-    for (const v of variants) {
-      if (window[v] && typeof window[v].init === 'function') return { name: v, lib: window[v] };
-    }
-    return null;
-  }
-
   // ensure jsCoq loaded & initialized; returns { jsCoq, sid, basePath }
   async function ensureJsCoq(opts = {}) {
-    if (cache.sid && window.jsCoq) return { jsCoq: window.jsCoq, sid: cache.sid, basePath: cache.basePath };
+    if (cache.sid && findJsCoqGlobal()) {
+      // normalize window.jsCoq to the library object that has start/init
+      const f = findJsCoqGlobal();
+      window.jsCoq = f.lib;
+      return { jsCoq: window.jsCoq, sid: cache.sid, basePath: cache.basePath };
+    }
+
     if (!cache.initting) {
       cache.initting = (async () => {
         const candidates = opts.candidates || DEFAULT_CANDIDATES;
@@ -119,27 +146,38 @@
             break;
           } catch (e) {
             lastErr = e;
-            // try next
+            // continue to next candidate
           }
         }
-        if (!chosen) throw new Error('failed to load jsCoq bundle: ' + (lastErr && lastErr.message));
-        // determine basePath from chosen url (strip final filename)
-        let basePath = chosen.replace(/\/?jscoq\.js(\?.*)?$/i, '');
-        if (!basePath || !basePath.endsWith('/')) basePath = basePath + '/';
-        // find global again robustly
+        if (!chosen) throw new Error('failed to load jsCoQ bundle: ' + (lastErr && lastErr.message));
+
+        // base path: use the directory part of the chosen url
+        let basePath = chosen.replace(/\/?[^/]*$/, '');
+        if (!basePath.endsWith('/')) basePath += '/';
+
+        // try to discover the library object again
         const found = findJsCoqGlobal();
         if (!found) throw new Error('no jsCoq global after loading bundle');
-        window.jsCoq = found.lib; // normalize
-        
-        
-        // init
-        const api = window.jsCoq.JsCoq || window.jsCoq;
-        if (typeof api.init !== 'function') {
-          throw new Error('jsCoq found but no init()');
+        // normalize window.jsCoq to the library that exposes init/start/add/goals etc.
+        window.jsCoq = found.lib;
+
+        // api may be in window.jsCoq or nested (some builds expose JsCoq)
+        const api = (window.jsCoq.JsCoq && (typeof window.jsCoq.JsCoq.init === 'function' || typeof window.jsCoq.JsCoq.start === 'function')) ? window.jsCoq.JsCoq : window.jsCoq;
+
+        // check for start/init
+        const starter = api.start || api.init;
+        if (typeof starter !== 'function') {
+          throw new Error('jsCoq found but no start()/init()');
         }
-        cache.sid = (api.start || api.init)({ base_path_: basePath, init_pkgs: ['init'], all_pkgs: true });
-        
-        
+
+        // call starter and store sid (some APIs return a session id, others return an object; keep both)
+        try {
+          cache.sid = starter({ base_path_: basePath, init_pkgs: ['init'], all_pkgs: true });
+        } catch (e) {
+          // some implementations return a Promise
+          cache.sid = await Promise.resolve(starter({ base_path_: basePath, init_pkgs: ['init'], all_pkgs: true }));
+        }
+
         cache.basePath = basePath;
         return { jsCoq: window.jsCoq, sid: cache.sid, basePath };
       })();
@@ -161,7 +199,6 @@
     if (/no more subgoals/i.test(allText)) out.remaining = 0;
     const m = allText.match(/(\d+)\s+(?:subgoals?|goals?)/i);
     if (m) out.remaining = Number(m[1]);
-    // extract snippets around "subgoal" or "Goal"
     const lines = allText.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     for (let i = 0; i < lines.length; i++) {
       const L = lines[i];
@@ -176,6 +213,11 @@
     }
     if (out.summaries.length === 0) out.summaries.push(allText.slice(0, 200));
     return out;
+  }
+
+  // safe getter for jsCoq handlers (may be undefined)
+  function jsCoQ_safe(jsCoqObj, prop) {
+    try { return jsCoqObj && jsCoqObj[prop]; } catch (e) { return undefined; }
   }
 
   // main exported function: checkProofText
@@ -201,36 +243,47 @@
       if (/\b(no more subgoals|proof completed|qed|completed|done)\b/.test(low)) finishedFlag = true;
     }
 
+    // determine the runtime object that exposes add/edit/commit/goals
+    const runtime = (window.jsCoq && window.jsCoq.JsCoq) ? window.jsCoq.JsCoq : window.jsCoq;
+
     // backup handlers
-    const old = { onLog: jsCoQ_safe(jsCoq, 'onLog'), onError: jsCoQ_safe(jsCoq, 'onError'), onMessage: jsCoQ_safe(jsCoq, 'onMessage'), onFeedback: jsCoQ_safe(jsCoq, 'onFeedback') };
+    const old = { onLog: jsCoQ_safe(runtime, 'onLog'), onError: jsCoQ_safe(runtime, 'onError'), onMessage: jsCoQ_safe(runtime, 'onMessage'), onFeedback: jsCoQ_safe(runtime, 'onFeedback') };
+
     // install capture handlers as possible
-    try { if ('onLog' in jsCoq) jsCoq.onLog = capturePayload; } catch (e) {}
-    try { if ('onError' in jsCoq) jsCoq.onError = capturePayload; } catch (e) {}
-    try { if ('onMessage' in jsCoq) jsCoq.onMessage = capturePayload; } catch (e) {}
-    try { if ('onFeedback' in jsCoq) jsCoq.onFeedback = capturePayload; } catch (e) {}
+    try { if ('onLog' in runtime) runtime.onLog = capturePayload; } catch (e) {}
+    try { if ('onError' in runtime) runtime.onError = capturePayload; } catch (e) {}
+    try { if ('onMessage' in runtime) runtime.onMessage = capturePayload; } catch (e) {}
+    try { if ('onFeedback' in runtime) runtime.onFeedback = capturePayload; } catch (e) {}
 
     try {
-      // send code
+      // send code: adapt to different API names
       let node;
       try {
-        node = jsCoq.add(sid, -1, text);
-        if (typeof jsCoq.edit === 'function') jsCoq.edit(node);
-        if (typeof jsCoq.commit === 'function') jsCoq.commit(node);
+        // some APIs expose add/edit/commit on runtime, others on a manager object; we try the common ones.
+        const addFn = runtime.add || (runtime.JsCoq && runtime.JsCoq.add) || (window.jsCoq && window.jsCoq.add);
+        const editFn = runtime.edit || (runtime.JsCoq && runtime.JsCoq.edit) || (window.jsCoq && window.jsCoq.edit);
+        const commitFn = runtime.commit || (runtime.JsCoq && runtime.JsCoq.commit) || (window.jsCoq && window.jsCoq.commit);
+
+        if (typeof addFn !== 'function') throw new Error('add() API not found on jsCoq runtime');
+        node = addFn(sid, -1, text);
+
+        if (typeof editFn === 'function') editFn(node);
+        if (typeof commitFn === 'function') commitFn(node);
       } catch (e) {
-        // immediate add/commit error
         throw new Error('add/commit failed: ' + (e && e.message ? e.message : String(e)));
       }
 
-      // wait loop: prefer jsCoq.goals() if available
+      // wait loop: prefer runtime.goals() if available
       const start = Date.now();
       let lastRemaining = null;
       let stableCount = 0;
 
       while (true) {
-        // 1) precise path: jsCoq.goals()
+        // 1) precise path: goals()
         try {
-          if (typeof jsCoq.goals === 'function') {
-            const g = jsCoq.goals();
+          const goalsFn = runtime.goals || (runtime.JsCoq && runtime.JsCoq.goals) || (window.jsCoq && window.jsCoq.goals);
+          if (typeof goalsFn === 'function') {
+            const g = goalsFn();
             if (g && Array.isArray(g.goals)) {
               const rem = g.goals.length;
               if (rem === lastRemaining) stableCount++; else { lastRemaining = rem; stableCount = 0; }
@@ -266,31 +319,25 @@
 
     } finally {
       // restore handlers
-      try { if ('onLog' in jsCoq) jsCoq.onLog = old.onLog; } catch (e) {}
-      try { if ('onError' in jsCoq) jsCoq.onError = old.onError; } catch (e) {}
-      try { if ('onMessage' in jsCoq) jsCoq.onMessage = old.onMessage; } catch (e) {}
-      try { if ('onFeedback' in jsCoq) jsCoq.onFeedback = old.onFeedback; } catch (e) {}
+      try { if ('onLog' in runtime) runtime.onLog = old.onLog; } catch (e) {}
+      try { if ('onError' in runtime) runtime.onError = old.onError; } catch (e) {}
+      try { if ('onMessage' in runtime) runtime.onMessage = old.onMessage; } catch (e) {}
+      try { if ('onFeedback' in runtime) runtime.onFeedback = old.onFeedback; } catch (e) {}
       releaseLock();
     }
   }
 
-  // safe getter for jsCoq handlers (may be undefined)
-  function jsCoQ_safe(jsCoqObj, prop) {
-    try { return jsCoqObj && jsCoqObj[prop]; } catch (e) { return undefined; }
-  }
-
   CoqRunner.checkProofText = checkProofText;
 
-  // expose convenience global if not present
+  // convenience global
   if (!global.CoqRunner) global.CoqRunner = CoqRunner;
   if (!global.checkProofText) global.checkProofText = async (text, opts) => await CoqRunner.checkProofText(text, opts);
 
 })(window);
 
-/* Example usage (editor.html or console):
+/* Example:
 (async () => {
-  const src = `Theorem t : 1 = 2. Proof. reflexivity. Qed.`;
-  const res = await CoqRunner.checkProofText(src, { timeoutMs: 20000 });
+  const res = await checkProofText(`Theorem t : 1 = 1. Proof. reflexivity. Qed.`);
   console.log(res);
 })();
 */
