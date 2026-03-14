@@ -10,7 +10,6 @@
 
   // Try reasonable local candidates first, then fall back to CDN if needed.
   const DEFAULT_CANDIDATES = [
-    './jscoq/dist/frontend/index.js',
     './jscoq/jscoq.js',
     './jscoq/package/dist/jscoq.js',
     './jscoq-0.17.1/dist/jscoq.js',
@@ -138,48 +137,52 @@
       cache.initting = (async () => {
         const candidates = opts.candidates || DEFAULT_CANDIDATES;
         let lastErr = null;
-        let chosen = null;
         for (const c of candidates) {
           try {
             await loadBundle(c, false);
-            chosen = c;
-            break;
+
+            // base path: use the directory part of the chosen url
+            let basePath = c.replace(/\/?[^/]*$/, '');
+            if (!basePath.endsWith('/')) basePath += '/';
+
+            // try to discover the library object again
+            const found = findJsCoqGlobal();
+            if (!found) throw new Error('no jsCoq global after loading bundle');
+            // normalize window.jsCoq to the library that exposes init/start/add/goals etc.
+            window.jsCoq = found.lib;
+
+            // api may be in window.jsCoq or nested (some builds expose JsCoq)
+            const api = (window.jsCoq.JsCoq && (typeof window.jsCoq.JsCoq.init === 'function' || typeof window.jsCoq.JsCoq.start === 'function')) ? window.jsCoq.JsCoq : window.jsCoq;
+
+            // check for start/init
+            const starter = api.start || api.init;
+            if (typeof starter !== 'function') {
+              throw new Error('jsCoq found but no start()/init()');
+            }
+
+            // call starter and store sid (some APIs return a session id, others return an object; keep both)
+            let sid;
+            try {
+              sid = starter({ base_path_: basePath, init_pkgs: ['init'], all_pkgs: true });
+            } catch (e) {
+              // some implementations return a Promise
+              sid = await Promise.resolve(starter({ base_path_: basePath, init_pkgs: ['init'], all_pkgs: true }));
+            }
+
+            cache.sid = sid;
+            cache.basePath = basePath;
+            cache.scriptUrl = c;
+            return { jsCoq: window.jsCoq, sid: cache.sid, basePath };
           } catch (e) {
             lastErr = e;
+            cache.sid = null;
+            cache.basePath = null;
+            cache.scriptUrl = null;
+            try { delete window.jsCoq; } catch (err) {}
             // continue to next candidate
           }
         }
-        if (!chosen) throw new Error('failed to load jsCoQ bundle: ' + (lastErr && lastErr.message));
-
-        // base path: use the directory part of the chosen url
-        let basePath = chosen.replace(/\/?[^/]*$/, '');
-        if (!basePath.endsWith('/')) basePath += '/';
-
-        // try to discover the library object again
-        const found = findJsCoqGlobal();
-        if (!found) throw new Error('no jsCoq global after loading bundle');
-        // normalize window.jsCoq to the library that exposes init/start/add/goals etc.
-        window.jsCoq = found.lib;
-
-        // api may be in window.jsCoq or nested (some builds expose JsCoq)
-        const api = (window.jsCoq.JsCoq && (typeof window.jsCoq.JsCoq.init === 'function' || typeof window.jsCoq.JsCoq.start === 'function')) ? window.jsCoq.JsCoq : window.jsCoq;
-
-        // check for start/init
-        const starter = api.start || api.init;
-        if (typeof starter !== 'function') {
-          throw new Error('jsCoq found but no start()/init()');
-        }
-
-        // call starter and store sid (some APIs return a session id, others return an object; keep both)
-        try {
-          cache.sid = starter({ base_path_: basePath, init_pkgs: ['init'], all_pkgs: true });
-        } catch (e) {
-          // some implementations return a Promise
-          cache.sid = await Promise.resolve(starter({ base_path_: basePath, init_pkgs: ['init'], all_pkgs: true }));
-        }
-
-        cache.basePath = basePath;
-        return { jsCoq: window.jsCoq, sid: cache.sid, basePath };
+        throw new Error('failed to load jsCoQ bundle: ' + (lastErr && lastErr.message));
       })();
     }
     return cache.initting;
