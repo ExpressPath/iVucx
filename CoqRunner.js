@@ -86,6 +86,11 @@
 
   // find any global object with init()
   function findJsCoqGlobal() {
+
+    if (window.jsCoq && window.jsCoq.JsCoq) {
+      return { name: "jsCoq", lib: window.jsCoq.JsCoq };
+    }
+
     try {
       const keys = Object.keys(window);
       for (const k of keys) {
