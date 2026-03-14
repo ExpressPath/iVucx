@@ -152,6 +152,67 @@
     throw new Error('Missing jsCoq assets: ' + missing.join(', '));
   }
 
+  async function resolveAssetRoot(scriptBase) {
+    const candidates = [
+      scriptBase.endsWith('/') ? scriptBase : scriptBase + '/',
+      (scriptBase.endsWith('/') ? scriptBase : scriptBase + '/') + 'package/'
+    ];
+
+    const tried = [];
+    for (const base of candidates) {
+      const baseAbs = resolveUrl(base);
+      const jsWorker = new URL('backend/jsoo/jscoq_worker.bc.js', baseAbs).href;
+      const splash = new URL('frontend/classic/images/jscoq-splash.png', baseAbs).href;
+      const quickHelp = new URL('docs/quick-help.html', baseAbs).href;
+
+      const [jsOk, splashOk, quickOk] = await Promise.all([
+        checkUrlExists(jsWorker),
+        checkUrlExists(splash),
+        checkUrlExists(quickHelp)
+      ]);
+
+      tried.push({
+        base: baseAbs,
+        jsWorker,
+        splash,
+        quickHelp,
+        jsOk,
+        splashOk,
+        quickOk
+      });
+
+      if (jsOk && splashOk) {
+        return { basePath: baseAbs };
+      }
+    }
+
+    const detail = tried.map((t) => {
+      return t.base + ' -> ' +
+        'jsWorker=' + (t.jsOk ? 'ok' : 'missing') + ', ' +
+        'splash=' + (t.splashOk ? 'ok' : 'missing') + ', ' +
+        'quickHelp=' + (t.quickOk ? 'ok' : 'missing');
+    }).join(' | ');
+
+    throw new Error('Missing jsCoq assets for any base path. Tried: ' + detail);
+  }
+
+  async function resolvePkgPath(scriptBase, assetBase) {
+    const candidates = [
+      (scriptBase.endsWith('/') ? scriptBase : scriptBase + '/') + 'coq-pkgs/',
+      (assetBase.endsWith('/') ? assetBase : assetBase + '/') + 'coq-pkgs/'
+    ];
+
+    for (const base of candidates) {
+      const baseAbs = resolveUrl(base);
+      const coqJson = new URL('coq.json', baseAbs).href;
+      if (await checkUrlExists(coqJson)) {
+        return baseAbs;
+      }
+    }
+
+    return null;
+  }
+
   function attachGoalSpy(manager) {
     if (manager.__coqRunnerGoalSpy) return;
     if (typeof manager.coqGoalInfo !== 'function') return;
@@ -180,13 +241,16 @@
           try {
             const absUrl = await loadBundle(c);
 
-            let basePath = absUrl.replace(/\/?[^/]*$/, '/');
+            let scriptBase = absUrl.replace(/\/?[^/]*$/, '/');
 
             const found = findJsCoqGlobal();
             if (!found) throw new Error('no jsCoq global after loading bundle');
             const api = found.lib;
             ensureRunnerDom();
 
+            const assetRoot = await resolveAssetRoot(scriptBase);
+            const basePath = assetRoot.basePath;
+            const pkgPath = await resolvePkgPath(scriptBase, basePath);
             const backendChoice = await pickBackend(basePath);
             const options = {
               wrapper_id: WRAPPER_ID,
@@ -201,6 +265,9 @@
               focus: false,
               replace: false
             };
+            if (pkgPath) {
+              options.pkg_path = pkgPath;
+            }
 
             let manager;
             if (typeof api.start === 'function') {
