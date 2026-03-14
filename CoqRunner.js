@@ -129,11 +129,14 @@
 
   async function pickBackend(basePath) {
     const jsWorker = new URL('backend/jsoo/jscoq_worker.bc.js', basePath).href;
+    const jsOk = await checkUrlExists(jsWorker);
+    if (jsOk) {
+      return { backend: 'js' };
+    }
+
     const waWorker = new URL('dist/wacoq_worker.js', basePath).href;
     const waBc = new URL('backend/wasm/wacoq_worker.bc', basePath).href;
-
-    const [jsOk, waOk, waBcOk] = await Promise.all([
-      checkUrlExists(jsWorker),
+    const [waOk, waBcOk] = await Promise.all([
       checkUrlExists(waWorker),
       checkUrlExists(waBc)
     ]);
@@ -141,47 +144,40 @@
     if (waOk && waBcOk) {
       return { backend: 'wa' };
     }
-    if (jsOk) {
-      return { backend: 'js' };
-    }
 
     const missing = [];
-    if (!jsOk) missing.push(jsWorker);
+    missing.push(jsWorker);
     if (!waOk) missing.push(waWorker);
     if (!waBcOk) missing.push(waBc);
     throw new Error('Missing jsCoq assets: ' + missing.join(', '));
   }
 
   async function resolveAssetRoot(scriptBase) {
+    const normalized = scriptBase.endsWith('/') ? scriptBase : scriptBase + '/';
     const candidates = [
-      scriptBase.endsWith('/') ? scriptBase : scriptBase + '/',
-      (scriptBase.endsWith('/') ? scriptBase : scriptBase + '/') + 'package/'
+      { base: normalized + 'package/', requireImages: true },
+      { base: normalized, requireImages: false }
     ];
 
     const tried = [];
-    for (const base of candidates) {
-      const baseAbs = resolveUrl(base);
+    for (const entry of candidates) {
+      const baseAbs = resolveUrl(entry.base);
       const jsWorker = new URL('backend/jsoo/jscoq_worker.bc.js', baseAbs).href;
       const splash = new URL('frontend/classic/images/jscoq-splash.png', baseAbs).href;
-      const quickHelp = new URL('docs/quick-help.html', baseAbs).href;
 
-      const [jsOk, splashOk, quickOk] = await Promise.all([
-        checkUrlExists(jsWorker),
-        checkUrlExists(splash),
-        checkUrlExists(quickHelp)
-      ]);
+      const jsOk = await checkUrlExists(jsWorker);
+      const splashOk = entry.requireImages ? await checkUrlExists(splash) : null;
 
       tried.push({
         base: baseAbs,
         jsWorker,
         splash,
-        quickHelp,
         jsOk,
         splashOk,
-        quickOk
+        requireImages: entry.requireImages
       });
 
-      if (jsOk && splashOk) {
+      if (jsOk && (!entry.requireImages || splashOk)) {
         return { basePath: baseAbs };
       }
     }
@@ -189,16 +185,17 @@
     const detail = tried.map((t) => {
       return t.base + ' -> ' +
         'jsWorker=' + (t.jsOk ? 'ok' : 'missing') + ', ' +
-        'splash=' + (t.splashOk ? 'ok' : 'missing') + ', ' +
-        'quickHelp=' + (t.quickOk ? 'ok' : 'missing');
+        'splash=' + (t.requireImages ? (t.splashOk ? 'ok' : 'missing') : 'skip');
     }).join(' | ');
 
     throw new Error('Missing jsCoq assets for any base path. Tried: ' + detail);
   }
 
   async function resolvePkgPath(scriptBase, assetBase) {
+    const normalized = scriptBase.endsWith('/') ? scriptBase : scriptBase + '/';
+    const rootBase = normalized.endsWith('package/') ? normalized.slice(0, -8) : normalized;
     const candidates = [
-      (scriptBase.endsWith('/') ? scriptBase : scriptBase + '/') + 'coq-pkgs/',
+      rootBase + 'coq-pkgs/',
       (assetBase.endsWith('/') ? assetBase : assetBase + '/') + 'coq-pkgs/'
     ];
 
