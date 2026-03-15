@@ -724,6 +724,9 @@
           if(details.editorMode){
             lines.push('Editor mode: ' + details.editorMode);
           }
+          if(typeof details.fallbackOnly === 'boolean'){
+            lines.push('Fallback only: ' + (details.fallbackOnly ? 'yes' : 'no'));
+          }
           if(details.bundleUrl){
             lines.push('Bundle URL: ' + details.bundleUrl);
           }

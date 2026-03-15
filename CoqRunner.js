@@ -309,6 +309,7 @@
           const msg = coqExnToText(manager, payload);
           if (msg) manager.__coqRunnerCoqExnMessages.push(msg);
           markRestart(manager);
+          manager.__coqRunnerFallbackOnly = true;
         } catch (e) {}
         return original(payload);
       };
@@ -320,6 +321,7 @@
           const msg = coqExnToText(manager, payload);
           if (msg) manager.__coqRunnerJsonExnMessages.push(msg);
           markRestart(manager);
+          manager.__coqRunnerFallbackOnly = true;
         } catch (e) {}
         return original(payload);
       };
@@ -426,7 +428,8 @@
       goalsRawCount: typeof goalsCount === 'number' ? goalsCount : null,
       editorMode,
       bundleUrl: cache.scriptUrl || null,
-      assetBase: cache.basePath || null
+      assetBase: cache.basePath || null,
+      fallbackOnly: !!(manager && manager.__coqRunnerFallbackOnly)
     };
     if (manager && Array.isArray(manager.__coqRunnerCoqExnMessages) && manager.__coqRunnerCoqExnMessages.length) {
       details.coqExceptions = manager.__coqRunnerCoqExnMessages.slice(0, 5);
@@ -1002,6 +1005,9 @@
       if (manager.__coqRunnerCoqExnMessages) manager.__coqRunnerCoqExnMessages.length = 0;
       if (manager.__coqRunnerJsonExnMessages) manager.__coqRunnerJsonExnMessages.length = 0;
 
+      const forceFallback = !!opts.forceFallback;
+      const useFallbackFirst = forceFallback || !!manager.__coqRunnerFallbackOnly;
+
       const providerReady = await waitForProviderReady(manager, Math.min(5000, timeoutMs));
       if (!providerReady) {
         const details = buildRunDetails(manager, null);
@@ -1025,6 +1031,39 @@
 
       const docName = 'Main_' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.v';
       await resetManagerDoc(manager, timeoutMs);
+
+      if (useFallbackFirst) {
+        const fallback = await execSentencesFallback(text, manager, timeoutMs);
+        const goalsCount = fallback.goalsCount;
+        const fb = fallback.feedback;
+        const fallbackDetails = fallback.details;
+        if (!fallbackDetails.snapshot) fallbackDetails.snapshot = snapshotManagerState(manager);
+        if (fb.errors.length > 0) {
+          markRestart(manager);
+          return {
+            ok: false,
+            details: fallbackDetails,
+            error: {
+              remaining: typeof goalsCount === 'number' ? goalsCount : -1,
+              summaries: fb.errors
+            }
+          };
+        }
+        if (typeof goalsCount === 'number' && goalsCount === 0) {
+          return { ok: true, details: fallbackDetails };
+        }
+        if (typeof goalsCount === 'number') {
+          return {
+            ok: false,
+            details: fallbackDetails,
+            error: {
+              remaining: goalsCount,
+              summaries: ['Remaining goals: ' + goalsCount]
+            }
+          };
+        }
+      }
+
       manager.provider.load(String(text || ''), docName);
       if (typeof manager.provider.focus === 'function') manager.provider.focus();
 
