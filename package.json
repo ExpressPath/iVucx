@@ -3,16 +3,18 @@
   "version": "1.0.0",
   "description": "iVucx - Interactive Proof Assistant Editor",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "dev": "vercel dev",
+    "dev": "node index.js",
     "build": "echo 'No build step required'",
-    "start": "vercel dev"
+    "start": "node index.js"
   },
   "keywords": ["proof-assistant", "coq", "lean", "isabelle", "agda"],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@supabase/supabase-js": "^2.50.2"
+    "@supabase/supabase-js": "^2.50.2",
+    "express": "^4.19.2"
   },
   "engines": {
     "node": ">=18.0.0"

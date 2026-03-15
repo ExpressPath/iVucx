@@ -193,25 +193,6 @@
       display:none;
     }
 
-    #leanFrame{
-      position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
-      border:0;
-      background:#0d1117;
-      display:none;
-    }
-
-    body.lean-mode #editor,
-    body.lean-mode #fallbackEditor{
-      display:none !important;
-    }
-
-    body.lean-mode #leanFrame{
-      display:block;
-    }
-
     #coq,
     #ide-wrapper{
       position:fixed;
@@ -356,7 +337,6 @@
       <div class="file-name" id="fileName">Main.lean</div>
     </div>
     <div class="right-cluster">
-      <button class="btn btn-small" id="leanToggleBtn" type="button">Use Local Editor</button>
       <button class="btn btn-run" id="runBtn" type="button">Run</button>
     </div>
   </header>
@@ -370,7 +350,6 @@
       <div class="editor-frame">
         <div id="editor"></div>
         <textarea id="fallbackEditor" spellcheck="false"></textarea>
-        <iframe id="leanFrame" title="Lean4web"></iframe>
       </div>
     </section>
 
@@ -382,11 +361,7 @@
       <pre id="outputPanel"></pre>
       <div class="lean-panel" id="leanPanel">
         <div class="lean-panel-head">
-          <span>Lean4web</span>
-          <div class="lean-panel-actions">
-            <button class="btn btn-small" id="leanReloadBtn" type="button">Reload</button>
-            <button class="btn btn-small" id="leanOpenBtn" type="button">Open</button>
-          </div>
+          <span>Lean Server</span>
         </div>
         <div class="lean-goals">
           <div class="lean-goals-row">
@@ -394,7 +369,7 @@
             <button class="btn btn-small" id="leanGoalsVerifyBtn" type="button">Verify</button>
           </div>
           <textarea id="leanGoalsInput" placeholder="Paste goals/infoview text here"></textarea>
-          <div id="leanGoalsSummary">Paste goals from the Lean4web InfoView to summarize.</div>
+          <div id="leanGoalsSummary">Paste goals/infoview text here to summarize.</div>
         </div>
       </div>
     </section>
@@ -402,7 +377,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
   <script src="CoqRunner.js"></script>
-  <script src="LeanRunner.js"></script>
   <script>
     (function(){
       const INIT_STORAGE_KEY = 'ivucxEditorInit';
@@ -414,13 +388,9 @@
       const outputTitleEl = document.getElementById('outputTitle');
       const outputHintEl = document.getElementById('outputHint');
       const leanPanel = document.getElementById('leanPanel');
-      const leanFrame = document.getElementById('leanFrame');
-      const leanReloadBtn = document.getElementById('leanReloadBtn');
-      const leanOpenBtn = document.getElementById('leanOpenBtn');
       const leanGoalsInput = document.getElementById('leanGoalsInput');
       const leanGoalsVerifyBtn = document.getElementById('leanGoalsVerifyBtn');
       const leanGoalsSummary = document.getElementById('leanGoalsSummary');
-      const leanToggleBtn = document.getElementById('leanToggleBtn');
       const statusEl = document.getElementById('statusText');
       const runBtn = document.getElementById('runBtn');
       const backBtn = document.getElementById('backBtn');
@@ -479,11 +449,6 @@
         }
       };
 
-      const LEAN_IFRAME_ORIGINS = new Set([
-        'https://live.lean-lang.org',
-        'https://lean.math.hhu.de'
-      ]);
-
       const initPayload = readInitPayload();
       const params = new URLSearchParams(window.location.search);
       const selectedLanguage = resolveLanguage(params.get('lang') || initPayload.proofAssistant || 'Lean');
@@ -508,9 +473,6 @@
       let useFallbackEditor = false;
       let monacoRef = null;
       let running = false;
-      let leanFrameUrl = '';
-      let leanEditorMode = 'local';
-      let leanLocalInitialized = false;
       let leanSeed = '';
 
       if(selectedLanguage === 'Lean'){
@@ -534,40 +496,6 @@
         runProof();
       });
 
-      if(leanToggleBtn){
-        leanToggleBtn.addEventListener('click', ()=>{
-          if(selectedLanguage !== 'Lean') return;
-          const nextMode = leanEditorMode === 'embed' ? 'local' : 'embed';
-          setLeanEditorMode(nextMode);
-        });
-      }
-
-      if(leanFrame){
-        leanFrame.addEventListener('load', ()=>{
-          try{
-            if(leanFrame.contentWindow){
-              leanFrame.contentWindow.postMessage({ type: 'ivucx:requestGoals' }, '*');
-            }
-          }catch(err){
-            // ignore cross-origin restrictions
-          }
-        });
-      }
-
-      if(leanReloadBtn){
-        leanReloadBtn.addEventListener('click', ()=>{
-          reloadLeanFrame();
-        });
-      }
-
-      if(leanOpenBtn){
-        leanOpenBtn.addEventListener('click', ()=>{
-          if(leanFrameUrl){
-            window.open(leanFrameUrl, '_blank', 'noopener');
-          }
-        });
-      }
-
       if(leanGoalsVerifyBtn){
         leanGoalsVerifyBtn.addEventListener('click', ()=>{
           renderLeanGoalsSummary(leanGoalsInput ? leanGoalsInput.value : '');
@@ -578,22 +506,11 @@
         if(!leanSeed && selectedConfig && selectedConfig.starter){
           leanSeed = selectedConfig.starter;
         }
-        initializeLeanEditor(leanSeed);
+        initializeEditor(leanSeed, selectedLanguage);
       } else {
         initializeEditor(initialDraft, selectedLanguage);
       }
       window.addEventListener('paste', handleProofFilePaste, true);
-
-      window.addEventListener('message', (event)=>{
-        if(!event || !event.data) return;
-        if(!LEAN_IFRAME_ORIGINS.has(event.origin)) return;
-        const data = event.data || {};
-        if(typeof data !== 'object') return;
-        const goalsText = data.goalsText || data.goals || data.text || '';
-        if(!goalsText) return;
-        if(leanGoalsInput) leanGoalsInput.value = goalsText;
-        renderLeanGoalsSummary(goalsText);
-      });
 
       function readInitPayload(){
         try{
@@ -659,64 +576,22 @@
 
       function setLeanMode(active){
         if(!active){
-          document.body.classList.remove('lean-mode');
           if(outputTitleEl) outputTitleEl.textContent = 'Server Output';
           if(outputHintEl) outputHintEl.textContent = 'Ctrl/Cmd + Enter to run';
           if(runBtn) runBtn.style.display = '';
-          if(leanToggleBtn) leanToggleBtn.style.display = 'none';
           setLeanPanelActive(false);
           return;
         }
-        if(leanToggleBtn) leanToggleBtn.style.display = '';
-        setLeanEditorMode(leanEditorMode);
-      }
-
-      function ensureLocalEditorInitialized(){
-        if(leanLocalInitialized) return;
-        if(!leanSeed && selectedConfig && selectedConfig.starter){
-          leanSeed = selectedConfig.starter;
-        }
-        initializeEditor(leanSeed, selectedLanguage);
-        leanLocalInitialized = true;
-      }
-
-      function setLeanEditorMode(mode){
-        leanEditorMode = mode === 'local' ? 'local' : 'embed';
-        const embed = leanEditorMode === 'embed';
-        document.body.classList.toggle('lean-mode', embed);
-        if(runBtn) runBtn.style.display = embed ? 'none' : '';
         if(outputTitleEl) outputTitleEl.textContent = 'Lean 4';
         if(outputHintEl){
-          outputHintEl.textContent = embed
-            ? 'Lean4web embedded (toggle if blank)'
-            : 'Run updates Lean4web link';
-        }
-        if(leanToggleBtn){
-          leanToggleBtn.textContent = embed ? 'Use Local Editor' : 'Use Lean4web';
+          outputHintEl.textContent = 'Ctrl/Cmd + Enter to run (server)';
         }
         setLeanPanelActive(true);
-        if(!embed){
-          ensureLocalEditorInitialized();
-        }
       }
 
       function setLeanPanelActive(active){
         if(!leanPanel) return;
         leanPanel.classList.toggle('active', !!active);
-      }
-
-      function updateLeanFrame(url){
-        if(!leanPanel || !leanFrame || !url) return;
-        leanFrameUrl = url;
-        setLeanPanelActive(true);
-        if(leanFrame.src !== url){
-          leanFrame.src = url;
-        }
-      }
-
-      function reloadLeanFrame(){
-        if(!leanFrame || !leanFrameUrl) return;
-        leanFrame.src = leanFrameUrl;
       }
 
       function summarizeLeanGoals(text){
@@ -762,8 +637,8 @@
         if(language === 'Coq'){
           lines.push('Coq YY proofs are verified via CoqRunner.');
         } else if(language === 'Lean'){
-          lines.push('Lean 4 uses Lean4web links (server-side, no file download).');
-          lines.push('Toggle between local editor and embedded Lean4web.');
+          lines.push('Lean 4 is verified on the Render server.');
+          lines.push('Run sends code to /api/lean-check.');
         } else {
           lines.push('Runner is disabled for this language.');
         }
@@ -1166,100 +1041,78 @@
           return { status: 'error', proof_state: 'YN', reason: summary };
         }
       }
-      const DEFAULT_LEAN_WEB_BASES = [
-        'https://live.lean-lang.org/',
-        'https://lean.math.hhu.de/'
-      ];
+      async function requestLeanServer(code){
+        let response = null;
+        try{
+          response = await fetch('/api/lean-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+          });
+        }catch(err){
+          return {
+            ok: false,
+            status: 'network',
+            error: err && err.message ? err.message : String(err),
+            httpStatus: 0
+          };
+        }
 
-      function getLeanWebConfig(payload){
-        const config = {
-          baseUrls: DEFAULT_LEAN_WEB_BASES.slice(),
-          project: '',
-          useCodez: true,
-          autoOpen: false,
-          maxUrlLength: 1800,
-          codeUrl: ''
+        let raw = '';
+        try{
+          raw = await response.text();
+        }catch(err){
+          raw = '';
+        }
+
+        const parsed = tryParseJson(raw);
+        if(!parsed || typeof parsed !== 'object'){
+          return {
+            ok: false,
+            status: 'error',
+            error: raw || 'Invalid response from server.',
+            httpStatus: response.status
+          };
+        }
+
+        return {
+          ...parsed,
+          httpStatus: response.status,
+          httpOk: response.ok
         };
-
-        if(!payload || typeof payload !== 'object') return config;
-
-        const raw = payload.leanWeb || payload.lean4web || payload.leanRunner || null;
-        if(typeof raw === 'string' && raw.trim()){
-          config.baseUrls = [raw.trim()];
-        } else if(raw && typeof raw === 'object'){
-          if(typeof raw.baseUrl === 'string' && raw.baseUrl.trim()){
-            config.baseUrls.unshift(raw.baseUrl.trim());
-          }
-          if(Array.isArray(raw.baseUrls)){
-            raw.baseUrls.forEach((value)=>{
-              if(typeof value === 'string' && value.trim()){
-                config.baseUrls.push(value.trim());
-              }
-            });
-          }
-          if(typeof raw.project === 'string' && raw.project.trim()){
-            config.project = raw.project.trim();
-          }
-          if(typeof raw.codeUrl === 'string' && raw.codeUrl.trim()){
-            config.codeUrl = raw.codeUrl.trim();
-          }
-          if(typeof raw.useCodez === 'boolean') config.useCodez = raw.useCodez;
-          if(typeof raw.autoOpen === 'boolean') config.autoOpen = raw.autoOpen;
-          if(Number.isFinite(raw.maxUrlLength)) config.maxUrlLength = raw.maxUrlLength;
-        }
-
-        if(!config.project && typeof payload.leanProject === 'string' && payload.leanProject.trim()){
-          config.project = payload.leanProject.trim();
-        }
-        if(!config.project && typeof payload.lean4webProject === 'string' && payload.lean4webProject.trim()){
-          config.project = payload.lean4webProject.trim();
-        }
-
-        config.baseUrls = config.baseUrls.map((value)=>String(value || '').trim()).filter(Boolean);
-        if(config.baseUrls.length === 0) config.baseUrls = DEFAULT_LEAN_WEB_BASES.slice();
-        return config;
       }
 
-      function formatLeanWebLinks(linkInfo){
+      function formatLeanServerResult(result, closure){
         const lines = [];
-        lines.push('[Lean Validation]');
-        lines.push('Lean4web runs Lean on a server (link-based, no file download).');
-        if(linkInfo.payloadType){
-          const payloadLabel = linkInfo.payloadType + (linkInfo.usedCompression ? ' (compressed)' : '');
-          lines.push('Payload: ' + payloadLabel);
+        lines.push('[Lean Server]');
+        if(result.status){
+          const statusLine = result.ok ? result.status + ' (ok)' : result.status;
+          lines.push('Status: ' + statusLine);
         }
-        lines.push('Project: ' + (linkInfo.project ? linkInfo.project : '(server default)'));
-        lines.push('Primary: ' + linkInfo.primaryUrl);
-        if(Array.isArray(linkInfo.urls) && linkInfo.urls.length > 1){
-          lines.push('Backup: ' + linkInfo.urls[1]);
+        if(typeof result.httpStatus === 'number' && result.httpStatus > 0 && result.httpStatus !== 200){
+          lines.push('HTTP: ' + result.httpStatus);
         }
-        lines.push('Iframe: updated in the editor pane.');
-        if(linkInfo.warning){
-          lines.push('Warning: ' + linkInfo.warning);
+        if(typeof result.exitCode === 'number'){
+          lines.push('Exit code: ' + result.exitCode);
         }
-        return lines;
-      }
-
-      function initializeLeanEditor(seedCode){
-        if(typeof LeanRunner === 'undefined' || !LeanRunner || typeof LeanRunner.buildLinks !== 'function'){
-          setStatus('Lean validation failed', true);
-          outputEl.textContent = '[Lean Validation]\nLeanRunner is not available.';
-          return;
+        if(typeof result.durationMs === 'number'){
+          lines.push('Duration: ' + result.durationMs + 'ms');
         }
-        const leanConfig = getLeanWebConfig(initPayload);
-        const linkInfo = LeanRunner.buildLinks(seedCode, leanConfig);
-        if(!linkInfo || !linkInfo.ok){
-          const reason = linkInfo && linkInfo.reason ? linkInfo.reason : 'Lean4web link generation failed.';
-          setStatus('Lean validation failed', true);
-          outputEl.textContent = '[Lean Validation]\n' + reason;
-          return;
+        if(result.error){
+          lines.push('Error: ' + result.error);
         }
-        if(linkInfo.primaryUrl){
-          updateLeanFrame(linkInfo.primaryUrl);
+        if(closure && closure.proofState === 'NY'){
+          lines.push('Local check: contains ' + closure.closer + ' (NY).');
+        } else if(closure){
+          lines.push('Local check: no sorry/admit/axiom/constant detected.');
         }
-        const lines = formatLeanWebLinks(linkInfo);
-        lines.push('Use Lean4web InfoView for live goals.');
-        outputEl.textContent = lines.join('\n');
+        if(result.stdout){
+          lines.push('stdout:\n' + result.stdout);
+        }
+        if(result.stderr){
+          lines.push('stderr:\n' + result.stderr);
+        }
+        return lines.join('\n');
       }
 
       async function validateLeanProof(code){
@@ -1296,49 +1149,24 @@
           return { status: 'rejected', proof_state: 'NN', reason: closure.reason || 'Lean code is empty' };
         }
 
-        if(typeof LeanRunner === 'undefined' || !LeanRunner || typeof LeanRunner.buildLinks !== 'function'){
-          const summary = 'LeanRunner is not available. Lean4web link could not be created.';
-          setStatus('Lean validation failed', true);
-          outputEl.textContent = '[Lean Validation]\n' + summary;
-          return { status: 'error', proof_state: 'NN', reason: summary };
-        }
+        outputEl.textContent = '[Lean Server]\nSending code to server...';
+        const serverResult = await requestLeanServer(code);
+        outputEl.textContent = formatLeanServerResult(serverResult, closure);
 
-        const leanConfig = getLeanWebConfig(initPayload);
-        const linkInfo = LeanRunner.buildLinks(code, leanConfig);
-        if(!linkInfo || !linkInfo.ok){
-          const reason = linkInfo && linkInfo.reason ? linkInfo.reason : 'Lean4web link generation failed.';
-          setStatus('Lean validation failed', true);
-          outputEl.textContent = '[Lean Validation]\n' + reason;
-          return { status: 'error', proof_state: 'NN', reason: reason };
-        }
-
-        if(linkInfo.primaryUrl){
-          updateLeanFrame(linkInfo.primaryUrl);
-        }
-
-        const lines = formatLeanWebLinks(linkInfo);
-        if(closure.proofState === 'NY'){
-          lines.push('Local check: contains ' + closure.closer + ' (NY).');
-        } else {
-          lines.push('Local check: no sorry/admit/axiom/constant detected.');
-        }
-        outputEl.textContent = lines.join('\n');
-
-        if(leanConfig.autoOpen){
-          try{
-            window.open(linkInfo.primaryUrl, '_blank', 'noopener');
-          }catch(err){
-            // ignore popup blockers
+        if(serverResult.ok){
+          if(closure.proofState === 'NY'){
+            setStatus('Lean proof accepted (NY)');
+            return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
           }
+          setStatus('Lean validated');
+          return { status: 'allowed', proof_state: 'YY', reason: 'Lean server ok' };
         }
 
-        if(closure.proofState === 'NY'){
-          setStatus('Lean proof accepted (NY)');
-          return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
-        }
-
-        setStatus('Lean validation link ready');
-        return { status: 'allowed', proof_state: 'NY', reason: 'Lean4web link created' };
+        const failureReason = serverResult && serverResult.error
+          ? serverResult.error
+          : 'Lean server validation failed.';
+        setStatus('Lean validation failed', true);
+        return { status: 'rejected', proof_state: closure.proofState, reason: failureReason };
       }
 
       function analyzeLeanClosure(code){
@@ -2423,14 +2251,6 @@
         running = true;
         runBtn.disabled = true;
         setStatus('Running...');
-
-        if(selectedLanguage === 'Lean' && leanEditorMode === 'embed'){
-          setStatus('Lean4web active');
-          outputEl.textContent = '[Lean]\nUse the embedded Lean4web editor to run and inspect goals.\nTip: if the editor is blank, click "Use Local Editor".';
-          running = false;
-          runBtn.disabled = false;
-          return;
-        }
 
         const code = getEditorCode();
 
