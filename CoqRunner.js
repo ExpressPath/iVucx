@@ -1001,6 +1001,7 @@
     if (typeof text !== 'string') throw new TypeError('text must be a string');
     const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 30000;
     const idleRestartMs = typeof opts.idleRestartMs === 'number' ? opts.idleRestartMs : 20000;
+    const forceFallback = opts.forceFallback !== undefined ? !!opts.forceFallback : true;
 
     const { manager } = await ensureJsCoq(opts);
     attachGoalSpy(manager);
@@ -1021,7 +1022,7 @@
       if (manager.__coqRunnerCoqExnMessages) manager.__coqRunnerCoqExnMessages.length = 0;
       if (manager.__coqRunnerJsonExnMessages) manager.__coqRunnerJsonExnMessages.length = 0;
 
-      const forceFallback = !!opts.forceFallback;
+      if (forceFallback) manager.__coqRunnerFallbackOnly = true;
       const useFallbackFirst = forceFallback || !!manager.__coqRunnerFallbackOnly;
 
       const providerReady = await waitForProviderReady(manager, Math.min(5000, timeoutMs));
@@ -1046,35 +1047,68 @@
       if (manager.error && Array.isArray(manager.error)) manager.error.length = 0;
 
       const docName = 'Main_' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.v';
+      if (useFallbackFirst) markRestart(manager);
       await resetManagerDoc(manager, timeoutMs);
 
       if (useFallbackFirst) {
-        const fallback = await execSentencesFallback(text, manager, timeoutMs);
-        const goalsCount = fallback.goalsCount;
-        const fb = fallback.feedback;
-        const fallbackDetails = fallback.details;
-        if (!fallbackDetails.snapshot) fallbackDetails.snapshot = snapshotManagerState(manager);
-        if (fb.errors.length > 0) {
+        try {
+          const fallback = await execSentencesFallback(text, manager, timeoutMs);
+          const goalsCount = fallback.goalsCount;
+          const fb = fallback.feedback;
+          const fallbackDetails = fallback.details;
+          if (!fallbackDetails.snapshot) fallbackDetails.snapshot = snapshotManagerState(manager);
+          if ((fallbackDetails.coqExceptions && fallbackDetails.coqExceptions.length) ||
+              (fallbackDetails.jsonExceptions && fallbackDetails.jsonExceptions.length)) {
+            markRestart(manager);
+            const summaries = [];
+            if (fallbackDetails.coqExceptions) summaries.push(...fallbackDetails.coqExceptions);
+            if (fallbackDetails.jsonExceptions) summaries.push(...fallbackDetails.jsonExceptions);
+            return {
+              ok: false,
+              details: fallbackDetails,
+              error: {
+                remaining: typeof goalsCount === 'number' ? goalsCount : -1,
+                summaries
+              }
+            };
+          }
+          if (fb.errors.length > 0) {
+            markRestart(manager);
+            return {
+              ok: false,
+              details: fallbackDetails,
+              error: {
+                remaining: typeof goalsCount === 'number' ? goalsCount : -1,
+                summaries: fb.errors
+              }
+            };
+          }
+          if (typeof goalsCount === 'number' && goalsCount === 0) {
+            return { ok: true, details: fallbackDetails };
+          }
+          if (typeof goalsCount === 'number') {
+            return {
+              ok: false,
+              details: fallbackDetails,
+              error: {
+                remaining: goalsCount,
+                summaries: ['Remaining goals: ' + goalsCount]
+              }
+            };
+          }
+        } catch (e) {
           markRestart(manager);
+          const details = buildRunDetails(manager, null);
+          details.input = analyzeInputText(text);
+          details.tokenSummary = summarizeTokens(manager);
+          details.snapshot = snapshotManagerState(manager);
+          const msg = e && e.message ? e.message : String(e);
           return {
             ok: false,
-            details: fallbackDetails,
+            details,
             error: {
-              remaining: typeof goalsCount === 'number' ? goalsCount : -1,
-              summaries: fb.errors
-            }
-          };
-        }
-        if (typeof goalsCount === 'number' && goalsCount === 0) {
-          return { ok: true, details: fallbackDetails };
-        }
-        if (typeof goalsCount === 'number') {
-          return {
-            ok: false,
-            details: fallbackDetails,
-            error: {
-              remaining: goalsCount,
-              summaries: ['Remaining goals: ' + goalsCount]
+              remaining: -1,
+              summaries: [msg]
             }
           };
         }
