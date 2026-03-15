@@ -287,6 +287,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
   <script src="CoqRunner.js"></script>
+  <script src="LeanRunner.js"></script>
   <script>
     (function(){
       const INIT_STORAGE_KEY = 'ivucxEditorInit';
@@ -476,6 +477,8 @@
 
         if(language === 'Coq'){
           lines.push('Coq YY proofs are verified via CoqRunner.');
+        } else if(language === 'Lean'){
+          lines.push('Lean proofs are checked via Lean4web links (server-side).');
         } else {
           lines.push('Runner is disabled for this language.');
         }
@@ -878,21 +881,81 @@
           return { status: 'error', proof_state: 'YN', reason: summary };
         }
       }
+      const DEFAULT_LEAN_WEB_BASES = [
+        'https://live.lean-lang.org/',
+        'https://lean.math.hhu.de/'
+      ];
 
-      async function waitLean4Ready(timeoutMs = 15000){
-        return new Promise((resolve, reject)=>{
-          const start = Date.now();
-          function check(){
-            if(lean4Instance) return resolve();
-            if(Date.now() - start > timeoutMs) return reject(new Error('Lean 4 initialization timeout'));
-            setTimeout(check, 100);
+      function getLeanWebConfig(payload){
+        const config = {
+          baseUrls: DEFAULT_LEAN_WEB_BASES.slice(),
+          project: '',
+          useCodez: true,
+          autoOpen: false,
+          maxUrlLength: 1800,
+          codeUrl: ''
+        };
+
+        if(!payload || typeof payload !== 'object') return config;
+
+        const raw = payload.leanWeb || payload.lean4web || payload.leanRunner || null;
+        if(typeof raw === 'string' && raw.trim()){
+          config.baseUrls = [raw.trim()];
+        } else if(raw && typeof raw === 'object'){
+          if(typeof raw.baseUrl === 'string' && raw.baseUrl.trim()){
+            config.baseUrls.unshift(raw.baseUrl.trim());
           }
-          check();
-        });
+          if(Array.isArray(raw.baseUrls)){
+            raw.baseUrls.forEach((value)=>{
+              if(typeof value === 'string' && value.trim()){
+                config.baseUrls.push(value.trim());
+              }
+            });
+          }
+          if(typeof raw.project === 'string' && raw.project.trim()){
+            config.project = raw.project.trim();
+          }
+          if(typeof raw.codeUrl === 'string' && raw.codeUrl.trim()){
+            config.codeUrl = raw.codeUrl.trim();
+          }
+          if(typeof raw.useCodez === 'boolean') config.useCodez = raw.useCodez;
+          if(typeof raw.autoOpen === 'boolean') config.autoOpen = raw.autoOpen;
+          if(Number.isFinite(raw.maxUrlLength)) config.maxUrlLength = raw.maxUrlLength;
+        }
+
+        if(!config.project && typeof payload.leanProject === 'string' && payload.leanProject.trim()){
+          config.project = payload.leanProject.trim();
+        }
+        if(!config.project && typeof payload.lean4webProject === 'string' && payload.lean4webProject.trim()){
+          config.project = payload.lean4webProject.trim();
+        }
+
+        config.baseUrls = config.baseUrls.map((value)=>String(value || '').trim()).filter(Boolean);
+        if(config.baseUrls.length === 0) config.baseUrls = DEFAULT_LEAN_WEB_BASES.slice();
+        return config;
+      }
+
+      function formatLeanWebLinks(linkInfo){
+        const lines = [];
+        lines.push('[Lean Validation]');
+        lines.push('Lean4web runs Lean on a server (link-based, no file download).');
+        if(linkInfo.payloadType){
+          const payloadLabel = linkInfo.payloadType + (linkInfo.usedCompression ? ' (compressed)' : '');
+          lines.push('Payload: ' + payloadLabel);
+        }
+        lines.push('Project: ' + (linkInfo.project ? linkInfo.project : '(server default)'));
+        lines.push('Primary: ' + linkInfo.primaryUrl);
+        if(Array.isArray(linkInfo.urls) && linkInfo.urls.length > 1){
+          lines.push('Backup: ' + linkInfo.urls[1]);
+        }
+        if(linkInfo.warning){
+          lines.push('Warning: ' + linkInfo.warning);
+        }
+        return lines;
       }
 
       async function validateLeanProof(code){
-        setStatus('Validating Lean 4 proof...');
+        setStatus('Validating Lean proof...');
         const normalized = stripLeanCommentsAndStrings(code);
         const libraryCatalog = buildLeanLibraryCatalog(initPayload);
         const libraryCheck = validateLeanLibraryUsage(normalized, libraryCatalog);
@@ -917,63 +980,53 @@
           outputEl.textContent = '[Lean Validation]\n' + conflictMessage;
           return { status: 'rejected', proof_state: 'NN', reason: conflictMessage };
         }
-        outputEl.textContent = 'Validating in Lean 4...\n';
 
-        try{
-          if(!lean4Instance){
-            await waitLean4Ready();
-          }
-        }catch(err){
+        const closure = analyzeLeanClosure(code);
+        if(closure.proofState === 'NN'){
           setStatus('Lean validation failed', true);
-          outputEl.textContent = '[Lean Validation]\nLean 4 is not initialized. Reload the page and try again.';
-          return { status: 'error', proof_state: 'NN', reason: 'Lean 4 not initialized' };
+          outputEl.textContent = '[Lean Validation]\n' + (closure.reason || 'Code is empty');
+          return { status: 'rejected', proof_state: 'NN', reason: closure.reason || 'Lean code is empty' };
         }
 
-        if(!lean4Instance){
+        if(typeof LeanRunner === 'undefined' || !LeanRunner || typeof LeanRunner.buildLinks !== 'function'){
+          const summary = 'LeanRunner is not available. Lean4web link could not be created.';
           setStatus('Lean validation failed', true);
-          outputEl.textContent = '[Lean Validation]\nLean 4 is not initialized. Reload the page and try again.';
-          return { status: 'error', proof_state: 'NN', reason: 'Lean 4 not initialized' };
+          outputEl.textContent = '[Lean Validation]\n' + summary;
+          return { status: 'error', proof_state: 'NN', reason: summary };
         }
 
-        try{
-          const diagnostics = await lean4Instance.execute(code);
-          const errors = Array.isArray(diagnostics)
-            ? diagnostics.filter((item)=>item && Number(item.severity || 0) === 1)
-            : [];
-
-          if(errors.length > 0){
-            const first = errors[0] || {};
-            const range = first.range || {};
-            const start = range.start || {};
-            const line = Number.isFinite(start.line) ? String(start.line + 1) : '?';
-            const col = Number.isFinite(start.character) ? String(start.character + 1) : '?';
-            const msg = first.message || 'Lean 4 reported an error';
-            setStatus('Lean validation failed', true);
-            outputEl.textContent = '[Lean Validation]\n' + line + ':' + col + ' ' + msg;
-            return { status: 'rejected', proof_state: 'NN', reason: msg };
-          }
-
-          const closure = analyzeLeanClosure(code);
-          if(closure.proofState === 'NN'){
-            setStatus('Lean validation failed', true);
-            outputEl.textContent = '[Lean Validation]\n' + (closure.reason || 'Code is empty');
-            return { status: 'rejected', proof_state: 'NN', reason: closure.reason || 'Lean code is empty' };
-          }
-          if(closure.proofState === 'NY'){
-            setStatus('Lean proof accepted (NY)');
-            outputEl.textContent = '[Lean Validation Success]\n險ｼ譏趣ｿｽE ' + closure.closer + ' 繧貞性繧縺溘ａ證ｫ螳壼女縺托ｿｽE繧後〒縺・(NY迥ｶ諷・';
-            return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
-          }
-
-          setStatus('Lean proof verified (YY)');
-          outputEl.textContent = '[Lean Validation Success]\nLean 4縺ｧ繧ｨ繝ｩ繝ｼ縺ｪ縺乗､懆ｨｼ縺ｧ縺阪∪縺励◆ (YY迥ｶ諷・';
-          return { status: 'allowed', proof_state: 'YY', reason: 'Lean 4 verified' };
-        }catch(err){
-          const errorMsg = err && err.message ? err.message : String(err);
+        const leanConfig = getLeanWebConfig(initPayload);
+        const linkInfo = LeanRunner.buildLinks(code, leanConfig);
+        if(!linkInfo || !linkInfo.ok){
+          const reason = linkInfo && linkInfo.reason ? linkInfo.reason : 'Lean4web link generation failed.';
           setStatus('Lean validation failed', true);
-          outputEl.textContent = '[Lean Validation]\nLean 4螳溯｡後お繝ｩ繝ｼ:\n' + errorMsg;
-          return { status: 'error', proof_state: 'NN', reason: 'Lean 4 execution error: ' + errorMsg };
+          outputEl.textContent = '[Lean Validation]\n' + reason;
+          return { status: 'error', proof_state: 'NN', reason: reason };
         }
+
+        const lines = formatLeanWebLinks(linkInfo);
+        if(closure.proofState === 'NY'){
+          lines.push('Local check: contains ' + closure.closer + ' (NY).');
+        } else {
+          lines.push('Local check: no sorry/admit/axiom/constant detected.');
+        }
+        outputEl.textContent = lines.join('\n');
+
+        if(leanConfig.autoOpen){
+          try{
+            window.open(linkInfo.primaryUrl, '_blank', 'noopener');
+          }catch(err){
+            // ignore popup blockers
+          }
+        }
+
+        if(closure.proofState === 'NY'){
+          setStatus('Lean proof accepted (NY)');
+          return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
+        }
+
+        setStatus('Lean validation link ready');
+        return { status: 'allowed', proof_state: 'NY', reason: 'Lean4web link created' };
       }
 
       function analyzeLeanClosure(code){
@@ -2061,23 +2114,27 @@
 
         const code = getEditorCode();
 
-        if(selectedLanguage !== 'Coq'){
-          setStatus('Runner disabled', true);
-          outputEl.textContent = '[Configuration]\nOnly Coq YY validation is supported in this editor.';
-          running = false;
-          runBtn.disabled = false;
-          return;
-        }
-
+        let shouldResetCoq = false;
         try {
-          await validateCoqProof(code);
+          if(selectedLanguage === 'Coq'){
+            shouldResetCoq = true;
+            await validateCoqProof(code);
+          } else if(selectedLanguage === 'Lean'){
+            await validateLeanProof(code);
+          } else {
+            setStatus('Runner disabled', true);
+            outputEl.textContent = '[Configuration]\nOnly Coq and Lean validation are supported in this editor.';
+            return;
+          }
         } finally {
-          setStatus('Resetting Coq environment...');
-          if(typeof CoqRunner !== 'undefined' && CoqRunner && typeof CoqRunner.resetEnvironment === 'function'){
-            try{
-              await CoqRunner.resetEnvironment({ timeoutMs: 15000 });
-            }catch(err){
-              console.warn('CoqRunner reset failed', err);
+          if(shouldResetCoq){
+            setStatus('Resetting Coq environment...');
+            if(typeof CoqRunner !== 'undefined' && CoqRunner && typeof CoqRunner.resetEnvironment === 'function'){
+              try{
+                await CoqRunner.resetEnvironment({ timeoutMs: 15000 });
+              }catch(err){
+                console.warn('CoqRunner reset failed', err);
+              }
             }
           }
           running = false;
