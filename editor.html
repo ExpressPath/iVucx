@@ -221,6 +221,89 @@
       background:#0d1117;
     }
 
+    .lean-panel{
+      border-top:1px solid var(--line);
+      background:#0f1520;
+      display:none;
+      flex-direction:column;
+      min-height:0;
+    }
+
+    .lean-panel.active{
+      display:flex;
+    }
+
+    .lean-panel-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      padding:6px 12px;
+      font-size:11px;
+      color:var(--muted);
+      border-bottom:1px solid var(--line);
+      background:linear-gradient(to bottom, #141b23, #10161d);
+    }
+
+    .lean-panel-actions{
+      display:flex;
+      gap:6px;
+    }
+
+    .btn-small{
+      padding:4px 8px;
+      font-size:11px;
+      border-radius:6px;
+    }
+
+    #leanFrame{
+      width:100%;
+      height:240px;
+      border:0;
+      background:#0d1117;
+    }
+
+    .lean-goals{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      padding:10px 12px 12px;
+      border-top:1px solid var(--line);
+      background:#0f1520;
+    }
+
+    .lean-goals-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      font-size:11px;
+      color:var(--muted);
+    }
+
+    #leanGoalsInput{
+      width:100%;
+      min-height:90px;
+      resize:vertical;
+      padding:8px;
+      border-radius:6px;
+      border:1px solid var(--line);
+      background:#0d1117;
+      color:#c9d1d9;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:12px;
+      line-height:1.4;
+    }
+
+    #leanGoalsSummary{
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    #leanGoalsSummary.error{
+      color:var(--warn);
+    }
+
     @media (max-width:1020px){
       .workspace{
         grid-template-columns:1fr;
@@ -282,6 +365,24 @@
         <span>Ctrl/Cmd + Enter to run</span>
       </div>
       <pre id="outputPanel"></pre>
+      <div class="lean-panel" id="leanPanel">
+        <div class="lean-panel-head">
+          <span>Lean4web</span>
+          <div class="lean-panel-actions">
+            <button class="btn btn-small" id="leanReloadBtn" type="button">Reload</button>
+            <button class="btn btn-small" id="leanOpenBtn" type="button">Open</button>
+          </div>
+        </div>
+        <iframe id="leanFrame" title="Lean4web"></iframe>
+        <div class="lean-goals">
+          <div class="lean-goals-row">
+            <span>Goals Snapshot</span>
+            <button class="btn btn-small" id="leanGoalsVerifyBtn" type="button">Verify</button>
+          </div>
+          <textarea id="leanGoalsInput" placeholder="Paste goals/infoview text here"></textarea>
+          <div id="leanGoalsSummary">Paste goals from the Lean4web InfoView to summarize.</div>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -296,6 +397,13 @@
       const langBadgeEl = document.getElementById('langBadge');
       const fileNameEl = document.getElementById('fileName');
       const outputEl = document.getElementById('outputPanel');
+      const leanPanel = document.getElementById('leanPanel');
+      const leanFrame = document.getElementById('leanFrame');
+      const leanReloadBtn = document.getElementById('leanReloadBtn');
+      const leanOpenBtn = document.getElementById('leanOpenBtn');
+      const leanGoalsInput = document.getElementById('leanGoalsInput');
+      const leanGoalsVerifyBtn = document.getElementById('leanGoalsVerifyBtn');
+      const leanGoalsSummary = document.getElementById('leanGoalsSummary');
       const statusEl = document.getElementById('statusText');
       const runBtn = document.getElementById('runBtn');
       const backBtn = document.getElementById('backBtn');
@@ -354,6 +462,11 @@
         }
       };
 
+      const LEAN_IFRAME_ORIGINS = new Set([
+        'https://live.lean-lang.org',
+        'https://lean.math.hhu.de'
+      ]);
+
       const initPayload = readInitPayload();
       const params = new URLSearchParams(window.location.search);
       const selectedLanguage = resolveLanguage(params.get('lang') || initPayload.proofAssistant || 'Lean');
@@ -378,11 +491,13 @@
       let useFallbackEditor = false;
       let monacoRef = null;
       let running = false;
+      let leanFrameUrl = '';
 
 
       setStatus('Ready');
 
       setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, summaryText);
+      setLeanPanelActive(false);
 
 
       backBtn.addEventListener('click', ()=>{
@@ -394,8 +509,51 @@
         runProof();
       });
 
+      if(leanReloadBtn){
+        leanReloadBtn.addEventListener('click', ()=>{
+          reloadLeanFrame();
+        });
+      }
+
+      if(leanOpenBtn){
+        leanOpenBtn.addEventListener('click', ()=>{
+          if(leanFrameUrl){
+            window.open(leanFrameUrl, '_blank', 'noopener');
+          }
+        });
+      }
+
+      if(leanGoalsVerifyBtn){
+        leanGoalsVerifyBtn.addEventListener('click', ()=>{
+          renderLeanGoalsSummary(leanGoalsInput ? leanGoalsInput.value : '');
+        });
+      }
+
       initializeEditor(initialDraft, selectedLanguage);
       window.addEventListener('paste', handleProofFilePaste, true);
+
+      if(leanFrame){
+        leanFrame.addEventListener('load', ()=>{
+          try{
+            if(leanFrame.contentWindow){
+              leanFrame.contentWindow.postMessage({ type: 'ivucx:requestGoals' }, '*');
+            }
+          }catch(err){
+            // ignore cross-origin restrictions
+          }
+        });
+      }
+
+      window.addEventListener('message', (event)=>{
+        if(!event || !event.data) return;
+        if(!LEAN_IFRAME_ORIGINS.has(event.origin)) return;
+        const data = event.data || {};
+        if(typeof data !== 'object') return;
+        const goalsText = data.goalsText || data.goals || data.text || '';
+        if(!goalsText) return;
+        if(leanGoalsInput) leanGoalsInput.value = goalsText;
+        renderLeanGoalsSummary(goalsText);
+      });
 
       function readInitPayload(){
         try{
@@ -457,6 +615,49 @@
       function setStatus(text, isError){
         statusEl.textContent = text;
         statusEl.classList.toggle('error', !!isError);
+      }
+
+      function setLeanPanelActive(active){
+        if(!leanPanel) return;
+        leanPanel.classList.toggle('active', !!active);
+      }
+
+      function updateLeanFrame(url){
+        if(!leanPanel || !leanFrame || !url) return;
+        leanFrameUrl = url;
+        setLeanPanelActive(true);
+        if(leanFrame.src !== url){
+          leanFrame.src = url;
+        }
+      }
+
+      function reloadLeanFrame(){
+        if(!leanFrame || !leanFrameUrl) return;
+        leanFrame.src = leanFrameUrl;
+      }
+
+      function summarizeLeanGoals(text){
+        const trimmed = String(text || '').trim();
+        if(!trimmed){
+          return { ok: false, summary: 'No goals text provided.' };
+        }
+        const lower = trimmed.toLowerCase();
+        if(lower.includes('no goals') || lower.includes('no goal')){
+          return { ok: true, summary: 'Goals: 0 (Lean reports no goals).' };
+        }
+        const goalMarks = (trimmed.match(/⊢/g) || []).length;
+        const lines = trimmed.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+        const head = lines.slice(0, 4).join(' | ');
+        const countNote = goalMarks ? 'Goals detected: ' + goalMarks : 'Goals detected: unknown';
+        const summary = head ? countNote + ' | Summary: ' + head : countNote;
+        return { ok: true, summary };
+      }
+
+      function renderLeanGoalsSummary(text){
+        if(!leanGoalsSummary) return;
+        const result = summarizeLeanGoals(text);
+        leanGoalsSummary.textContent = result.summary;
+        leanGoalsSummary.classList.toggle('error', !result.ok);
       }
 
 
@@ -948,6 +1149,7 @@
         if(Array.isArray(linkInfo.urls) && linkInfo.urls.length > 1){
           lines.push('Backup: ' + linkInfo.urls[1]);
         }
+        lines.push('Iframe: updated below for goals snapshot.');
         if(linkInfo.warning){
           lines.push('Warning: ' + linkInfo.warning);
         }
@@ -1002,6 +1204,10 @@
           setStatus('Lean validation failed', true);
           outputEl.textContent = '[Lean Validation]\n' + reason;
           return { status: 'error', proof_state: 'NN', reason: reason };
+        }
+
+        if(linkInfo.primaryUrl){
+          updateLeanFrame(linkInfo.primaryUrl);
         }
 
         const lines = formatLeanWebLinks(linkInfo);
