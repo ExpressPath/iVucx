@@ -356,6 +356,7 @@
       <div class="file-name" id="fileName">Main.lean</div>
     </div>
     <div class="right-cluster">
+      <button class="btn btn-small" id="leanToggleBtn" type="button">Use Local Editor</button>
       <button class="btn btn-run" id="runBtn" type="button">Run</button>
     </div>
   </header>
@@ -419,6 +420,7 @@
       const leanGoalsInput = document.getElementById('leanGoalsInput');
       const leanGoalsVerifyBtn = document.getElementById('leanGoalsVerifyBtn');
       const leanGoalsSummary = document.getElementById('leanGoalsSummary');
+      const leanToggleBtn = document.getElementById('leanToggleBtn');
       const statusEl = document.getElementById('statusText');
       const runBtn = document.getElementById('runBtn');
       const backBtn = document.getElementById('backBtn');
@@ -507,7 +509,15 @@
       let monacoRef = null;
       let running = false;
       let leanFrameUrl = '';
+      let leanEditorMode = 'local';
+      let leanLocalInitialized = false;
+      let leanSeed = '';
 
+      if(selectedLanguage === 'Lean'){
+        leanSeed = initialDraft && initialDraft.trim()
+          ? initialDraft
+          : (selectedConfig && selectedConfig.starter ? selectedConfig.starter : '');
+      }
 
       setStatus('Ready');
 
@@ -523,6 +533,14 @@
       runBtn.addEventListener('click', ()=>{
         runProof();
       });
+
+      if(leanToggleBtn){
+        leanToggleBtn.addEventListener('click', ()=>{
+          if(selectedLanguage !== 'Lean') return;
+          const nextMode = leanEditorMode === 'embed' ? 'local' : 'embed';
+          setLeanEditorMode(nextMode);
+        });
+      }
 
       if(leanFrame){
         leanFrame.addEventListener('load', ()=>{
@@ -557,9 +575,9 @@
       }
 
       if(selectedLanguage === 'Lean'){
-        const leanSeed = initialDraft && initialDraft.trim()
-          ? initialDraft
-          : (selectedConfig && selectedConfig.starter ? selectedConfig.starter : '');
+        if(!leanSeed && selectedConfig && selectedConfig.starter){
+          leanSeed = selectedConfig.starter;
+        }
         initializeLeanEditor(leanSeed);
       } else {
         initializeEditor(initialDraft, selectedLanguage);
@@ -640,17 +658,46 @@
       }
 
       function setLeanMode(active){
-        document.body.classList.toggle('lean-mode', !!active);
-        if(outputTitleEl){
-          outputTitleEl.textContent = active ? 'Lean 4' : 'Server Output';
+        if(!active){
+          document.body.classList.remove('lean-mode');
+          if(outputTitleEl) outputTitleEl.textContent = 'Server Output';
+          if(outputHintEl) outputHintEl.textContent = 'Ctrl/Cmd + Enter to run';
+          if(runBtn) runBtn.style.display = '';
+          if(leanToggleBtn) leanToggleBtn.style.display = 'none';
+          setLeanPanelActive(false);
+          return;
         }
+        if(leanToggleBtn) leanToggleBtn.style.display = '';
+        setLeanEditorMode(leanEditorMode);
+      }
+
+      function ensureLocalEditorInitialized(){
+        if(leanLocalInitialized) return;
+        if(!leanSeed && selectedConfig && selectedConfig.starter){
+          leanSeed = selectedConfig.starter;
+        }
+        initializeEditor(leanSeed, selectedLanguage);
+        leanLocalInitialized = true;
+      }
+
+      function setLeanEditorMode(mode){
+        leanEditorMode = mode === 'local' ? 'local' : 'embed';
+        const embed = leanEditorMode === 'embed';
+        document.body.classList.toggle('lean-mode', embed);
+        if(runBtn) runBtn.style.display = embed ? 'none' : '';
+        if(outputTitleEl) outputTitleEl.textContent = 'Lean 4';
         if(outputHintEl){
-          outputHintEl.textContent = active ? 'Lean4web embedded' : 'Ctrl/Cmd + Enter to run';
+          outputHintEl.textContent = embed
+            ? 'Lean4web embedded (toggle if blank)'
+            : 'Run updates Lean4web link';
         }
-        if(runBtn){
-          runBtn.style.display = active ? 'none' : '';
+        if(leanToggleBtn){
+          leanToggleBtn.textContent = embed ? 'Use Local Editor' : 'Use Lean4web';
         }
-        setLeanPanelActive(active);
+        setLeanPanelActive(true);
+        if(!embed){
+          ensureLocalEditorInitialized();
+        }
       }
 
       function setLeanPanelActive(active){
@@ -715,7 +762,8 @@
         if(language === 'Coq'){
           lines.push('Coq YY proofs are verified via CoqRunner.');
         } else if(language === 'Lean'){
-          lines.push('Lean 4 editor is embedded via Lean4web (server-side).');
+          lines.push('Lean 4 uses Lean4web links (server-side, no file download).');
+          lines.push('Toggle between local editor and embedded Lean4web.');
         } else {
           lines.push('Runner is disabled for this language.');
         }
@@ -2376,9 +2424,9 @@
         runBtn.disabled = true;
         setStatus('Running...');
 
-        if(selectedLanguage === 'Lean'){
+        if(selectedLanguage === 'Lean' && leanEditorMode === 'embed'){
           setStatus('Lean4web active');
-          outputEl.textContent = '[Lean]\nUse the embedded Lean4web editor to run and inspect goals.';
+          outputEl.textContent = '[Lean]\nUse the embedded Lean4web editor to run and inspect goals.\nTip: if the editor is blank, click "Use Local Editor".';
           running = false;
           runBtn.disabled = false;
           return;
