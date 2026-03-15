@@ -193,6 +193,25 @@
       display:none;
     }
 
+    #leanFrame{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      border:0;
+      background:#0d1117;
+      display:none;
+    }
+
+    body.lean-mode #editor,
+    body.lean-mode #fallbackEditor{
+      display:none !important;
+    }
+
+    body.lean-mode #leanFrame{
+      display:block;
+    }
+
     #coq,
     #ide-wrapper{
       position:fixed;
@@ -256,12 +275,6 @@
       border-radius:6px;
     }
 
-    #leanFrame{
-      width:100%;
-      height:240px;
-      border:0;
-      background:#0d1117;
-    }
 
     .lean-goals{
       display:flex;
@@ -356,13 +369,14 @@
       <div class="editor-frame">
         <div id="editor"></div>
         <textarea id="fallbackEditor" spellcheck="false"></textarea>
+        <iframe id="leanFrame" title="Lean4web"></iframe>
       </div>
     </section>
 
     <section class="pane">
       <div class="pane-head">
-        <span>Server Output</span>
-        <span>Ctrl/Cmd + Enter to run</span>
+        <span id="outputTitle">Server Output</span>
+        <span id="outputHint">Ctrl/Cmd + Enter to run</span>
       </div>
       <pre id="outputPanel"></pre>
       <div class="lean-panel" id="leanPanel">
@@ -373,7 +387,6 @@
             <button class="btn btn-small" id="leanOpenBtn" type="button">Open</button>
           </div>
         </div>
-        <iframe id="leanFrame" title="Lean4web"></iframe>
         <div class="lean-goals">
           <div class="lean-goals-row">
             <span>Goals Snapshot</span>
@@ -397,6 +410,8 @@
       const langBadgeEl = document.getElementById('langBadge');
       const fileNameEl = document.getElementById('fileName');
       const outputEl = document.getElementById('outputPanel');
+      const outputTitleEl = document.getElementById('outputTitle');
+      const outputHintEl = document.getElementById('outputHint');
       const leanPanel = document.getElementById('leanPanel');
       const leanFrame = document.getElementById('leanFrame');
       const leanReloadBtn = document.getElementById('leanReloadBtn');
@@ -497,7 +512,7 @@
       setStatus('Ready');
 
       setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, summaryText);
-      setLeanPanelActive(false);
+      setLeanMode(selectedLanguage === 'Lean');
 
 
       backBtn.addEventListener('click', ()=>{
@@ -508,6 +523,18 @@
       runBtn.addEventListener('click', ()=>{
         runProof();
       });
+
+      if(leanFrame){
+        leanFrame.addEventListener('load', ()=>{
+          try{
+            if(leanFrame.contentWindow){
+              leanFrame.contentWindow.postMessage({ type: 'ivucx:requestGoals' }, '*');
+            }
+          }catch(err){
+            // ignore cross-origin restrictions
+          }
+        });
+      }
 
       if(leanReloadBtn){
         leanReloadBtn.addEventListener('click', ()=>{
@@ -529,20 +556,15 @@
         });
       }
 
-      initializeEditor(initialDraft, selectedLanguage);
-      window.addEventListener('paste', handleProofFilePaste, true);
-
-      if(leanFrame){
-        leanFrame.addEventListener('load', ()=>{
-          try{
-            if(leanFrame.contentWindow){
-              leanFrame.contentWindow.postMessage({ type: 'ivucx:requestGoals' }, '*');
-            }
-          }catch(err){
-            // ignore cross-origin restrictions
-          }
-        });
+      if(selectedLanguage === 'Lean'){
+        const leanSeed = initialDraft && initialDraft.trim()
+          ? initialDraft
+          : (selectedConfig && selectedConfig.starter ? selectedConfig.starter : '');
+        initializeLeanEditor(leanSeed);
+      } else {
+        initializeEditor(initialDraft, selectedLanguage);
       }
+      window.addEventListener('paste', handleProofFilePaste, true);
 
       window.addEventListener('message', (event)=>{
         if(!event || !event.data) return;
@@ -617,6 +639,20 @@
         statusEl.classList.toggle('error', !!isError);
       }
 
+      function setLeanMode(active){
+        document.body.classList.toggle('lean-mode', !!active);
+        if(outputTitleEl){
+          outputTitleEl.textContent = active ? 'Lean 4' : 'Server Output';
+        }
+        if(outputHintEl){
+          outputHintEl.textContent = active ? 'Lean4web embedded' : 'Ctrl/Cmd + Enter to run';
+        }
+        if(runBtn){
+          runBtn.style.display = active ? 'none' : '';
+        }
+        setLeanPanelActive(active);
+      }
+
       function setLeanPanelActive(active){
         if(!leanPanel) return;
         leanPanel.classList.toggle('active', !!active);
@@ -679,7 +715,7 @@
         if(language === 'Coq'){
           lines.push('Coq YY proofs are verified via CoqRunner.');
         } else if(language === 'Lean'){
-          lines.push('Lean proofs are checked via Lean4web links (server-side).');
+          lines.push('Lean 4 editor is embedded via Lean4web (server-side).');
         } else {
           lines.push('Runner is disabled for this language.');
         }
@@ -1149,11 +1185,33 @@
         if(Array.isArray(linkInfo.urls) && linkInfo.urls.length > 1){
           lines.push('Backup: ' + linkInfo.urls[1]);
         }
-        lines.push('Iframe: updated below for goals snapshot.');
+        lines.push('Iframe: updated in the editor pane.');
         if(linkInfo.warning){
           lines.push('Warning: ' + linkInfo.warning);
         }
         return lines;
+      }
+
+      function initializeLeanEditor(seedCode){
+        if(typeof LeanRunner === 'undefined' || !LeanRunner || typeof LeanRunner.buildLinks !== 'function'){
+          setStatus('Lean validation failed', true);
+          outputEl.textContent = '[Lean Validation]\nLeanRunner is not available.';
+          return;
+        }
+        const leanConfig = getLeanWebConfig(initPayload);
+        const linkInfo = LeanRunner.buildLinks(seedCode, leanConfig);
+        if(!linkInfo || !linkInfo.ok){
+          const reason = linkInfo && linkInfo.reason ? linkInfo.reason : 'Lean4web link generation failed.';
+          setStatus('Lean validation failed', true);
+          outputEl.textContent = '[Lean Validation]\n' + reason;
+          return;
+        }
+        if(linkInfo.primaryUrl){
+          updateLeanFrame(linkInfo.primaryUrl);
+        }
+        const lines = formatLeanWebLinks(linkInfo);
+        lines.push('Use Lean4web InfoView for live goals.');
+        outputEl.textContent = lines.join('\n');
       }
 
       async function validateLeanProof(code){
@@ -2317,6 +2375,14 @@
         running = true;
         runBtn.disabled = true;
         setStatus('Running...');
+
+        if(selectedLanguage === 'Lean'){
+          setStatus('Lean4web active');
+          outputEl.textContent = '[Lean]\nUse the embedded Lean4web editor to run and inspect goals.';
+          running = false;
+          runBtn.disabled = false;
+          return;
+        }
 
         const code = getEditorCode();
 
