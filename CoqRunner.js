@@ -446,6 +446,9 @@
     if (manager && Array.isArray(manager.__coqRunnerJsonExnMessages) && manager.__coqRunnerJsonExnMessages.length) {
       details.jsonExceptions = manager.__coqRunnerJsonExnMessages.slice(0, 5);
     }
+    if (manager && Array.isArray(manager.__coqRunnerResetErrors) && manager.__coqRunnerResetErrors.length) {
+      details.resetErrors = manager.__coqRunnerResetErrors.slice(0, 3);
+    }
     const feedback = collectFeedback(manager);
     if (feedback.errors.length) details.errors = feedback.errors;
     if (feedback.warnings.length) details.warnings = feedback.warnings;
@@ -586,14 +589,22 @@
     }
 
     manager.__coqRunnerFeedback = [];
-    await resetManagerDoc(manager, timeoutMs);
+    await resetManagerDoc(manager, timeoutMs, { forceFull: true });
 
     const sentences = splitCoqSentences(text);
-    let sid = 2;
+    const doc = manager && manager.doc;
+    const rootSid = doc && doc.sentences && doc.sentences[0] && Number.isFinite(doc.sentences[0].coq_sid)
+      ? doc.sentences[0].coq_sid
+      : 1;
+    let sid = doc && Number.isFinite(doc.fresh_id) ? doc.fresh_id : rootSid + 1;
+    if (!Number.isFinite(sid) || sid <= rootSid) sid = rootSid + 1;
+    let lastSid = rootSid;
+    let firstExecSid = null;
     let executed = 0;
     for (const sentence of sentences) {
       if (!/\S/.test(sentence)) continue;
-      coq.add(1, sid, sentence);
+      if (firstExecSid === null) firstExecSid = sid;
+      coq.add(lastSid, sid, sentence);
       const execP = coq.execPromise(sid);
       try {
         await Promise.race([
@@ -607,11 +618,17 @@
       executed += 1;
       const feedback = collectFeedback(manager);
       if (feedback.errors.length > 0) break;
+      lastSid = sid;
       sid += 1;
     }
 
-    const lastSid = sid - 1;
-    if (lastSid >= 2 && typeof coq.goals === 'function') {
+    if (doc && Number.isFinite(sid)) {
+      try {
+        doc.fresh_id = Math.max(Number(doc.fresh_id || 0), sid);
+      } catch (e) {}
+    }
+
+    if (executed > 0 && typeof coq.goals === 'function') {
       const goalRequestAt = Date.now();
       coq.goals(lastSid);
       await waitForGoalsUpdate(manager, goalRequestAt, 2000);
@@ -626,6 +643,9 @@
     details.fallbackUsed = true;
     details.fallbackSentenceCount = sentences.length;
     details.fallbackExecutedCount = executed;
+    details.fallbackRootSid = rootSid;
+    details.fallbackStartSid = firstExecSid;
+    details.fallbackLastSid = executed > 0 ? lastSid : null;
     return { goalsCount, feedback, details };
   }
 
@@ -997,6 +1017,14 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  function withTimeout(promise, timeoutMs, message) {
+    if (!timeoutMs || timeoutMs <= 0) return promise;
+    return Promise.race([
+      promise,
+      sleep(timeoutMs).then(() => { throw new Error(message || 'timeout'); })
+    ]);
+  }
+
   async function checkProofText(text, opts = {}) {
     if (typeof text !== 'string') throw new TypeError('text must be a string');
     const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 30000;
@@ -1021,34 +1049,37 @@
       manager.__coqRunnerGoalInfoSeen = false;
       if (manager.__coqRunnerCoqExnMessages) manager.__coqRunnerCoqExnMessages.length = 0;
       if (manager.__coqRunnerJsonExnMessages) manager.__coqRunnerJsonExnMessages.length = 0;
+      if (manager.__coqRunnerResetErrors) manager.__coqRunnerResetErrors.length = 0;
 
       if (forceFallback) manager.__coqRunnerFallbackOnly = true;
       const useFallbackFirst = forceFallback || !!manager.__coqRunnerFallbackOnly;
 
-      const providerReady = await waitForProviderReady(manager, Math.min(5000, timeoutMs));
-      if (!providerReady) {
-        const details = buildRunDetails(manager, null);
-        return {
-          ok: false,
-          details,
-          error: {
-            remaining: -1,
-            summaries: ['Coq provider not ready (snippet missing).']
-          }
-        };
-      }
-      if (manager.provider && Array.isArray(manager.provider.snippets) && manager.provider.snippets[0]) {
-        manager.provider.currentFocus = manager.provider.snippets[0];
-      }
+      if (!useFallbackFirst) {
+        const providerReady = await waitForProviderReady(manager, Math.min(5000, timeoutMs));
+        if (!providerReady) {
+          const details = buildRunDetails(manager, null);
+          return {
+            ok: false,
+            details,
+            error: {
+              remaining: -1,
+              summaries: ['Coq provider not ready (snippet missing).']
+            }
+          };
+        }
+        if (manager.provider && Array.isArray(manager.provider.snippets) && manager.provider.snippets[0]) {
+          manager.provider.currentFocus = manager.provider.snippets[0];
+        }
 
-      if (!manager || !manager.provider || typeof manager.provider.load !== 'function') {
-        throw new Error('jsCoq manager provider is unavailable');
+        if (!manager || !manager.provider || typeof manager.provider.load !== 'function') {
+          throw new Error('jsCoq manager provider is unavailable');
+        }
+      } else if (manager.provider && Array.isArray(manager.provider.snippets) && manager.provider.snippets[0]) {
+        manager.provider.currentFocus = manager.provider.snippets[0];
       }
       if (manager.error && Array.isArray(manager.error)) manager.error.length = 0;
 
       const docName = 'Main_' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.v';
-      if (useFallbackFirst) markRestart(manager);
-      await resetManagerDoc(manager, timeoutMs);
 
       if (useFallbackFirst) {
         try {
@@ -1057,6 +1088,19 @@
           const fb = fallback.feedback;
           const fallbackDetails = fallback.details;
           if (!fallbackDetails.snapshot) fallbackDetails.snapshot = snapshotManagerState(manager);
+          if (fallbackDetails.fallbackExecutedCount === 0) {
+            fallbackDetails.input = analyzeInputText(text);
+            fallbackDetails.tokenSummary = summarizeTokens(manager);
+            fallbackDetails.snapshot = snapshotManagerState(manager);
+            return {
+              ok: false,
+              details: fallbackDetails,
+              error: {
+                remaining: -1,
+                summaries: ['No Coq statements were processed (check for missing periods).']
+              }
+            };
+          }
           if ((fallbackDetails.coqExceptions && fallbackDetails.coqExceptions.length) ||
               (fallbackDetails.jsonExceptions && fallbackDetails.jsonExceptions.length)) {
             markRestart(manager);
@@ -1096,6 +1140,18 @@
               }
             };
           }
+          return {
+            ok: false,
+            details: fallbackDetails,
+            error: {
+              remaining: -1,
+              summaries: [
+                fallbackDetails.goalInfoSeen
+                  ? 'Goals could not be determined (empty GoalInfo).'
+                  : 'Goals could not be determined (no GoalInfo).'
+              ]
+            }
+          };
         } catch (e) {
           markRestart(manager);
           const details = buildRunDetails(manager, null);
@@ -1114,6 +1170,7 @@
         }
       }
 
+      await resetManagerDoc(manager, timeoutMs, { forceFull: false });
       manager.provider.load(String(text || ''), docName);
 
       const started = Date.now();
@@ -1351,12 +1408,44 @@
     });
   }
 
-  async function resetManagerDoc(manager, timeoutMs) {
+  function recordResetError(manager, msg) {
+    if (!manager || !msg) return;
+    if (!Array.isArray(manager.__coqRunnerResetErrors)) manager.__coqRunnerResetErrors = [];
+    manager.__coqRunnerResetErrors.push(msg);
+  }
+
+  async function resetManagerDoc(manager, timeoutMs, opts = {}) {
     const needsRestart = !!(manager && manager.__coqRunnerNeedsRestart);
-    const shouldRestart = needsRestart || hasBusySentences(manager);
-    if (shouldRestart && manager && manager.coq && typeof manager.coq.restart === 'function') {
-      try { await manager.coq.restart(); } catch (e) {}
-      try { await waitForManagerReady(manager, Math.min(15000, timeoutMs || 15000)); } catch (e) {}
+    const forceFull = !!opts.forceFull;
+    const shouldRestart = forceFull || needsRestart || hasBusySentences(manager);
+    const resetTimeout = Math.max(20000, timeoutMs || 20000);
+    let didFullReset = false;
+    let resetFailed = false;
+    if (shouldRestart) {
+      if (manager && typeof manager.reset === 'function') {
+        try {
+          await withTimeout(manager.reset(), resetTimeout, 'jsCoq reset timeout');
+          didFullReset = true;
+        } catch (e) {
+          recordResetError(manager, e && e.message ? e.message : String(e));
+          resetFailed = true;
+        }
+      }
+      if (!didFullReset && manager && manager.coq && typeof manager.coq.restart === 'function') {
+        try {
+          await withTimeout(manager.coq.restart(), resetTimeout, 'jsCoq worker restart timeout');
+        } catch (e) {
+          recordResetError(manager, e && e.message ? e.message : String(e));
+          resetFailed = true;
+        }
+        try {
+          if (typeof manager.coqInit === 'function') manager.coqInit();
+        } catch (e) {
+          recordResetError(manager, e && e.message ? e.message : String(e));
+          resetFailed = true;
+        }
+      }
+      try { await waitForManagerReady(manager, Math.min(20000, timeoutMs || 20000)); } catch (e) {}
     } else {
       try {
         if (manager && manager.coq && typeof manager.coq.cancel === 'function' && hasBusySentences(manager)) {
@@ -1384,7 +1473,7 @@
     try {
       if (manager && Array.isArray(manager.error)) manager.error.length = 0;
     } catch (e) {}
-    if (manager) manager.__coqRunnerNeedsRestart = false;
+    if (manager) manager.__coqRunnerNeedsRestart = resetFailed;
   }
 
   CoqRunner.checkProofText = checkProofText;
@@ -1395,7 +1484,7 @@
       await acquireLock();
       try {
         markRestart(manager);
-        await resetManagerDoc(manager, timeoutMs);
+        await resetManagerDoc(manager, timeoutMs, { forceFull: true });
         if (manager && manager.provider && typeof manager.provider.load === 'function') {
           manager.provider.load('', 'Reset_' + Date.now() + '.v');
         }
