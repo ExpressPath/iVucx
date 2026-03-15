@@ -4,7 +4,16 @@
 
 (function (global) {
   const CoqRunner = {};
-  const cache = { initting: null, manager: null, basePath: null, busy: false, scriptUrl: null, jsCoqLib: null, workerShim: false };
+  const cache = {
+    initting: null,
+    manager: null,
+    basePath: null,
+    busy: false,
+    scriptUrl: null,
+    jsCoqLib: null,
+    workerShim: false,
+    lastRunAt: 0
+  };
 
   const WRAPPER_ID = 'coq-runner-wrapper';
   const SNIPPET_ID = 'coq-runner-snippet';
@@ -991,6 +1000,7 @@
   async function checkProofText(text, opts = {}) {
     if (typeof text !== 'string') throw new TypeError('text must be a string');
     const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 30000;
+    const idleRestartMs = typeof opts.idleRestartMs === 'number' ? opts.idleRestartMs : 20000;
 
     const { manager } = await ensureJsCoq(opts);
     attachGoalSpy(manager);
@@ -999,6 +1009,12 @@
     await acquireLock();
 
     try {
+      const now = Date.now();
+      if (cache.lastRunAt && now - cache.lastRunAt > idleRestartMs) {
+        markRestart(manager);
+      }
+      cache.lastRunAt = now;
+
       manager.__coqRunnerLastGoals = null;
       manager.__coqRunnerLastGoalsAt = 0;
       manager.__coqRunnerGoalInfoSeen = false;
@@ -1065,7 +1081,6 @@
       }
 
       manager.provider.load(String(text || ''), docName);
-      if (typeof manager.provider.focus === 'function') manager.provider.focus();
 
       const started = Date.now();
       let advancedAny = false;
@@ -1349,7 +1364,6 @@
         await resetManagerDoc(manager, timeoutMs);
         if (manager && manager.provider && typeof manager.provider.load === 'function') {
           manager.provider.load('', 'Reset_' + Date.now() + '.v');
-          if (typeof manager.provider.focus === 'function') manager.provider.focus();
         }
       } finally {
         releaseLock();
