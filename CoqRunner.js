@@ -831,7 +831,8 @@
   async function waitForManagerReady(manager, timeoutMs = 45000) {
     if (!manager) throw new Error('jsCoq manager is unavailable');
 
-    const whenReady = manager.when_ready && manager.when_ready.promise ? manager.when_ready.promise : null;
+    const forcePoll = !!manager.__coqRunnerForcePollReady || !manager.navEnabled;
+    const whenReady = !forcePoll && manager.when_ready && manager.when_ready.promise ? manager.when_ready.promise : null;
     if (whenReady && typeof whenReady.then === 'function') {
       await Promise.race([
         whenReady,
@@ -843,8 +844,11 @@
     const start = Date.now();
     while (true) {
       const sid = manager && manager.doc && manager.doc.sentences && manager.doc.sentences[0] && manager.doc.sentences[0].coq_sid;
-      const isReady = !!(manager.navEnabled && sid && Number(sid) > 1);
-      if (isReady) return;
+      const isReady = !!(manager.navEnabled && sid && Number.isFinite(sid));
+      if (isReady) {
+        manager.__coqRunnerForcePollReady = false;
+        return;
+      }
       if (Date.now() - start > timeoutMs) throw new Error('jsCoq manager ready timeout');
       await sleep(100);
     }
@@ -1170,7 +1174,24 @@
         }
       }
 
-      await resetManagerDoc(manager, timeoutMs, { forceFull: false });
+      try {
+        await resetManagerDoc(manager, timeoutMs, { forceFull: false, requireReady: true });
+      } catch (e) {
+        markRestart(manager);
+        const details = buildRunDetails(manager, null);
+        details.input = analyzeInputText(text);
+        details.tokenSummary = summarizeTokens(manager);
+        details.snapshot = snapshotManagerState(manager);
+        const msg = e && e.message ? e.message : String(e);
+        return {
+          ok: false,
+          details,
+          error: {
+            remaining: -1,
+            summaries: [msg]
+          }
+        };
+      }
       manager.provider.load(String(text || ''), docName);
 
       const started = Date.now();
@@ -1417,11 +1438,13 @@
   async function resetManagerDoc(manager, timeoutMs, opts = {}) {
     const needsRestart = !!(manager && manager.__coqRunnerNeedsRestart);
     const forceFull = !!opts.forceFull;
+    const requireReady = opts.requireReady !== false;
     const shouldRestart = forceFull || needsRestart || hasBusySentences(manager);
     const resetTimeout = Math.max(20000, timeoutMs || 20000);
     let didFullReset = false;
     let resetFailed = false;
     if (shouldRestart) {
+      if (manager) manager.__coqRunnerForcePollReady = true;
       if (manager && typeof manager.reset === 'function') {
         try {
           await withTimeout(manager.reset(), resetTimeout, 'jsCoq reset timeout');
@@ -1445,7 +1468,15 @@
           resetFailed = true;
         }
       }
-      try { await waitForManagerReady(manager, Math.min(20000, timeoutMs || 20000)); } catch (e) {}
+      try {
+        await waitForManagerReady(manager, Math.min(20000, timeoutMs || 20000));
+      } catch (e) {
+        recordResetError(manager, e && e.message ? e.message : String(e));
+        resetFailed = true;
+        if (requireReady) {
+          throw new Error('jsCoq did not become ready after reset');
+        }
+      }
     } else {
       try {
         if (manager && manager.coq && typeof manager.coq.cancel === 'function' && hasBusySentences(manager)) {
