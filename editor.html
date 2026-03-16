@@ -417,6 +417,8 @@
     (function(){
       const INIT_STORAGE_KEY = 'ivucxEditorInit';
       const EDITOR_RETURN_KEY = 'ivucxEditorReturn';
+      const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000;
+      const KEEP_ALIVE_URL = '/?keepalive=1';
 
       const langBadgeEl = document.getElementById('langBadge');
       const fileNameEl = document.getElementById('fileName');
@@ -513,6 +515,8 @@
       let running = false;
       let leanSeed = '';
       let toastTimer = null;
+      let keepAliveTimer = null;
+      let keepAliveInFlight = false;
 
       if(selectedLanguage === 'Lean'){
         leanSeed = initialDraft && initialDraft.trim()
@@ -524,6 +528,7 @@
 
       setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, summaryText);
       setLeanMode(selectedLanguage === 'Lean');
+      startKeepAlivePings();
 
 
       backBtn.addEventListener('click', ()=>{
@@ -630,6 +635,38 @@
           toastEl.classList.remove('show');
           toastEl.setAttribute('aria-hidden', 'true');
         }, 13000);
+      }
+
+      function startKeepAlivePings(){
+        if(keepAliveTimer) return;
+        const sendPing = () => {
+          if(keepAliveInFlight) return;
+          keepAliveInFlight = true;
+          const separator = KEEP_ALIVE_URL.includes('?') ? '&' : '?';
+          const url = KEEP_ALIVE_URL + separator + 't=' + Date.now();
+          fetch(url, {
+            method: 'GET',
+            cache: 'no-store',
+            credentials: 'same-origin',
+            keepalive: true,
+            headers: {
+              'Accept': 'text/plain'
+            }
+          })
+            .catch(() => {})
+            .finally(() => {
+              keepAliveInFlight = false;
+            });
+        };
+        sendPing();
+        keepAliveTimer = setInterval(sendPing, KEEP_ALIVE_INTERVAL_MS);
+        document.addEventListener('visibilitychange', () => {
+          if(document.visibilityState === 'visible') sendPing();
+        });
+        window.addEventListener('beforeunload', () => {
+          if(keepAliveTimer) clearInterval(keepAliveTimer);
+          keepAliveTimer = null;
+        }, { once: true });
       }
 
       function setLeanMode(active){
