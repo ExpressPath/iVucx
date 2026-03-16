@@ -4,7 +4,7 @@ SHELL ["/bin/bash", "-lc"]
 
 ENV NODE_ENV=production
 ENV ELAN_HOME=/opt/elan
-ENV PATH="${ELAN_HOME}/bin:${PATH}"
+ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${ELAN_HOME}/bin"
 
 ARG LEAN_TOOLCHAIN=stable
 ENV LEAN_TOOLCHAIN=${LEAN_TOOLCHAIN}
@@ -22,6 +22,8 @@ RUN set -euxo pipefail; \
     zstd \
     libgmp10; \
   rm -rf /var/lib/apt/lists/*; \
+  command -v zstd; \
+  if ! command -v unzstd; then ln -s "$(command -v zstd)" /usr/local/bin/unzstd; fi; \
   command -v unzstd; \
   unzstd --version; \
   tar --version
