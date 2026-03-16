@@ -1,6 +1,7 @@
 import express from 'express';
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,7 +22,8 @@ const PORT = Number(process.env.PORT || 3000);
 const MAX_CODE_BYTES = Number(process.env.LEAN_MAX_CODE_BYTES || 200000);
 const MAX_OUTPUT_CHARS = Number(process.env.LEAN_MAX_OUTPUT_CHARS || 200000);
 const LEAN_TIMEOUT_MS = Number(process.env.LEAN_TIMEOUT_MS || 15000);
-const LEAN_CMD = process.env.LEAN_CMD || 'lean';
+const LEAN_CMD_RAW = process.env.LEAN_CMD || 'lean';
+const LEAN_CMD = resolveLeanCommand(LEAN_CMD_RAW);
 const LEAN_ARGS = splitArgs(process.env.LEAN_ARGS || '');
 const LEAN_WORKDIR = process.env.LEAN_WORKDIR
   ? path.resolve(process.env.LEAN_WORKDIR)
@@ -30,6 +32,17 @@ const LEAN_WORKDIR = process.env.LEAN_WORKDIR
 app.disable('x-powered-by');
 app.use(express.json({ limit: '512kb' }));
 app.use(express.urlencoded({ extended: true }));
+
+function resolveLeanCommand(cmd) {
+  if (!cmd) return 'lean';
+  if (path.isAbsolute(cmd)) return cmd;
+  const elanHome = process.env.ELAN_HOME;
+  if (elanHome) {
+    const candidate = path.join(elanHome, 'bin', cmd);
+    if (fsSync.existsSync(candidate)) return candidate;
+  }
+  return cmd;
+}
 
 function splitArgs(value) {
   if (!value) return [];
@@ -177,10 +190,14 @@ app.post('/api/lean-check', async (req, res) => {
     await cleanupLeanFile(info);
 
     if (result.error) {
+      const isMissing = result.error && result.error.code === 'ENOENT';
+      const errorMessage = isMissing
+        ? 'Lean executable not found. Install Lean or set LEAN_CMD/ELAN_HOME so the server can find it.'
+        : (result.error.message || String(result.error));
       res.status(500).json({
         ok: false,
         status: 'error',
-        error: result.error.message || String(result.error),
+        error: errorMessage,
         durationMs,
         stdout: truncateOutput(result.stdout),
         stderr: truncateOutput(result.stderr)
@@ -228,6 +245,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`[ivucx] server listening on :${PORT}`);
 });
