@@ -305,7 +305,7 @@
       max-width:min(320px, 90vw);
       background:#11161c;
       color:#e6edf3;
-      border:1px solid var(--line);
+      border:1px solid rgba(63,185,80,0.7);
       border-radius:10px;
       padding:12px 14px;
       font-size:13px;
@@ -328,7 +328,7 @@
     }
 
     .toast.warn{
-      border-color:rgba(255,123,114,0.7);
+      border-color:rgba(63,185,80,0.7);
     }
 
     @media (max-width:1020px){
@@ -629,7 +629,7 @@
         toastTimer = setTimeout(() => {
           toastEl.classList.remove('show');
           toastEl.setAttribute('aria-hidden', 'true');
-        }, 3500);
+        }, 13000);
       }
 
       function setLeanMode(active){
