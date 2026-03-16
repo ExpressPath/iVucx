@@ -9,3 +9,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: LEAN_WORKDIR
+        value: /app/lean
+      - key: LEAN_CMD
+        value: lake
+      - key: LEAN_ARGS
+        value: env lean
