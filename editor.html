@@ -635,7 +635,8 @@
         }
 
         if(language === 'Coq'){
-          lines.push('Coq YY proofs are verified via CoqRunner.');
+          lines.push('Coq proofs are verified on the server and via CoqRunner.');
+          lines.push('Run sends code to /api/coq-check.');
         } else if(language === 'Lean'){
           lines.push('Lean 4 is verified on the Render server.');
           lines.push('Run sends code to /api/lean-check.');
@@ -854,25 +855,12 @@
           return { status: 'rejected', proof_state: 'NN', reason: closure.reason };
         }
 
-        if(closure.proofState === 'NY'){
-          setStatus('Coq proof accepted (NY)');
-          outputEl.textContent = '[Coq Validation Success]\nProof ends with ' + closure.closer + ' (NY).';
-          return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
-        }
-
         const soundnessIssue = findCoqUnsoundToken(code);
         if(soundnessIssue){
           const summary = soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ') (remaining goals: unknown).';
           setStatus('Coq soundness failed', true);
           outputEl.textContent = '[Coq Soundness]\n' + summary;
           return { status: 'rejected', proof_state: 'YN', reason: soundnessIssue.message };
-        }
-
-        if(typeof checkProofText !== 'function'){
-          const summary = 'CoqRunner.js is not available (remaining goals: unknown).';
-          setStatus('Coq soundness failed', true);
-          outputEl.textContent = '[Coq Soundness]\n' + summary;
-          return { status: 'error', proof_state: 'YN', reason: summary };
         }
 
         function formatCoqRunnerDetails(details){
@@ -1009,12 +997,37 @@
           return lines.length ? '\n' + lines.join('\n') : '';
         }
 
+        outputEl.textContent = '[Coq Server]\nSending code to server...';
+        const serverResult = await requestCoqServer(code);
+        const serverText = formatCoqServerResult(serverResult, closure);
+        if(!serverResult.ok){
+          setStatus('Coq validation failed', true);
+          outputEl.textContent = serverText;
+          const failureReason = serverResult && serverResult.error
+            ? serverResult.error
+            : 'Coq server validation failed.';
+          return { status: 'rejected', proof_state: closure.proofState, reason: failureReason };
+        }
+
+        if(closure.proofState === 'NY'){
+          setStatus('Coq proof accepted (NY)');
+          outputEl.textContent = serverText + '\n\n[Coq Validation]\nProof ends with ' + closure.closer + ' (NY).';
+          return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
+        }
+
+        if(typeof checkProofText !== 'function'){
+          setStatus('Coq proof verified (YY)');
+          outputEl.textContent = serverText + '\n\n[CoqRunner]\nCoqRunner.js is not available (remaining goals: unknown).';
+          return { status: 'allowed', proof_state: 'YY', reason: 'Coq server ok' };
+        }
+
         try{
           const result = await checkProofText(code);
           if(result && result.ok){
             setStatus('Coq proof verified (YY)');
             const detailsText = formatCoqRunnerDetails(result.details);
-            outputEl.textContent = '[Coq Validation Success]\nProof verified by CoqRunner (' + closure.closer + ').' + detailsText;
+            const runnerText = '[CoqRunner]\nProof verified by CoqRunner (' + closure.closer + ').' + detailsText;
+            outputEl.textContent = serverText + '\n\n' + runnerText;
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
           }
           const err = result && result.error ? result.error : null;
@@ -1030,16 +1043,90 @@
               summary = 'CoqRunner failed (remaining goals: ' + remainingText + '): ' + err.summaries.join(' | ');
             }
           }
-          setStatus('Coq soundness failed', true);
-          outputEl.textContent = '[Coq Soundness]\n' + summary + detailsText;
-          return { status: 'rejected', proof_state: 'YN', reason: summary };
+          setStatus('Coq proof verified (YY)');
+          outputEl.textContent = serverText + '\n\n[CoqRunner]\n' + summary + detailsText;
+          return { status: 'allowed', proof_state: 'YY', reason: summary };
         } catch (err) {
           const errorMsg = err && err.message ? err.message : String(err);
           const summary = 'CoqRunner error: ' + errorMsg + ' (remaining goals: unknown).';
-          setStatus('Coq soundness failed', true);
-          outputEl.textContent = '[Coq Soundness]\n' + summary;
-          return { status: 'error', proof_state: 'YN', reason: summary };
+          setStatus('Coq proof verified (YY)');
+          outputEl.textContent = serverText + '\n\n[CoqRunner]\n' + summary;
+          return { status: 'allowed', proof_state: 'YY', reason: summary };
         }
+      }
+
+      async function requestCoqServer(code){
+        let response = null;
+        try{
+          response = await fetch('/api/coq-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+          });
+        }catch(err){
+          return {
+            ok: false,
+            status: 'network',
+            error: err && err.message ? err.message : String(err),
+            httpStatus: 0
+          };
+        }
+
+        let raw = '';
+        try{
+          raw = await response.text();
+        }catch(err){
+          raw = '';
+        }
+
+        const parsed = tryParseJson(raw);
+        if(!parsed || typeof parsed !== 'object'){
+          return {
+            ok: false,
+            status: 'error',
+            error: raw || 'Invalid response from server.',
+            httpStatus: response.status
+          };
+        }
+
+        return {
+          ...parsed,
+          httpStatus: response.status,
+          httpOk: response.ok
+        };
+      }
+
+      function formatCoqServerResult(result, closure){
+        const lines = [];
+        lines.push('[Coq Server]');
+        if(result.status){
+          const statusLine = result.ok ? result.status + ' (ok)' : result.status;
+          lines.push('Status: ' + statusLine);
+        }
+        if(typeof result.httpStatus === 'number' && result.httpStatus > 0 && result.httpStatus !== 200){
+          lines.push('HTTP: ' + result.httpStatus);
+        }
+        if(typeof result.exitCode === 'number'){
+          lines.push('Exit code: ' + result.exitCode);
+        }
+        if(typeof result.durationMs === 'number'){
+          lines.push('Duration: ' + result.durationMs + 'ms');
+        }
+        if(result.error){
+          lines.push('Error: ' + result.error);
+        }
+        if(closure && closure.proofState === 'NY'){
+          lines.push('Local check: contains ' + closure.closer + ' (NY).');
+        } else if(closure){
+          lines.push('Local check: no Admitted/Conjecture detected.');
+        }
+        if(result.stdout){
+          lines.push('stdout:\n' + result.stdout);
+        }
+        if(result.stderr){
+          lines.push('stderr:\n' + result.stderr);
+        }
+        return lines.join('\n');
       }
       async function requestLeanServer(code){
         let response = null;

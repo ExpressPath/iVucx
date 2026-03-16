@@ -14,6 +14,7 @@ RUN set -euxo pipefail; \
   apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
+    coq \
     curl \
     git \
     tar \
