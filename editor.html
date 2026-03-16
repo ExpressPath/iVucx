@@ -298,6 +298,39 @@
       color:var(--warn);
     }
 
+    .toast{
+      position:fixed;
+      right:18px;
+      bottom:18px;
+      max-width:min(320px, 90vw);
+      background:#11161c;
+      color:#e6edf3;
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:12px 14px;
+      font-size:13px;
+      font-weight:600;
+      box-shadow:0 14px 28px rgba(0,0,0,0.35);
+      opacity:0;
+      transform:translateY(10px);
+      pointer-events:none;
+      transition:opacity .2s ease, transform .2s ease;
+      z-index:50;
+    }
+
+    .toast.show{
+      opacity:1;
+      transform:translateY(0);
+    }
+
+    .toast.ok{
+      border-color:rgba(63,185,80,0.7);
+    }
+
+    .toast.warn{
+      border-color:rgba(255,123,114,0.7);
+    }
+
     @media (max-width:1020px){
       .workspace{
         grid-template-columns:1fr;
@@ -374,6 +407,9 @@
       </div>
     </section>
   </main>
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-hidden="true">
+    <span id="toastMessage"></span>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
   <script src="CoqRunner.js"></script>
@@ -396,6 +432,8 @@
       const backBtn = document.getElementById('backBtn');
       const fallbackEditor = document.getElementById('fallbackEditor');
       const editorMount = document.getElementById('editor');
+      const toastEl = document.getElementById('toast');
+      const toastMessageEl = document.getElementById('toastMessage');
 
       const languageConfig = {
         Lean: {
@@ -474,6 +512,7 @@
       let monacoRef = null;
       let running = false;
       let leanSeed = '';
+      let toastTimer = null;
 
       if(selectedLanguage === 'Lean'){
         leanSeed = initialDraft && initialDraft.trim()
@@ -572,6 +611,25 @@
       function setStatus(text, isError){
         statusEl.textContent = text;
         statusEl.classList.toggle('error', !!isError);
+      }
+
+      function showToast(message, variant){
+        if(!toastEl || !toastMessageEl) return;
+        const text = String(message || '').trim();
+        if(!text) return;
+        toastMessageEl.textContent = text;
+        toastEl.classList.remove('ok', 'warn', 'show');
+        if(variant === 'ok') toastEl.classList.add('ok');
+        if(variant === 'warn') toastEl.classList.add('warn');
+        toastEl.setAttribute('aria-hidden', 'false');
+        if(toastTimer) clearTimeout(toastTimer);
+        requestAnimationFrame(() => {
+          toastEl.classList.add('show');
+        });
+        toastTimer = setTimeout(() => {
+          toastEl.classList.remove('show');
+          toastEl.setAttribute('aria-hidden', 'true');
+        }, 3500);
       }
 
       function setLeanMode(active){
@@ -855,12 +913,14 @@
           return { status: 'rejected', proof_state: 'NN', reason: closure.reason };
         }
 
-        const soundnessIssue = findCoqUnsoundToken(code);
-        if(soundnessIssue){
-          const summary = soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ') (remaining goals: unknown).';
-          setStatus('Coq soundness failed', true);
-          outputEl.textContent = '[Coq Soundness]\n' + summary;
-          return { status: 'rejected', proof_state: 'YN', reason: soundnessIssue.message };
+        if(closure.proofState !== 'NY'){
+          const soundnessIssue = findCoqUnsoundToken(code);
+          if(soundnessIssue){
+            const summary = soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ') (remaining goals: unknown).';
+            setStatus('Coq soundness failed', true);
+            outputEl.textContent = '[Coq Soundness]\n' + summary;
+            return { status: 'rejected', proof_state: 'YN', reason: soundnessIssue.message };
+          }
         }
 
         function formatCoqRunnerDetails(details){
@@ -1012,12 +1072,14 @@
         if(closure.proofState === 'NY'){
           setStatus('Coq proof accepted (NY)');
           outputEl.textContent = serverText + '\n\n[Coq Validation]\nProof ends with ' + closure.closer + ' (NY).';
+          showToast('Post as a problem?', 'warn');
           return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
         }
 
         if(typeof checkProofText !== 'function'){
           setStatus('Coq proof verified (YY)');
           outputEl.textContent = serverText + '\n\n[CoqRunner]\nCoqRunner.js is not available (remaining goals: unknown).';
+          showToast('Post as a proof?', 'ok');
           return { status: 'allowed', proof_state: 'YY', reason: 'Coq server ok' };
         }
 
@@ -1028,6 +1090,7 @@
             const detailsText = formatCoqRunnerDetails(result.details);
             const runnerText = '[CoqRunner]\nProof verified by CoqRunner (' + closure.closer + ').' + detailsText;
             outputEl.textContent = serverText + '\n\n' + runnerText;
+            showToast('Post as a proof?', 'ok');
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
           }
           const err = result && result.error ? result.error : null;
@@ -1045,12 +1108,14 @@
           }
           setStatus('Coq proof verified (YY)');
           outputEl.textContent = serverText + '\n\n[CoqRunner]\n' + summary + detailsText;
+          showToast('Post as a proof?', 'ok');
           return { status: 'allowed', proof_state: 'YY', reason: summary };
         } catch (err) {
           const errorMsg = err && err.message ? err.message : String(err);
           const summary = 'CoqRunner error: ' + errorMsg + ' (remaining goals: unknown).';
           setStatus('Coq proof verified (YY)');
           outputEl.textContent = serverText + '\n\n[CoqRunner]\n' + summary;
+          showToast('Post as a proof?', 'ok');
           return { status: 'allowed', proof_state: 'YY', reason: summary };
         }
       }
