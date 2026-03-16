@@ -1,5 +1,7 @@
 FROM node:20-bookworm-slim
 
+SHELL ["/bin/bash", "-lc"]
+
 ENV NODE_ENV=production
 ENV ELAN_HOME=/opt/elan
 ENV PATH="${ELAN_HOME}/bin:${PATH}"
@@ -7,8 +9,9 @@ ENV PATH="${ELAN_HOME}/bin:${PATH}"
 ARG LEAN_TOOLCHAIN=stable
 ENV LEAN_TOOLCHAIN=${LEAN_TOOLCHAIN}
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
+RUN set -euxo pipefail; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
     curl \
@@ -17,17 +20,24 @@ RUN apt-get update \
     unzip \
     xz-utils \
     zstd \
-    libgmp10 \
-  && rm -rf /var/lib/apt/lists/*
+    libgmp10; \
+  rm -rf /var/lib/apt/lists/*; \
+  command -v unzstd; \
+  unzstd --version; \
+  tar --version
 
-RUN curl -L https://elan.lean-lang.org/elan-init.sh -sSf \
-  | sh -s -- -y --default-toolchain "${LEAN_TOOLCHAIN}"
+RUN set -euxo pipefail; \
+  curl -L https://elan.lean-lang.org/elan-init.sh -sSf \
+  | sh -s -- -y --default-toolchain "${LEAN_TOOLCHAIN}"; \
+  "${ELAN_HOME}/bin/elan" --version
 
-RUN lean --version
+RUN set -euxo pipefail; \
+  "${ELAN_HOME}/bin/lean" --version
 
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
+RUN set -euxo pipefail; \
+  if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
 
 COPY . .
 
