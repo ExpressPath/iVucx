@@ -16,6 +16,7 @@ RUN apt-get update \
     tar \
     unzip \
     xz-utils \
+    zstd \
     libgmp10 \
   && rm -rf /var/lib/apt/lists/*
 
