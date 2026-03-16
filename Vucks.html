@@ -84,6 +84,10 @@
       justify-content:flex-end;
     }
 
+    body.scrolled .search-container.expanded{
+      padding:0;
+    }
+
     .search-box{
       display:flex;
       align-items:center;
@@ -206,17 +210,17 @@
       --slide-line:rgba(15,23,42,0.12);
       --slide-accent:#1a73e8;
       display:grid;
-      grid-template-columns:160px minmax(0,1fr) 240px;
+      grid-template-columns:140px minmax(0,1fr) 220px;
       grid-template-rows:52px minmax(0,1fr) 44px;
       grid-template-areas:
         "toolbar toolbar toolbar"
         "thumbs canvas inspector"
         "status status action";
-      gap:12px;
-      padding:12px;
+      gap:8px;
+      padding:8px;
       background:linear-gradient(180deg, rgba(255,255,255,0.92), rgba(238,240,244,0.9));
       border:1px solid rgba(15,23,42,0.12);
-      border-radius:18px;
+      border-radius:12px;
       box-shadow:0 22px 46px rgba(15,23,42,0.2);
       backdrop-filter:blur(10px);
     }
@@ -300,13 +304,13 @@
       grid-area:thumbs;
       display:flex;
       flex-direction:column;
-      gap:12px;
-      padding:12px;
+      gap:10px;
+      padding:8px;
       border-radius:12px;
       background:var(--slide-panel);
       border:1px solid var(--slide-line);
       overflow:auto;
-      min-width:140px;
+      min-width:120px;
     }
 
     .slide-thumb{
@@ -357,7 +361,7 @@
       grid-area:canvas;
       display:block;
       position:relative;
-      border-radius:16px;
+      border-radius:12px;
       background:
         radial-gradient(circle at 1px 1px, rgba(15,23,42,0.08) 1px, transparent 1px) 0 0 / 24px 24px,
         linear-gradient(180deg, rgba(255,255,255,0.82), rgba(244,246,248,0.9));
@@ -369,8 +373,8 @@
       grid-area:canvas;
       position:relative;
       z-index:2;
-      width:min(900px, 100%);
-      min-height:260px;
+      width:min(1200px, 100%);
+      min-height:320px;
       max-height:100%;
       border-radius:8px;
       border:1px solid #d5d8de;
@@ -395,8 +399,8 @@
       grid-area:inspector;
       display:flex;
       flex-direction:column;
-      gap:12px;
-      padding:12px;
+      gap:10px;
+      padding:8px;
       border-radius:12px;
       background:var(--slide-panel);
       border:1px solid var(--slide-line);
