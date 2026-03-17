@@ -48,13 +48,65 @@
   let lineStart = null;
   let thumbTimer = null;
   let videoAnimation = null;
+  let activeTextEditor = null;
+  let activeTextNode = null;
 
   function hasKonva(){
     return typeof window.Konva !== 'undefined';
   }
 
+  function isEditingText(){
+    return !!activeTextEditor;
+  }
+
+  function closeActiveTextEditor(commit){
+    if (!activeTextEditor || !activeTextNode) return;
+    const textarea = activeTextEditor;
+    const textNode = activeTextNode;
+    if (commit){
+      textNode.text(textarea.value);
+    }
+    if (textarea.parentNode){
+      textarea.parentNode.removeChild(textarea);
+    }
+    textNode.show();
+    transformer.show();
+    uiLayer.draw();
+    currentLayer.draw();
+    refreshHasContent();
+    scheduleThumbUpdate();
+    activeTextEditor = null;
+    activeTextNode = null;
+  }
+
+  function positionTextEditor(){
+    if (!activeTextEditor || !activeTextNode || !stage) return;
+    const stageBox = stage.container().getBoundingClientRect();
+    const absPos = activeTextNode.getAbsolutePosition();
+    const absScale = activeTextNode.getAbsoluteScale();
+    const rotation = typeof activeTextNode.getAbsoluteRotation === 'function'
+      ? activeTextNode.getAbsoluteRotation()
+      : activeTextNode.rotation();
+    const baseHeight = Math.max(
+      activeTextNode.height(),
+      activeTextNode.fontSize() * activeTextNode.lineHeight()
+    );
+
+    activeTextEditor.style.left = `${stageBox.left + absPos.x}px`;
+    activeTextEditor.style.top = `${stageBox.top + absPos.y}px`;
+    activeTextEditor.style.width = `${activeTextNode.width() * absScale.x}px`;
+    activeTextEditor.style.fontSize = `${activeTextNode.fontSize() * absScale.y}px`;
+    activeTextEditor.style.transform = rotation ? `rotate(${rotation}deg)` : '';
+    const minHeight = baseHeight * absScale.y;
+    activeTextEditor.style.height = 'auto';
+    activeTextEditor.style.height = `${Math.max(minHeight, activeTextEditor.scrollHeight)}px`;
+  }
+
   function setEditorActive(active){
     if (active === isEditorActive) return;
+    if (!active && isEditingText()){
+      closeActiveTextEditor(true);
+    }
     isEditorActive = active;
     container.classList.toggle('slide-editor-active', active);
     if (active && !isInitialized){
@@ -210,7 +262,12 @@
   function refreshHasContent(){
     if (!currentLayer) return;
     const nodes = currentLayer.getChildren(node => !node.getAttr('isBackground'));
-    window.slideEditorState.hasContent = nodes.length > 0;
+    window.slideEditorState.hasContent = nodes.some(node => {
+      if (node.className === 'Text'){
+        return node.text().trim().length > 0;
+      }
+      return true;
+    });
   }
 
   function hasVideoContent(){
@@ -340,6 +397,8 @@
 
     window.addEventListener('keydown', (e) => {
       if (!isEditorActive) return;
+      const tag = document.activeElement ? document.activeElement.tagName : '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || isEditingText()) return;
       if (e.key === 'Delete' || e.key === 'Backspace'){
         if (selectedNode){
           deleteSelected();
@@ -504,6 +563,7 @@
     const y = (h - SLIDE_HEIGHT * scale) / 2;
     stage.position({ x, y });
     stage.batchDraw();
+    positionTextEditor();
   }
 
   function getStagePointer(){
@@ -692,12 +752,17 @@
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
+      const maxW = SLIDE_WIDTH / 2;
+      const maxH = SLIDE_HEIGHT / 2;
+      const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+      const width = img.width * scale;
+      const height = img.height * scale;
       const node = new Konva.Image({
-        x: SLIDE_WIDTH / 2 - img.width / 4,
-        y: SLIDE_HEIGHT / 2 - img.height / 4,
+        x: SLIDE_WIDTH / 2 - width / 2,
+        y: SLIDE_HEIGHT / 2 - height / 2,
         image: img,
-        width: Math.min(img.width, SLIDE_WIDTH / 2),
-        height: Math.min(img.height, SLIDE_HEIGHT / 2),
+        width,
+        height,
         strokeScaleEnabled: false
       });
       node.setAttr('assetType', 'image');
@@ -721,12 +786,17 @@
     video.addEventListener('loadeddata', () => {
       const width = video.videoWidth || 640;
       const height = video.videoHeight || 360;
+      const maxW = SLIDE_WIDTH / 2;
+      const maxH = SLIDE_HEIGHT / 2;
+      const scale = Math.min(maxW / width, maxH / height, 1);
+      const fitW = width * scale;
+      const fitH = height * scale;
       const node = new Konva.Image({
-        x: SLIDE_WIDTH / 2 - width / 4,
-        y: SLIDE_HEIGHT / 2 - height / 4,
+        x: SLIDE_WIDTH / 2 - fitW / 2,
+        y: SLIDE_HEIGHT / 2 - fitH / 2,
         image: video,
-        width: Math.min(width, SLIDE_WIDTH / 2),
-        height: Math.min(height, SLIDE_HEIGHT / 2),
+        width: fitW,
+        height: fitH,
         strokeScaleEnabled: false
       });
       node.setAttr('assetType', 'video');
@@ -768,6 +838,7 @@
       y: selectedNode.y() + 20
     });
     addNode(clone);
+    syncVideoAnimation();
   }
 
   function alignSelected(action){
@@ -828,61 +899,44 @@
 
   function editText(textNode){
     if (!stage) return;
-    const stageBox = stage.container().getBoundingClientRect();
-    const textPosition = textNode.absolutePosition();
-    const scale = stage.scaleX();
-    const areaPosition = {
-      x: stageBox.left + textPosition.x * scale + stage.x(),
-      y: stageBox.top + textPosition.y * scale + stage.y()
-    };
+    if (isEditingText()){
+      closeActiveTextEditor(true);
+    }
 
     const textarea = document.createElement('textarea');
     document.body.appendChild(textarea);
     textarea.value = textNode.text();
     textarea.style.position = 'absolute';
-    textarea.style.top = `${areaPosition.y}px`;
-    textarea.style.left = `${areaPosition.x}px`;
-    textarea.style.width = `${textNode.width() * scale}px`;
-    textarea.style.height = `${textNode.height() * scale + 6}px`;
-    textarea.style.fontSize = `${textNode.fontSize() * scale}px`;
+    textarea.style.boxSizing = 'border-box';
+    textarea.style.padding = '0';
     textarea.style.fontFamily = textNode.fontFamily();
     textarea.style.lineHeight = textNode.lineHeight();
     textarea.style.color = textNode.fill();
-    textarea.style.padding = '4px';
     textarea.style.margin = '0';
     textarea.style.border = '1px solid #1a73e8';
     textarea.style.background = '#ffffff';
+    textarea.style.textAlign = textNode.align();
     textarea.style.resize = 'none';
     textarea.style.overflow = 'hidden';
     textarea.style.transformOrigin = 'left top';
-    textarea.style.transform = `rotate(${textNode.rotation()}deg)`;
     textarea.style.zIndex = 1000;
 
     textNode.hide();
     transformer.hide();
     uiLayer.draw();
     textarea.focus();
-
-    function removeTextarea(commit){
-      if (commit){
-        textNode.text(textarea.value);
-      }
-      textarea.parentNode.removeChild(textarea);
-      textNode.show();
-      transformer.show();
-      uiLayer.draw();
-      currentLayer.draw();
-      scheduleThumbUpdate();
-    }
+    activeTextEditor = textarea;
+    activeTextNode = textNode;
+    positionTextEditor();
 
     textarea.addEventListener('keydown', (e) => {
       if (e.key === 'Escape'){
         e.preventDefault();
-        removeTextarea(false);
+        closeActiveTextEditor(false);
       }
     });
 
-    textarea.addEventListener('blur', () => removeTextarea(true));
+    textarea.addEventListener('blur', () => closeActiveTextEditor(true));
 
     textarea.addEventListener('input', () => {
       textarea.style.height = 'auto';
