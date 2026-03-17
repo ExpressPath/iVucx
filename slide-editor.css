@@ -1,0 +1,150 @@
+.slide-editor-active .search-input{
+  opacity:0;
+  pointer-events:none;
+}
+
+.slide-zoom{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.slide-stage{
+  width:100%;
+  height:100%;
+}
+
+.slide-canvas{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:2;
+}
+
+.search-input{
+  z-index:1;
+}
+
+.slide-toolbar .slide-tool{
+  appearance:none;
+  border:1px solid rgba(15,23,42,0.12);
+  background:rgba(15,23,42,0.04);
+  color:inherit;
+  font-size:12px;
+  font-weight:600;
+  padding:4px 8px;
+  border-radius:6px;
+  cursor:pointer;
+}
+
+.slide-toolbar .slide-tool.is-active{
+  background:var(--slide-accent);
+  border-color:var(--slide-accent);
+  color:#fff;
+}
+
+.slide-toolbar .slide-tool:disabled{
+  opacity:0.5;
+  cursor:not-allowed;
+}
+
+.slide-toolbar .slide-tool:focus-visible{
+  outline:2px solid rgba(26,115,232,0.35);
+  outline-offset:2px;
+}
+
+.slide-toolbar-button{
+  cursor:pointer;
+}
+
+.slide-toolbar-group{
+  align-items:center;
+}
+
+.slide-toolbar-right{
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.slide-thumbs{
+  gap:10px;
+}
+
+.slide-thumb{
+  cursor:pointer;
+}
+
+.slide-thumb-canvas{
+  background-size:cover;
+  background-position:center;
+}
+
+.slide-thumb-add{
+  cursor:pointer;
+}
+
+.slide-panel{
+  gap:10px;
+}
+
+.slide-control{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  font-size:12px;
+  color:#3c4757;
+}
+
+.slide-control span{
+  white-space:nowrap;
+}
+
+.slide-control input,
+.slide-control select{
+  flex:0 0 120px;
+  min-width:0;
+  border:1px solid rgba(15,23,42,0.12);
+  border-radius:6px;
+  padding:4px 6px;
+  font-size:12px;
+  background:#fff;
+  color:#1f2933;
+}
+
+.slide-control input[type="range"]{
+  flex:1 1 auto;
+}
+
+.slide-control input[type="color"]{
+  padding:0;
+  height:26px;
+}
+
+#slideTextPanel,
+#slideShapePanel,
+#slideCommonPanel{
+  display:none;
+}
+
+@media (max-width:980px){
+  .slide-toolbar .slide-tool{
+    padding:4px 6px;
+  }
+
+  .slide-control input,
+  .slide-control select{
+    flex:0 0 100px;
+  }
+}
+
+@media (max-width:700px){
+  .slide-toolbar-right{
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+
+  .slide-zoom{
+    order:1;
+  }
+}

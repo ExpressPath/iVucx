@@ -211,7 +211,7 @@
       --slide-accent:#1a73e8;
       display:grid;
       grid-template-columns:140px minmax(0,1fr) 220px;
-      grid-template-rows:52px minmax(0,1fr) 44px;
+      grid-template-rows:auto minmax(0,1fr) 44px;
       grid-template-areas:
         "toolbar toolbar toolbar"
         "thumbs canvas inspector"
@@ -517,7 +517,7 @@
     @media (max-width:700px){
       body.scrolled .search-container.expanded .search-box{
         grid-template-columns:minmax(0,1fr);
-        grid-template-rows:56px minmax(0,1fr) auto 40px 44px;
+        grid-template-rows:auto minmax(0,1fr) auto 40px 44px;
         grid-template-areas:
           "toolbar"
           "canvas"
@@ -1644,6 +1644,7 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="slide-editor.css" />
 </head>
 <body>
 
@@ -1651,74 +1652,112 @@
   <div class="search-container" id="searchContainer">
 
     <form class="search-box" id="searchForm">
-      <div class="slide-toolbar" aria-hidden="true">
+      <div class="slide-toolbar">
         <div class="slide-toolbar-left">
           <div class="slide-app-pill">Slides</div>
-          <div class="slide-toolbar-group">
-            <span class="slide-tool">File</span>
-            <span class="slide-tool">Edit</span>
-            <span class="slide-tool">View</span>
-            <span class="slide-tool">Insert</span>
-            <span class="slide-tool">Format</span>
-            <span class="slide-tool">Arrange</span>
-            <span class="slide-tool">Tools</span>
+          <div class="slide-toolbar-group" data-group="tools">
+            <button class="slide-tool is-active" type="button" data-tool="select">Select</button>
+            <button class="slide-tool" type="button" data-tool="text">Text</button>
+            <button class="slide-tool" type="button" data-tool="rect">Rect</button>
+            <button class="slide-tool" type="button" data-tool="ellipse">Ellipse</button>
+            <button class="slide-tool" type="button" data-tool="line">Line</button>
+            <button class="slide-tool" type="button" data-tool="image">Image</button>
+            <button class="slide-tool" type="button" data-tool="video">Video</button>
           </div>
         </div>
         <div class="slide-toolbar-right">
-          <div class="slide-zoom-pill">100%</div>
-          <div class="slide-toolbar-button">Present</div>
-          <div class="slide-toolbar-button is-primary">Share</div>
+          <div class="slide-toolbar-group" data-group="arrange">
+            <button class="slide-tool" type="button" data-action="bring-front">Front</button>
+            <button class="slide-tool" type="button" data-action="send-back">Back</button>
+            <button class="slide-tool" type="button" data-action="duplicate">Duplicate</button>
+            <button class="slide-tool" type="button" data-action="delete">Delete</button>
+          </div>
+          <div class="slide-toolbar-group" data-group="align">
+            <button class="slide-tool" type="button" data-action="align-left">Left</button>
+            <button class="slide-tool" type="button" data-action="align-center">Center</button>
+            <button class="slide-tool" type="button" data-action="align-right">Right</button>
+            <button class="slide-tool" type="button" data-action="align-top">Top</button>
+            <button class="slide-tool" type="button" data-action="align-middle">Middle</button>
+            <button class="slide-tool" type="button" data-action="align-bottom">Bottom</button>
+          </div>
+          <div class="slide-zoom">
+            <button class="slide-tool" type="button" data-zoom="out">-</button>
+            <div class="slide-zoom-pill" id="slideZoomPill">100%</div>
+            <button class="slide-tool" type="button" data-zoom="in">+</button>
+          </div>
+          <button class="slide-toolbar-button" type="button" data-action="export">Export</button>
+          <button class="slide-toolbar-button is-primary" type="button" data-action="present">Present</button>
         </div>
       </div>
-      <div class="slide-thumbs" aria-hidden="true">
-        <div class="slide-thumb is-active">
-          <div class="slide-thumb-index">1</div>
-          <div class="slide-thumb-canvas"></div>
-        </div>
-        <div class="slide-thumb">
-          <div class="slide-thumb-index">2</div>
-          <div class="slide-thumb-canvas"></div>
-        </div>
-        <div class="slide-thumb">
-          <div class="slide-thumb-index">3</div>
-          <div class="slide-thumb-canvas"></div>
-        </div>
-        <button class="slide-thumb-add" type="button">+ New slide</button>
+      <div class="slide-thumbs" id="slideThumbs"></div>
+      <div class="slide-canvas">
+        <div class="slide-stage" id="slideStage"></div>
       </div>
-      <div class="slide-canvas" aria-hidden="true"></div>
       <textarea
         class="search-input"
         id="searchInput"
         placeholder="Search..."
         rows="1"
       ></textarea>
-      <div class="slide-inspector" aria-hidden="true">
+      <div class="slide-inspector">
         <div class="slide-panel">
-          <div class="slide-panel-title">Theme</div>
-          <div class="slide-swatches">
-            <span class="slide-swatch one"></span>
-            <span class="slide-swatch two"></span>
-            <span class="slide-swatch three"></span>
-            <span class="slide-swatch four"></span>
-            <span class="slide-swatch five"></span>
-          </div>
+          <div class="slide-panel-title">Selection</div>
+          <div class="slide-panel-note" id="slideSelectionLabel">No selection</div>
         </div>
-        <div class="slide-panel">
-          <div class="slide-panel-title">Layout</div>
-          <div class="slide-layout-grid">
-            <div class="slide-layout-card"></div>
-            <div class="slide-layout-card"></div>
-            <div class="slide-layout-card"></div>
-            <div class="slide-layout-card"></div>
-          </div>
+        <div class="slide-panel" id="slideTextPanel">
+          <div class="slide-panel-title">Text</div>
+          <label class="slide-control">
+            <span>Font</span>
+            <select id="propFont">
+              <option value="Arial">Arial</option>
+              <option value="Helvetica">Helvetica</option>
+              <option value="Times New Roman">Times New Roman</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Courier New">Courier New</option>
+            </select>
+          </label>
+          <label class="slide-control">
+            <span>Size</span>
+            <input type="number" id="propFontSize" min="8" max="120" step="1" />
+          </label>
+          <label class="slide-control">
+            <span>Color</span>
+            <input type="color" id="propFill" />
+          </label>
+          <label class="slide-control">
+            <span>Align</span>
+            <select id="propAlign">
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </label>
         </div>
-        <div class="slide-panel">
-          <div class="slide-panel-title">Notes</div>
-          <div class="slide-panel-note">Draft the slide content in the canvas.</div>
+        <div class="slide-panel" id="slideShapePanel">
+          <div class="slide-panel-title">Shape</div>
+          <label class="slide-control">
+            <span>Fill</span>
+            <input type="color" id="propShapeFill" />
+          </label>
+          <label class="slide-control">
+            <span>Stroke</span>
+            <input type="color" id="propStroke" />
+          </label>
+          <label class="slide-control">
+            <span>Stroke W</span>
+            <input type="number" id="propStrokeWidth" min="0" max="20" step="1" />
+          </label>
+        </div>
+        <div class="slide-panel" id="slideCommonPanel">
+          <div class="slide-panel-title">Common</div>
+          <label class="slide-control">
+            <span>Opacity</span>
+            <input type="range" id="propOpacity" min="0" max="1" step="0.05" />
+          </label>
         </div>
       </div>
-      <div class="slide-status" aria-hidden="true">
-        <div>Slide 1 of 3</div>
+      <div class="slide-status">
+        <div id="slideStatusLabel">Slide 1 of 1</div>
         <div>Canvas 16:9</div>
       </div>
       <button class="send-button" id="sendButton" type="submit">
@@ -1732,6 +1771,8 @@
         </svg>
       </button>
     </form>
+    <input id="slideImageInput" type="file" accept="image/*" hidden />
+    <input id="slideVideoInput" type="file" accept="video/*" hidden />
     <button class="search-mode-close" id="searchModeClose" type="button" aria-label="Back">×</button>
     <div class="attachment-list" id="attachmentList" aria-live="polite"></div>
 
@@ -3295,8 +3336,11 @@
     const { contentHeight, lineCount } = measureInputContent();
     updateLineCount(lineCount);
 
+    const hasExternalContent = bodyEl.classList.contains('scrolled')
+      && window.slideEditorState
+      && window.slideEditorState.hasContent;
     const isInputEmpty = input.value.length === 0;
-    if(isInputEmpty){
+    if(isInputEmpty && !hasExternalContent){
       collapseToInitialSearchBox(contentHeight);
       return;
     }
@@ -3602,6 +3646,8 @@
   });
 
 </script>
+<script src="https://unpkg.com/konva@9.3.14/konva.min.js"></script>
+<script src="slide-editor.js"></script>
 
 </body>
 </html>
