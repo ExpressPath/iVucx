@@ -1663,6 +1663,7 @@
             <button class="slide-tool" type="button" data-tool="line">Line</button>
             <button class="slide-tool" type="button" data-tool="image">Image</button>
             <button class="slide-tool" type="button" data-tool="video">Video</button>
+            <button class="slide-tool" type="button" data-tool="file">File</button>
           </div>
         </div>
         <div class="slide-toolbar-right">
@@ -1758,7 +1759,7 @@
       </div>
       <div class="slide-status">
         <div id="slideStatusLabel">Slide 1 of 1</div>
-        <div>Canvas 16:9</div>
+        <div id="slideMetaLabel">Canvas 16:9</div>
       </div>
       <button class="send-button" id="sendButton" type="submit">
         <svg class="icon-search" viewBox="0 0 24 24">
@@ -1773,6 +1774,7 @@
     </form>
     <input id="slideImageInput" type="file" accept="image/*" hidden />
     <input id="slideVideoInput" type="file" accept="video/*" hidden />
+    <input id="slideFileInput" type="file" accept=".pdf,.txt,.md,.markdown,.json,.csv,image/*" hidden />
     <button class="search-mode-close" id="searchModeClose" type="button" aria-label="Back">×</button>
     <div class="attachment-list" id="attachmentList" aria-live="polite"></div>
 
@@ -2251,6 +2253,11 @@
       closeLoginPopup(true);
       return;
     }
+    if(state === 1 && container.classList.contains('expanded') && !document.fullscreenElement){
+      e.preventDefault();
+      applyState(0);
+      return;
+    }
     if(hasSuggestionResults && state === 0){
       e.preventDefault();
       exitSearchMode();
@@ -2259,6 +2266,10 @@
 
   if(searchModeClose){
     searchModeClose.addEventListener('click', ()=>{
+      if(state === 1 && container.classList.contains('expanded')){
+        applyState(0);
+        return;
+      }
       exitSearchMode();
     });
   }

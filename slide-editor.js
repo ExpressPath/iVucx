@@ -3,12 +3,15 @@
   const container = document.getElementById('searchContainer');
   const searchInput = document.getElementById('searchInput');
   const stageHost = document.getElementById('slideStage');
+  const slideCanvas = stageHost ? stageHost.closest('.slide-canvas') : null;
   const thumbsEl = document.getElementById('slideThumbs');
   const zoomPill = document.getElementById('slideZoomPill');
   const statusLabel = document.getElementById('slideStatusLabel');
+  const metaLabel = document.getElementById('slideMetaLabel');
   const selectionLabel = document.getElementById('slideSelectionLabel');
   const imageInput = document.getElementById('slideImageInput');
   const videoInput = document.getElementById('slideVideoInput');
+  const fileInput = document.getElementById('slideFileInput');
   const toolButtons = Array.from(document.querySelectorAll('[data-tool]'));
   const actionButtons = Array.from(document.querySelectorAll('[data-action]'));
   const zoomButtons = Array.from(document.querySelectorAll('[data-zoom]'));
@@ -24,7 +27,7 @@
   const propStrokeWidth = document.getElementById('propStrokeWidth');
   const propOpacity = document.getElementById('propOpacity');
 
-  if (!container || !stageHost || !thumbsEl) return;
+  if (!container || !stageHost || !thumbsEl || !slideCanvas) return;
 
   window.slideEditorState = window.slideEditorState || { hasContent: false };
 
@@ -35,9 +38,18 @@
   const SNAP_THRESHOLD = 8;
   const NUDGE_STEP = 10;
   const NUDGE_FINE_STEP = 1;
+  const FILE_SIZE_LIMIT = 20 * 1024 * 1024;
   const SEED_TEXT_WIDTH = 920;
   const SEED_TEXT_MARGIN = 120;
   const DEFAULT_ANCHORS = ['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right'];
+  const DANGEROUS_FILE_EXTENSIONS = new Set([
+    'ade','adp','apk','app','bat','chm','cmd','com','cpl','dll','dmg','exe','hta','ins','iso',
+    'jar','js','jse','lib','lnk','mde','msc','msi','msp','mst','ps1','reg','scr','sct','sh',
+    'sys','vb','vbe','vbs','vxd','wsc','wsf','wsh'
+  ]);
+  const SUPPORTED_FILE_EXTENSIONS = new Set([
+    'pdf','txt','md','markdown','json','csv','png','jpg','jpeg','gif','webp'
+  ]);
 
   let stage = null;
   let uiLayer = null;
@@ -60,6 +72,12 @@
   let contextMenuEl = null;
   let clipboardNode = null;
   let guideLines = [];
+  let docViewer = null;
+  let docTitleEl = null;
+  let docTypeEl = null;
+  let docScrollEl = null;
+  let docDownloadBtn = null;
+  let isPresentationMode = false;
 
   function hasKonva(){
     return typeof window.Konva !== 'undefined';
@@ -377,6 +395,362 @@
     uiLayer.batchDraw();
   }
 
+  function getCurrentSlide(){
+    return slides[currentSlideIndex] || null;
+  }
+
+  function isDocumentSlide(slide = getCurrentSlide()){
+    return !!(slide && slide.type === 'document');
+  }
+
+  function updateZoomPill(){
+    if (!zoomPill) return;
+    zoomPill.textContent = isDocumentSlide() ? 'DOC' : `${Math.round(zoom * 100)}%`;
+  }
+
+  function ensureDocViewer(){
+    if (docViewer) return docViewer;
+
+    docViewer = document.createElement('div');
+    docViewer.className = 'slide-doc-viewer';
+
+    const shell = document.createElement('div');
+    shell.className = 'slide-doc-shell';
+
+    const header = document.createElement('div');
+    header.className = 'slide-doc-header';
+
+    const meta = document.createElement('div');
+    meta.className = 'slide-doc-meta';
+
+    docTitleEl = document.createElement('div');
+    docTitleEl.className = 'slide-doc-title';
+
+    docTypeEl = document.createElement('div');
+    docTypeEl.className = 'slide-doc-type';
+
+    meta.append(docTitleEl, docTypeEl);
+
+    docDownloadBtn = document.createElement('button');
+    docDownloadBtn.type = 'button';
+    docDownloadBtn.className = 'slide-doc-download';
+    docDownloadBtn.textContent = 'Download';
+    docDownloadBtn.addEventListener('click', () => {
+      const slide = getCurrentSlide();
+      if (!slide || !slide.document) return;
+      downloadDocumentFile(slide.document);
+    });
+
+    header.append(meta, docDownloadBtn);
+
+    docScrollEl = document.createElement('div');
+    docScrollEl.className = 'slide-doc-scroll';
+
+    shell.append(header, docScrollEl);
+    docViewer.appendChild(shell);
+    slideCanvas.appendChild(docViewer);
+    return docViewer;
+  }
+
+  function downloadDocumentFile(fileInfo){
+    if (!fileInfo || !fileInfo.url) return;
+    const link = document.createElement('a');
+    link.href = fileInfo.url;
+    link.download = fileInfo.title || 'document';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function getFileExtension(name){
+    const match = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+    return match ? match[1] : '';
+  }
+
+  function startsWithBytes(bytes, signature){
+    if (!bytes || bytes.length < signature.length) return false;
+    return signature.every((value, index) => bytes[index] === value);
+  }
+
+  async function readFileHeader(file, length = 16){
+    const buffer = await file.slice(0, length).arrayBuffer();
+    return new Uint8Array(buffer);
+  }
+
+  function getDocumentKind(file, ext){
+    if (ext === 'pdf' || file.type === 'application/pdf') return 'pdf';
+    if (file.type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return 'image';
+    if (
+      file.type.startsWith('text/') ||
+      file.type === 'application/json' ||
+      ['txt', 'md', 'markdown', 'json', 'csv'].includes(ext)
+    ){
+      return 'text';
+    }
+    return '';
+  }
+
+  async function validateFileSignature(file, kind, ext){
+    if (kind === 'text') return { ok: true };
+
+    const header = await readFileHeader(file, 16);
+
+    if (kind === 'pdf'){
+      return startsWithBytes(header, [0x25, 0x50, 0x44, 0x46, 0x2D])
+        ? { ok: true }
+        : { ok: false, message: 'PDF signature check failed.' };
+    }
+
+    if (kind === 'image'){
+      if (ext === 'png'){
+        return startsWithBytes(header, [0x89, 0x50, 0x4E, 0x47])
+          ? { ok: true }
+          : { ok: false, message: 'PNG signature check failed.' };
+      }
+      if (ext === 'jpg' || ext === 'jpeg'){
+        return startsWithBytes(header, [0xFF, 0xD8, 0xFF])
+          ? { ok: true }
+          : { ok: false, message: 'JPEG signature check failed.' };
+      }
+      if (ext === 'gif'){
+        return startsWithBytes(header, [0x47, 0x49, 0x46, 0x38])
+          ? { ok: true }
+          : { ok: false, message: 'GIF signature check failed.' };
+      }
+      if (ext === 'webp'){
+        return startsWithBytes(header, [0x52, 0x49, 0x46, 0x46])
+          ? { ok: true }
+          : { ok: false, message: 'WEBP signature check failed.' };
+      }
+    }
+
+    return { ok: true };
+  }
+
+  async function runFileSafetyChecks(file){
+    if (!file) return { ok: false, message: 'No file selected.' };
+    const ext = getFileExtension(file.name);
+    if (file.size > FILE_SIZE_LIMIT){
+      return { ok: false, message: 'Files larger than 20 MB are blocked.' };
+    }
+    if (DANGEROUS_FILE_EXTENSIONS.has(ext)){
+      return { ok: false, message: 'Executable or script-like files are blocked.' };
+    }
+    if (!SUPPORTED_FILE_EXTENSIONS.has(ext)){
+      return { ok: false, message: 'This file type is not supported as a slide page.' };
+    }
+
+    const kind = getDocumentKind(file, ext);
+    if (!kind){
+      return { ok: false, message: 'Could not classify this file safely.' };
+    }
+
+    const signature = await validateFileSignature(file, kind, ext);
+    if (!signature.ok) return signature;
+
+    return {
+      ok: true,
+      ext,
+      kind
+    };
+  }
+
+  function getDocumentTypeLabel(documentInfo){
+    if (!documentInfo) return 'Document';
+    const baseLabel = documentInfo.kind === 'pdf'
+      ? 'PDF slide'
+      : documentInfo.kind === 'image'
+        ? 'Image document'
+        : 'Text document';
+    return documentInfo.checked ? `${baseLabel} - safety checked` : baseLabel;
+  }
+
+  async function buildDocumentSlideData(file, verdict){
+    const documentInfo = {
+      title: file.name,
+      kind: verdict.kind,
+      ext: verdict.ext,
+      mime: file.type,
+      size: file.size,
+      url: URL.createObjectURL(file),
+      checked: true,
+      text: ''
+    };
+
+    if (documentInfo.kind === 'text'){
+      documentInfo.text = await file.text();
+    }
+
+    return documentInfo;
+  }
+
+  function renderDocumentSlide(slide){
+    ensureDocViewer();
+    if (!slide || !slide.document){
+      docViewer.classList.remove('is-active');
+      return;
+    }
+
+    docTitleEl.textContent = slide.document.title;
+    docTypeEl.textContent = getDocumentTypeLabel(slide.document);
+    docScrollEl.innerHTML = '';
+
+    if (slide.document.kind === 'pdf'){
+      const frame = document.createElement('iframe');
+      frame.className = 'slide-doc-frame';
+      frame.src = slide.document.url;
+      frame.title = slide.document.title;
+      frame.tabIndex = -1;
+      docScrollEl.appendChild(frame);
+    } else if (slide.document.kind === 'image'){
+      const image = document.createElement('img');
+      image.className = 'slide-doc-image';
+      image.src = slide.document.url;
+      image.alt = slide.document.title;
+      docScrollEl.appendChild(image);
+    } else if (slide.document.kind === 'text'){
+      const pre = document.createElement('pre');
+      pre.className = 'slide-doc-text';
+      pre.textContent = slide.document.text;
+      docScrollEl.appendChild(pre);
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'slide-doc-empty';
+      empty.textContent = 'This document cannot be previewed here.';
+      docScrollEl.appendChild(empty);
+    }
+
+    docScrollEl.scrollTop = 0;
+    docViewer.classList.add('is-active');
+  }
+
+  function hideDocumentSlide(){
+    if (!docViewer) return;
+    docViewer.classList.remove('is-active');
+    if (docScrollEl){
+      docScrollEl.innerHTML = '';
+    }
+  }
+
+  function updateUiForCurrentSlide(){
+    const slide = getCurrentSlide();
+    const isDoc = !!(slide && slide.type === 'document');
+
+    if (isDoc && currentTool !== 'select' && currentTool !== 'file'){
+      setTool('select');
+    }
+
+    toolButtons.forEach(btn => {
+      const tool = btn.getAttribute('data-tool');
+      btn.disabled = isDoc && tool !== 'select' && tool !== 'file';
+    });
+
+    actionButtons.forEach(btn => {
+      const action = btn.getAttribute('data-action');
+      btn.disabled = isDoc && action !== 'duplicate' && action !== 'export' && action !== 'present';
+    });
+
+    zoomButtons.forEach(btn => {
+      btn.disabled = isDoc;
+    });
+
+    if (metaLabel){
+      metaLabel.textContent = isDoc ? 'Document slide' : 'Canvas 16:9';
+    }
+
+    if (isDoc && selectionLabel){
+      selectionLabel.textContent = 'Document slide';
+    }
+
+    updateZoomPill();
+  }
+
+  function setPresentationMode(active){
+    if (active === isPresentationMode) return;
+    isPresentationMode = active;
+    bodyEl.classList.toggle('slide-presenting', active);
+    if (active && typeof slideCanvas.focus === 'function'){
+      slideCanvas.focus();
+    }
+    if (!active){
+      clearGuideLines();
+    }
+    resizeStage();
+  }
+
+  document.addEventListener('fullscreenchange', () => {
+    setPresentationMode(document.fullscreenElement === slideCanvas);
+  });
+
+  async function enterPresentationMode(){
+    if (!slideCanvas.requestFullscreen) return;
+    try{
+      await slideCanvas.requestFullscreen();
+    }catch(err){
+      // ignore fullscreen rejections
+    }
+  }
+
+  function moveSlide(step){
+    if (!slides.length) return;
+    const nextIndex = Math.max(0, Math.min(slides.length - 1, currentSlideIndex + step));
+    if (nextIndex === currentSlideIndex) return;
+    showSlide(nextIndex);
+    if (isPresentationMode && typeof slideCanvas.focus === 'function'){
+      slideCanvas.focus();
+    }
+  }
+
+  function handlePresentationKeydown(e){
+    if (!isPresentationMode) return false;
+    const isSpace = e.key === ' ' || e.code === 'Space';
+
+    if (e.key === 'Escape'){
+      if (document.fullscreenElement && document.exitFullscreen){
+        document.exitFullscreen();
+        e.preventDefault();
+        return true;
+      }
+      return false;
+    }
+
+    if (isDocumentSlide()){
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || isSpace){
+        moveSlide(1);
+        e.preventDefault();
+        return true;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace'){
+        moveSlide(-1);
+        e.preventDefault();
+        return true;
+      }
+      if (e.key === 'ArrowDown' && docScrollEl){
+        docScrollEl.scrollBy({ top: Math.round(window.innerHeight * 0.72), behavior: 'smooth' });
+        e.preventDefault();
+        return true;
+      }
+      if (e.key === 'ArrowUp' && docScrollEl){
+        docScrollEl.scrollBy({ top: -Math.round(window.innerHeight * 0.72), behavior: 'smooth' });
+        e.preventDefault();
+        return true;
+      }
+      return false;
+    }
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown' || isSpace){
+      moveSlide(1);
+      e.preventDefault();
+      return true;
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp' || e.key === 'Backspace'){
+      moveSlide(-1);
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
   function setEditorActive(active){
     if (active === isEditorActive) return;
     if (!active && isEditingText()){
@@ -411,6 +785,9 @@
       if (selectionLabel) selectionLabel.textContent = 'Konva not loaded.';
       return;
     }
+
+    slideCanvas.tabIndex = 0;
+    ensureDocViewer();
 
     stage = new Konva.Stage({
       container: stageHost,
@@ -451,7 +828,18 @@
     isInitialized = true;
   }
 
-  function createSlide(){
+  function createSlide(type = 'canvas', payload = null){
+    if (type === 'document'){
+      slides.push({
+        id: `slide-${Date.now()}-${slides.length}`,
+        type: 'document',
+        layer: null,
+        thumbUrl: '',
+        document: payload
+      });
+      return;
+    }
+
     const layer = new Konva.Layer();
     const bg = new Konva.Rect({
       x: 0,
@@ -466,8 +854,10 @@
 
     slides.push({
       id: `slide-${Date.now()}-${slides.length}`,
+      type: 'canvas',
       layer,
-      thumbUrl: ''
+      thumbUrl: '',
+      document: null
     });
   }
 
@@ -479,17 +869,32 @@
       currentLayer.remove();
     }
     currentSlideIndex = index;
-    currentLayer = slides[index].layer;
-    stage.add(currentLayer);
-    uiLayer.moveToTop();
-    stage.draw();
+    const slide = slides[index];
+    currentLayer = slide.type === 'canvas' ? slide.layer : null;
+
+    if (slide.type === 'canvas' && currentLayer){
+      hideDocumentSlide();
+      stageHost.style.display = '';
+      stage.add(currentLayer);
+      uiLayer.moveToTop();
+      stage.draw();
+    } else {
+      stageHost.style.display = 'none';
+      hideContextMenu();
+      clearGuideLines();
+      renderDocumentSlide(slide);
+      stopVideoAnimation();
+    }
+
     selectNode(null);
-    if (index === 0){
+    if (index === 0 && slide.type === 'canvas'){
       syncSeedTextFromInput();
     }
     updateStatus();
     refreshHasContent();
     syncVideoAnimation();
+    updateUiForCurrentSlide();
+    resizeStage();
     scheduleThumbUpdate();
   }
 
@@ -512,7 +917,18 @@
 
       const canvas = document.createElement('div');
       canvas.className = 'slide-thumb-canvas';
-      if (slide.thumbUrl){
+      if (slide.type === 'document' && slide.document){
+        canvas.classList.add('is-document');
+        const kind = document.createElement('div');
+        kind.className = 'slide-thumb-doc-kind';
+        kind.textContent = getDocumentTypeLabel(slide.document);
+
+        const name = document.createElement('div');
+        name.className = 'slide-thumb-doc-name';
+        name.textContent = slide.document.title;
+
+        canvas.append(kind, name);
+      } else if (slide.thumbUrl){
         canvas.style.backgroundImage = `url(${slide.thumbUrl})`;
       }
 
@@ -540,11 +956,17 @@
   }
 
   function updateThumbForCurrent(){
-    if (!stage || !slides[currentSlideIndex]) return;
+    const slide = slides[currentSlideIndex];
+    if (!slide) return;
+    if (slide.type === 'document'){
+      renderThumbs();
+      return;
+    }
+    if (!stage) return;
     transformer.visible(false);
     uiLayer.draw();
     try{
-      slides[currentSlideIndex].thumbUrl = stage.toDataURL({ pixelRatio: 0.2 });
+      slide.thumbUrl = stage.toDataURL({ pixelRatio: 0.2 });
     }catch(err){
       // ignore tainted canvas
     }
@@ -554,6 +976,10 @@
   }
 
   function refreshHasContent(){
+    if (isDocumentSlide()){
+      window.slideEditorState.hasContent = true;
+      return;
+    }
     if (!currentLayer) return;
     const nodes = currentLayer.getChildren(node => !node.getAttr('isBackground'));
     window.slideEditorState.hasContent = nodes.some(node => {
@@ -571,6 +997,10 @@
   }
 
   function syncVideoAnimation(){
+    if (isDocumentSlide()){
+      stopVideoAnimation();
+      return;
+    }
     if (hasVideoContent()) startVideoAnimation();
     else stopVideoAnimation();
   }
@@ -756,6 +1186,10 @@
           if (videoInput) videoInput.click();
           return;
         }
+        if (tool === 'file'){
+          if (fileInput) fileInput.click();
+          return;
+        }
         setTool(tool);
       });
     });
@@ -784,6 +1218,10 @@
       videoInput.addEventListener('change', handleVideoUpload);
     }
 
+    if (fileInput){
+      fileInput.addEventListener('change', handleFileUpload);
+    }
+
     if (searchInput){
       ['input', 'change'].forEach(eventName => {
         searchInput.addEventListener(eventName, () => {
@@ -797,6 +1235,7 @@
     bindInspector();
 
     window.addEventListener('keydown', (e) => {
+      if (handlePresentationKeydown(e)) return;
       if (!isEditorActive) return;
       const tag = document.activeElement ? document.activeElement.tagName : '';
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || isEditingText()) return;
@@ -1001,9 +1440,7 @@
         exportCurrentSlide();
         return;
       case 'present':
-        if (stageHost.requestFullscreen){
-          stageHost.requestFullscreen();
-        }
+        enterPresentationMode();
         return;
       default:
         return;
@@ -1012,9 +1449,7 @@
 
   function setZoom(value){
     zoom = Math.max(0.5, Math.min(2, value));
-    if (zoomPill){
-      zoomPill.textContent = `${Math.round(zoom * 100)}%`;
-    }
+    updateZoomPill();
     resizeStage();
   }
 
@@ -1358,6 +1793,37 @@
     });
   }
 
+  async function handleFileUpload(e){
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    try{
+      const verdict = await runFileSafetyChecks(file);
+      if (!verdict.ok){
+        if (selectionLabel){
+          selectionLabel.textContent = verdict.message;
+        }
+        e.target.value = '';
+        return;
+      }
+
+      const documentInfo = await buildDocumentSlideData(file, verdict);
+      createSlide('document', documentInfo);
+      renderThumbs();
+      showSlide(slides.length - 1);
+      setTool('select');
+      if (selectionLabel){
+        selectionLabel.textContent = `${file.name} passed local safety checks.`;
+      }
+    }catch(err){
+      if (selectionLabel){
+        selectionLabel.textContent = 'File processing failed.';
+      }
+    }finally{
+      e.target.value = '';
+    }
+  }
+
   function startVideoAnimation(){
     if (videoAnimation || !currentLayer) return;
     videoAnimation = new Konva.Animation(() => {}, currentLayer);
@@ -1406,7 +1872,18 @@
   }
 
   function duplicateCurrentSlide(){
-    if (!currentLayer) return;
+    const slide = getCurrentSlide();
+    if (!slide) return;
+
+    if (slide.type === 'document'){
+      const duplicateDocument = {
+        ...slide.document
+      };
+      createSlide('document', duplicateDocument);
+      renderThumbs();
+      showSlide(slides.length - 1);
+      return;
+    }
 
     createSlide();
     const duplicateLayer = slides[slides.length - 1].layer;
@@ -1466,6 +1943,11 @@
   }
 
   function exportCurrentSlide(){
+    const slide = getCurrentSlide();
+    if (slide && slide.type === 'document'){
+      downloadDocumentFile(slide.document);
+      return;
+    }
     if (!stage) return;
     transformer.visible(false);
     uiLayer.draw();
