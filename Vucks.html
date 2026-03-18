@@ -3665,9 +3665,46 @@
     else if(state === 2) applyState(1);
   }
 
+  function canElementConsumeScroll(el){
+    if(!el || el === document.body || el === document.documentElement) return false;
+    if(!(el instanceof HTMLElement)) return false;
+    const style = window.getComputedStyle(el);
+    const overflowY = style.overflowY || style.overflow;
+    const isScrollable = /(auto|scroll|overlay)/.test(overflowY);
+    return isScrollable && (el.scrollHeight - el.clientHeight > 2);
+  }
+
   function shouldSkipScrollDetection(target){
     if(!target || typeof target.closest !== 'function') return false;
-    return !!target.closest('.search-container.expanded, .login-popup-card, .blue-mode-panel, .suggestion-panel');
+
+    if(target.closest('.login-popup-card, .blue-mode-panel, .suggestion-panel')){
+      return true;
+    }
+
+    if(target.closest('.slide-thumbs, .slide-inspector, .slide-doc-scroll')){
+      return true;
+    }
+
+    if(target instanceof HTMLElement){
+      const tagName = target.tagName;
+      if(tagName === 'SELECT'){
+        return true;
+      }
+
+      if(tagName === 'TEXTAREA' && target !== input){
+        return true;
+      }
+
+      let current = target;
+      while(current && current !== document.body){
+        if(canElementConsumeScroll(current)){
+          return true;
+        }
+        current = current.parentElement;
+      }
+    }
+
+    return false;
   }
 
   function handleScrollDelta(deltaY){
@@ -3698,6 +3735,7 @@
     }
 
     if(shouldSkipScrollDetection(e.target)){
+      wheelAccum = 0;
       return;
     }
 
@@ -3715,7 +3753,10 @@
   window.addEventListener('touchmove', e=>{
     if(touchLastY === null || e.touches.length !== 1) return;
     if(hasSuggestionResults && state === 0) return;
-    if(shouldSkipScrollDetection(e.target)) return;
+    if(shouldSkipScrollDetection(e.target)){
+      wheelAccum = 0;
+      return;
+    }
 
     const currentY = e.touches[0].clientY;
     const deltaY = touchLastY - currentY;
