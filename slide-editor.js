@@ -1,6 +1,7 @@
 (() => {
   const bodyEl = document.body;
   const container = document.getElementById('searchContainer');
+  const searchInput = document.getElementById('searchInput');
   const stageHost = document.getElementById('slideStage');
   const thumbsEl = document.getElementById('slideThumbs');
   const zoomPill = document.getElementById('slideZoomPill');
@@ -30,6 +31,9 @@
   const SLIDE_WIDTH = 1280;
   const SLIDE_HEIGHT = 720;
   const MIN_SIZE = 20;
+  const MIN_TEXT_SIZE = 12;
+  const SEED_TEXT_WIDTH = 920;
+  const SEED_TEXT_MARGIN = 120;
   const DEFAULT_ANCHORS = ['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right'];
 
   let stage = null;
@@ -50,6 +54,7 @@
   let videoAnimation = null;
   let activeTextEditor = null;
   let activeTextNode = null;
+  let contextMenuEl = null;
 
   function hasKonva(){
     return typeof window.Konva !== 'undefined';
@@ -102,10 +107,187 @@
     activeTextEditor.style.height = `${Math.max(minHeight, activeTextEditor.scrollHeight)}px`;
   }
 
+  function getContentNodes(layer = currentLayer){
+    if (!layer) return [];
+    return layer.getChildren(node => !node.getAttr('isBackground'));
+  }
+
+  function centerNodeOnSlide(node, layer = currentLayer){
+    if (!node || !layer) return;
+    const box = node.getClientRect({ relativeTo: layer });
+    node.position({
+      x: node.x() + (SLIDE_WIDTH / 2 - (box.x + box.width / 2)),
+      y: node.y() + (SLIDE_HEIGHT / 2 - (box.y + box.height / 2))
+    });
+  }
+
+  function fitSeedTextNode(node){
+    if (!node) return;
+    node.width(Math.min(SEED_TEXT_WIDTH, SLIDE_WIDTH - SEED_TEXT_MARGIN * 2));
+    node.align('center');
+    node.fontSize(38);
+    while (node.height() > SLIDE_HEIGHT - SEED_TEXT_MARGIN * 2 && node.fontSize() > 18){
+      node.fontSize(node.fontSize() - 2);
+    }
+  }
+
+  function createSeedTextNode(text){
+    const fontFamily = searchInput
+      ? window.getComputedStyle(searchInput).fontFamily
+      : 'Arial';
+    const node = new Konva.Text({
+      x: SEED_TEXT_MARGIN,
+      y: SEED_TEXT_MARGIN,
+      text,
+      fontSize: 38,
+      fontFamily,
+      fill: '#111111',
+      width: Math.min(SEED_TEXT_WIDTH, SLIDE_WIDTH - SEED_TEXT_MARGIN * 2),
+      draggable: true,
+      align: 'center',
+      lineHeight: 1.3
+    });
+    node.setAttr('seedSource', true);
+    fitSeedTextNode(node);
+    return node;
+  }
+
+  function syncSeedTextFromInput(){
+    if (!slides[0] || !searchInput) return;
+
+    const layer = slides[0].layer;
+    const text = searchInput.value.trim();
+    const nodes = getContentNodes(layer);
+    const seedNode = nodes.find(node => node.getAttr && node.getAttr('seedSource'));
+    const hasOtherContent = nodes.some(node => !node.getAttr('seedSource'));
+
+    if (!text){
+      if (seedNode && !hasOtherContent){
+        seedNode.destroy();
+        if (currentLayer === layer){
+          if (selectedNode === seedNode){
+            selectNode(null);
+          }
+          currentLayer.batchDraw();
+          refreshHasContent();
+          scheduleThumbUpdate();
+        }
+      }
+      return;
+    }
+
+    if (hasOtherContent && !seedNode) return;
+
+    if (seedNode && !hasOtherContent){
+      seedNode.text(text);
+      fitSeedTextNode(seedNode);
+      centerNodeOnSlide(seedNode, layer);
+      if (currentLayer === layer){
+        currentLayer.batchDraw();
+        refreshHasContent();
+        if (selectedNode === seedNode){
+          updateInspector(seedNode);
+        }
+        scheduleThumbUpdate();
+      }
+      return;
+    }
+
+    if (!seedNode && nodes.length === 0){
+      const node = createSeedTextNode(text);
+      addNode(node, currentLayer === layer ? false : true, layer);
+      centerNodeOnSlide(node, layer);
+      if (currentLayer === layer){
+        currentLayer.batchDraw();
+        selectNode(node);
+        scheduleThumbUpdate();
+      }
+    }
+  }
+
+  function resolveSelectableNode(target){
+    if (!target || target === stage) return null;
+    if (target === transformer || target.getParent && target.getParent() === transformer){
+      return selectedNode;
+    }
+    if (target.getAttr && target.getAttr('isBackground')){
+      return null;
+    }
+    return target;
+  }
+
+  function hideContextMenu(){
+    if (!contextMenuEl) return;
+    contextMenuEl.hidden = true;
+    contextMenuEl.innerHTML = '';
+  }
+
+  function ensureContextMenu(){
+    if (contextMenuEl) return contextMenuEl;
+
+    const menu = document.createElement('div');
+    menu.className = 'slide-context-menu';
+    menu.hidden = true;
+    document.body.appendChild(menu);
+
+    document.addEventListener('pointerdown', (e) => {
+      if (!contextMenuEl || contextMenuEl.hidden) return;
+      if (contextMenuEl.contains(e.target)) return;
+      hideContextMenu();
+    }, true);
+
+    window.addEventListener('blur', hideContextMenu);
+    window.addEventListener('resize', hideContextMenu);
+    window.addEventListener('scroll', hideContextMenu, true);
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape'){
+        hideContextMenu();
+      }
+    });
+
+    contextMenuEl = menu;
+    return contextMenuEl;
+  }
+
+  function createContextMenuItem(def){
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'slide-context-menu-item' + (def.danger ? ' is-danger' : '');
+    button.textContent = def.label;
+    button.addEventListener('click', () => {
+      hideContextMenu();
+      def.action();
+    });
+    return button;
+  }
+
+  function showContextMenu(items, clientX, clientY){
+    if (!items.length){
+      hideContextMenu();
+      return;
+    }
+    const menu = ensureContextMenu();
+    menu.innerHTML = '';
+    items.forEach(item => menu.appendChild(createContextMenuItem(item)));
+    menu.hidden = false;
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+
+    const rect = menu.getBoundingClientRect();
+    const left = Math.max(12, Math.min(clientX, window.innerWidth - rect.width - 12));
+    const top = Math.max(12, Math.min(clientY, window.innerHeight - rect.height - 12));
+
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+  }
+
   function setEditorActive(active){
     if (active === isEditorActive) return;
     if (!active && isEditingText()){
       closeActiveTextEditor(true);
+    }
+    if (!active){
+      hideContextMenu();
     }
     isEditorActive = active;
     container.classList.toggle('slide-editor-active', active);
@@ -113,6 +295,7 @@
       init();
     }
     if (active){
+      syncSeedTextFromInput();
       resizeStage();
     }
   }
@@ -156,6 +339,7 @@
 
     bindStageEvents();
     bindUiEvents();
+    syncSeedTextFromInput();
     resizeStage();
     renderThumbs();
 
@@ -193,6 +377,9 @@
     uiLayer.moveToTop();
     stage.draw();
     selectNode(null);
+    if (index === 0){
+      syncSeedTextFromInput();
+    }
     updateStatus();
     refreshHasContent();
     syncVideoAnimation();
@@ -284,8 +471,9 @@
   function bindStageEvents(){
     stage.on('mousedown touchstart', (e) => {
       if (!isEditorActive) return;
-      const target = e.target;
-      const isEmpty = target === stage || target.getAttr('isBackground');
+      hideContextMenu();
+      const target = resolveSelectableNode(e.target);
+      const isEmpty = !target;
 
       if (!isEmpty){
         selectNode(target);
@@ -350,6 +538,102 @@
       setTool('select');
       scheduleThumbUpdate();
     });
+
+    stage.on('contextmenu', (e) => {
+      if (!isEditorActive) return;
+      e.evt.preventDefault();
+
+      const target = resolveSelectableNode(e.target);
+      const point = getStagePointer();
+
+      if (target){
+        selectNode(target);
+      } else {
+        selectNode(null);
+      }
+
+      const items = [];
+
+      if (target){
+        if (target.className === 'Text'){
+          items.push({
+            label: 'Edit text',
+            action: () => editText(target)
+          });
+        }
+        items.push({
+          label: 'Larger',
+          action: () => resizeNodeByFactor(target, 1.12)
+        });
+        items.push({
+          label: 'Smaller',
+          action: () => resizeNodeByFactor(target, 0.88)
+        });
+        items.push({
+          label: 'Center on slide',
+          action: () => {
+            centerNodeOnSlide(target);
+            currentLayer.batchDraw();
+            scheduleThumbUpdate();
+          }
+        });
+        items.push({
+          label: 'Duplicate',
+          action: () => duplicateSelected()
+        });
+        items.push({
+          label: 'Bring to front',
+          action: () => handleAction('bring-front')
+        });
+        items.push({
+          label: 'Send to back',
+          action: () => handleAction('send-back')
+        });
+        items.push({
+          label: 'Delete',
+          action: () => deleteSelected(),
+          danger: true
+        });
+      } else if (point){
+        items.push({
+          label: 'Add text here',
+          action: () => {
+            const textNode = createTextNode(point.x, point.y);
+            addNode(textNode);
+            editText(textNode);
+            setTool('select');
+          }
+        });
+        items.push({
+          label: 'Add rectangle',
+          action: () => {
+            addNode(createRectNode(point.x, point.y));
+            setTool('select');
+          }
+        });
+        items.push({
+          label: 'Add ellipse',
+          action: () => {
+            addNode(createEllipseNode(point.x, point.y));
+            setTool('select');
+          }
+        });
+        if (imageInput){
+          items.push({
+            label: 'Insert image',
+            action: () => imageInput.click()
+          });
+        }
+        if (videoInput){
+          items.push({
+            label: 'Insert video',
+            action: () => videoInput.click()
+          });
+        }
+      }
+
+      showContextMenu(items, e.evt.clientX, e.evt.clientY);
+    });
   }
 
   function bindUiEvents(){
@@ -393,6 +677,16 @@
       videoInput.addEventListener('change', handleVideoUpload);
     }
 
+    if (searchInput){
+      ['input', 'change'].forEach(eventName => {
+        searchInput.addEventListener(eventName, () => {
+          if (isEditorActive){
+            syncSeedTextFromInput();
+          }
+        });
+      });
+    }
+
     bindInspector();
 
     window.addEventListener('keydown', (e) => {
@@ -409,6 +703,12 @@
 
     const resizeObserver = new ResizeObserver(() => resizeStage());
     resizeObserver.observe(stageHost);
+
+    stageHost.addEventListener('contextmenu', (e) => {
+      if (isEditorActive){
+        e.preventDefault();
+      }
+    });
   }
 
   function bindInspector(){
@@ -518,7 +818,12 @@
         scheduleThumbUpdate();
         return;
       case 'send-back':
-        if (selectedNode) selectedNode.moveToBottom();
+        if (selectedNode){
+          selectedNode.moveToBottom();
+          if (selectedNode.zIndex() === 0){
+            selectedNode.zIndex(1);
+          }
+        }
         currentLayer.draw();
         scheduleThumbUpdate();
         return;
@@ -594,6 +899,8 @@
     const isMedia = node.getAttr('assetType') === 'image' || node.getAttr('assetType') === 'video';
     if (isText){
       transformer.enabledAnchors(['middle-left', 'middle-right']);
+    } else if (isMedia){
+      transformer.enabledAnchors(['top-left', 'top-right', 'bottom-left', 'bottom-right']);
     } else {
       transformer.enabledAnchors(DEFAULT_ANCHORS);
     }
@@ -640,8 +947,14 @@
     return fallback;
   }
 
-  function addNode(node, skipSelect = false){
+  function bindNodeEvents(node){
     node.draggable(true);
+    node.on('transformstart dragstart', hideContextMenu);
+    node.on('transform', () => {
+      if (selectedNode === node){
+        updateInspector(node);
+      }
+    });
     node.on('transformend', () => normalizeNode(node));
     node.on('dragend', () => {
       scheduleThumbUpdate();
@@ -650,14 +963,26 @@
     if (node.className === 'Text'){
       node.on('dblclick dbltap', () => editText(node));
     }
+  }
 
-    currentLayer.add(node);
-    currentLayer.draw();
-    if (!skipSelect){
+  function addNode(node, skipSelect = false, layer = currentLayer){
+    if (!layer) return;
+    bindNodeEvents(node);
+
+    layer.add(node);
+
+    if (layer === currentLayer){
+      currentLayer.draw();
+    }
+
+    if (!skipSelect && layer === currentLayer){
       selectNode(node);
     }
-    refreshHasContent();
-    scheduleThumbUpdate();
+
+    if (layer === currentLayer){
+      refreshHasContent();
+      scheduleThumbUpdate();
+    }
   }
 
   function normalizeNode(node){
@@ -692,6 +1017,57 @@
     }
 
     currentLayer.batchDraw();
+    if (selectedNode === node){
+      updateInspector(node);
+    }
+    scheduleThumbUpdate();
+  }
+
+  function resizeNodeByFactor(node, factor){
+    if (!node || !currentLayer) return;
+
+    const box = node.getClientRect({ relativeTo: currentLayer });
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+
+    if (node.className === 'Text'){
+      node.width(Math.max(MIN_SIZE, node.width() * factor));
+      node.fontSize(Math.max(MIN_TEXT_SIZE, node.fontSize() * factor));
+    } else if (node.className === 'Rect' || node.className === 'Image'){
+      node.width(Math.max(MIN_SIZE, node.width() * factor));
+      node.height(Math.max(MIN_SIZE, node.height() * factor));
+    } else if (node.className === 'Ellipse'){
+      const radius = node.radius();
+      node.radius({
+        x: Math.max(MIN_SIZE / 2, radius.x * factor),
+        y: Math.max(MIN_SIZE / 2, radius.y * factor)
+      });
+    } else if (node.className === 'Line'){
+      const points = node.points();
+      const lineCenterX = (points[0] + points[2]) / 2;
+      const lineCenterY = (points[1] + points[3]) / 2;
+      node.points([
+        lineCenterX + (points[0] - lineCenterX) * factor,
+        lineCenterY + (points[1] - lineCenterY) * factor,
+        lineCenterX + (points[2] - lineCenterX) * factor,
+        lineCenterY + (points[3] - lineCenterY) * factor
+      ]);
+      node.strokeWidth(Math.max(1, node.strokeWidth() * factor));
+    }
+
+    const nextBox = node.getClientRect({ relativeTo: currentLayer });
+    const nextCenterX = nextBox.x + nextBox.width / 2;
+    const nextCenterY = nextBox.y + nextBox.height / 2;
+
+    node.position({
+      x: node.x() + (centerX - nextCenterX),
+      y: node.y() + (centerY - nextCenterY)
+    });
+
+    currentLayer.batchDraw();
+    if (selectedNode === node){
+      updateInspector(node);
+    }
     scheduleThumbUpdate();
   }
 
