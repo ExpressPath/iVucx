@@ -396,7 +396,7 @@
     }
 
     createSlide();
-    showSlide(0);
+    showSlide(0, { syncSeedFromInput: updateInput });
     if (updateInput){
       syncSeedTextFromInput();
     } else {
@@ -1041,9 +1041,9 @@
     });
     uiLayer.add(transformer);
 
+    stage.add(uiLayer);
     createSlide();
     showSlide(0);
-    stage.add(uiLayer);
 
     bindStageEvents();
     bindUiEvents();
@@ -1087,7 +1087,8 @@
     });
   }
 
-  function showSlide(index){
+  function showSlide(index, options = {}){
+    const syncSeedFromInput = options.syncSeedFromInput !== false;
     if (!slides[index]) return;
     hideContextMenu();
     clearGuideLines();
@@ -1102,7 +1103,9 @@
       hideDocumentSlide();
       stageHost.style.display = '';
       stage.add(currentLayer);
-      uiLayer.moveToTop();
+      if (uiLayer && uiLayer.getParent()){
+        uiLayer.moveToTop();
+      }
       stage.draw();
     } else {
       stageHost.style.display = 'none';
@@ -1113,7 +1116,7 @@
     }
 
     selectNode(null);
-    if (index === 0 && slide.type === 'canvas'){
+    if (syncSeedFromInput && index === 0 && slide.type === 'canvas'){
       syncSeedTextFromInput();
     }
     updateStatus();
