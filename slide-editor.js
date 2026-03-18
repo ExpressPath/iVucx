@@ -399,13 +399,21 @@
 
     if (!isInitialized || !stage){
       clearEditorSession();
-      window.dispatchEvent(new CustomEvent('slide-editor:close-requested'));
+      if (typeof window.closeSlideEditorMode === 'function'){
+        window.closeSlideEditorMode();
+      } else {
+        window.dispatchEvent(new CustomEvent('slide-editor:close-requested'));
+      }
       return true;
     }
 
     resetSlidesToSeedState(sessionSeedText);
     clearEditorSession();
-    window.dispatchEvent(new CustomEvent('slide-editor:close-requested'));
+    if (typeof window.closeSlideEditorMode === 'function'){
+      window.closeSlideEditorMode();
+    } else {
+      window.dispatchEvent(new CustomEvent('slide-editor:close-requested'));
+    }
     return true;
   }
 

@@ -1845,7 +1845,7 @@
 </section>
 
 <div class="selection-mode" id="selectionMode" style="display:none;">
-  <button class="selection-cancel" id="selectionCancel" type="button" aria-label="Cancel">ﾃ・/button>
+  <button class="selection-cancel" id="selectionCancel" type="button" aria-label="Cancel">&times;</button>
   <div class="selection-option" data-value="Lean">Lean</div>
   <div class="selection-option" data-value="Coq">Coq</div>
   <div class="selection-option" data-value="Isabelle">Isabelle</div>
@@ -1869,7 +1869,7 @@
 
   <div class="login-popup" id="loginPopup" aria-hidden="true">
     <div class="login-popup-card" role="dialog" aria-modal="true" aria-labelledby="loginPopupTitle">
-      <button class="login-popup-close" id="loginPopupClose" type="button" aria-label="Close login popup">ﾃ・/button>
+      <button class="login-popup-close" id="loginPopupClose" type="button" aria-label="Close login popup">&times;</button>
       <div class="login-popup-loading" id="loginPopupLoading">
         <div class="login-popup-spinner" aria-hidden="true"></div>
         <div id="loginLoadingText">Checking account state...</div>
@@ -2306,7 +2306,13 @@
     if(state === 1 && container.classList.contains('expanded') && !document.fullscreenElement){
       e.preventDefault();
       if(window.slideEditorControls && typeof window.slideEditorControls.requestClose === 'function'){
-        if(window.slideEditorControls.requestClose()) return;
+        const handled = window.slideEditorControls.requestClose();
+        if(handled){
+          if(state === 1 && container.classList.contains('expanded')){
+            applyState(0);
+          }
+          return;
+        }
       }
       applyState(0);
       return;
@@ -2321,7 +2327,13 @@
     searchModeClose.addEventListener('click', ()=>{
       if(state === 1 && container.classList.contains('expanded')){
         if(window.slideEditorControls && typeof window.slideEditorControls.requestClose === 'function'){
-          if(window.slideEditorControls.requestClose()) return;
+          const handled = window.slideEditorControls.requestClose();
+          if(handled){
+            if(state === 1 && container.classList.contains('expanded')){
+              applyState(0);
+            }
+            return;
+          }
         }
         applyState(0);
         return;
@@ -3635,6 +3647,12 @@
 
   }
 
+  window.closeSlideEditorMode = () => {
+    if(state === 1 && container.classList.contains('expanded')){
+      applyState(0);
+    }
+  };
+
   function applyForwardCycle(){
     if(state === 0) applyState(1);
     else if(state === 1) applyState(2);
@@ -3725,4 +3743,5 @@
 
 </body>
 </html>
+
 
