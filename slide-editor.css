@@ -34,12 +34,14 @@
 }
 
 body.scrolled .search-container.expanded .search-mode-close{
-  display:flex;
-  top:14px;
-  right:14px;
+  display:inline-flex;
+  position:static;
+  top:auto;
+  right:auto;
   bottom:auto;
-  z-index:6;
-  background:rgba(255,255,255,0.92);
+  z-index:auto;
+  background:#ffffff;
+  box-shadow:none;
 }
 
 .slide-doc-viewer{

@@ -78,6 +78,8 @@
   let docScrollEl = null;
   let docDownloadBtn = null;
   let isPresentationMode = false;
+  let sessionSeedText = '';
+  let sessionBaselineDigest = '';
 
   function hasKonva(){
     return typeof window.Konva !== 'undefined';
@@ -227,6 +229,190 @@
       }
     }
   }
+
+  function roundMetric(value){
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.round(numeric * 100) / 100;
+  }
+
+  function serializeDocumentData(documentData){
+    if (!documentData) return null;
+    return {
+      title: documentData.title || '',
+      kind: documentData.kind || '',
+      ext: documentData.ext || '',
+      mime: documentData.mime || '',
+      size: Number(documentData.size) || 0,
+      url: documentData.url || '',
+      text: documentData.text || ''
+    };
+  }
+
+  function serializeNode(node){
+    if (!node) return null;
+    const common = {
+      className: node.className || '',
+      x: roundMetric(node.x ? node.x() : 0),
+      y: roundMetric(node.y ? node.y() : 0),
+      rotation: roundMetric(node.rotation ? node.rotation() : 0),
+      opacity: roundMetric(node.opacity ? node.opacity() : 1),
+      seedSource: !!(node.getAttr && node.getAttr('seedSource')),
+      assetType: node.getAttr ? (node.getAttr('assetType') || '') : '',
+      assetSrc: node.getAttr ? (node.getAttr('assetSrc') || '') : ''
+    };
+
+    if (node.className === 'Text'){
+      return {
+        ...common,
+        text: node.text(),
+        width: roundMetric(node.width()),
+        fontSize: roundMetric(node.fontSize()),
+        fontFamily: node.fontFamily() || '',
+        fill: node.fill() || '',
+        align: node.align ? (node.align() || 'left') : 'left',
+        lineHeight: roundMetric(node.lineHeight ? node.lineHeight() : 1.2)
+      };
+    }
+
+    if (node.className === 'Rect' || node.className === 'Image'){
+      return {
+        ...common,
+        width: roundMetric(node.width()),
+        height: roundMetric(node.height()),
+        fill: node.fill ? (node.fill() || '') : '',
+        stroke: node.stroke ? (node.stroke() || '') : '',
+        strokeWidth: roundMetric(node.strokeWidth ? node.strokeWidth() : 0),
+        cornerRadius: roundMetric(node.cornerRadius ? node.cornerRadius() : 0)
+      };
+    }
+
+    if (node.className === 'Ellipse'){
+      const radius = node.radius ? node.radius() : { x: 0, y: 0 };
+      return {
+        ...common,
+        radiusX: roundMetric(radius.x),
+        radiusY: roundMetric(radius.y),
+        fill: node.fill ? (node.fill() || '') : '',
+        stroke: node.stroke ? (node.stroke() || '') : '',
+        strokeWidth: roundMetric(node.strokeWidth ? node.strokeWidth() : 0)
+      };
+    }
+
+    if (node.className === 'Line'){
+      return {
+        ...common,
+        points: (node.points ? node.points() : []).map(point => roundMetric(point)),
+        stroke: node.stroke ? (node.stroke() || '') : '',
+        strokeWidth: roundMetric(node.strokeWidth ? node.strokeWidth() : 0)
+      };
+    }
+
+    return common;
+  }
+
+  function serializeEditorState(){
+    return {
+      inputText: searchInput ? searchInput.value : '',
+      slides: slides.map(slide => {
+        if (slide.type === 'document'){
+          return {
+            type: 'document',
+            document: serializeDocumentData(slide.document)
+          };
+        }
+        return {
+          type: 'canvas',
+          nodes: getContentNodes(slide.layer).map(serializeNode)
+        };
+      })
+    };
+  }
+
+  function getEditorStateDigest(){
+    return JSON.stringify(serializeEditorState());
+  }
+
+  function startEditorSession(){
+    sessionSeedText = searchInput ? searchInput.value : '';
+    sessionBaselineDigest = getEditorStateDigest();
+  }
+
+  function clearEditorSession(){
+    sessionSeedText = '';
+    sessionBaselineDigest = '';
+  }
+
+  function hasPendingEditorChanges(){
+    if (!sessionBaselineDigest) return false;
+    return getEditorStateDigest() !== sessionBaselineDigest;
+  }
+
+  function destroySlide(slide){
+    if (!slide || slide.type !== 'canvas' || !slide.layer) return;
+    slide.layer.destroy();
+  }
+
+  function resetSlidesToSeedState(seedText){
+    hideContextMenu();
+    clearGuideLines();
+
+    if (isEditingText()){
+      closeActiveTextEditor(false);
+    }
+
+    if (selectedNode){
+      selectNode(null);
+    }
+
+    stopVideoAnimation();
+    hideDocumentSlide();
+
+    slides.forEach(destroySlide);
+    slides = [];
+    currentLayer = null;
+    currentSlideIndex = 0;
+    clipboardNode = null;
+
+    if (searchInput){
+      searchInput.value = typeof seedText === 'string' ? seedText : '';
+    }
+
+    createSlide();
+    showSlide(0);
+    syncSeedTextFromInput();
+    renderThumbs();
+    refreshHasContent();
+    scheduleThumbUpdate();
+  }
+
+  function requestCloseEditor(){
+    if (!isEditorActive && !sessionBaselineDigest) return false;
+
+    const hasChanges = hasPendingEditorChanges();
+    if (hasChanges){
+      const shouldDiscard = window.confirm('このエディタには編集内容があります。閉じるとスライドの編集内容はすべて破棄され、元の入力テキストに戻ります。続けますか？');
+      if (!shouldDiscard){
+        return true;
+      }
+    }
+
+    if (!isInitialized || !stage){
+      clearEditorSession();
+      window.dispatchEvent(new CustomEvent('slide-editor:close-requested'));
+      return true;
+    }
+
+    resetSlidesToSeedState(sessionSeedText);
+    clearEditorSession();
+    window.dispatchEvent(new CustomEvent('slide-editor:close-requested'));
+    return true;
+  }
+
+  window.slideEditorControls = {
+    requestClose: requestCloseEditor,
+    hasPendingChanges: hasPendingEditorChanges
+  };
 
   function resolveSelectableNode(target){
     if (!target || target === stage) return null;
@@ -758,6 +944,7 @@
     }
     if (!active){
       hideContextMenu();
+      clearEditorSession();
     }
     isEditorActive = active;
     container.classList.toggle('slide-editor-active', active);
@@ -766,6 +953,7 @@
     }
     if (active){
       syncSeedTextFromInput();
+      startEditorSession();
       resizeStage();
     }
   }
@@ -898,6 +1086,40 @@
     scheduleThumbUpdate();
   }
 
+  function deleteSlideAt(index){
+    if (!slides[index]) return;
+
+    if (slides.length === 1){
+      resetSlidesToSeedState(searchInput ? searchInput.value : '');
+      return;
+    }
+
+    hideContextMenu();
+    clearGuideLines();
+
+    const isCurrentSlide = index === currentSlideIndex;
+    if (isCurrentSlide && isEditingText()){
+      closeActiveTextEditor(false);
+    }
+
+    if (isCurrentSlide && selectedNode){
+      selectNode(null);
+    }
+
+    const [removedSlide] = slides.splice(index, 1);
+    if (removedSlide && removedSlide.layer === currentLayer){
+      currentLayer = null;
+    }
+    destroySlide(removedSlide);
+
+    const nextIndex = isCurrentSlide
+      ? Math.min(index, slides.length - 1)
+      : (index < currentSlideIndex ? currentSlideIndex - 1 : currentSlideIndex);
+
+    renderThumbs();
+    showSlide(Math.max(0, nextIndex));
+  }
+
   function updateStatus(){
     if (statusLabel){
       statusLabel.textContent = `Slide ${currentSlideIndex + 1} of ${slides.length}`;
@@ -934,6 +1156,17 @@
 
       thumb.append(label, canvas);
       thumb.addEventListener('click', () => showSlide(index));
+      thumb.addEventListener('contextmenu', (e) => {
+        if (!isEditorActive) return;
+        e.preventDefault();
+        showContextMenu([
+          {
+            label: 'Delete slide',
+            action: () => deleteSlideAt(index),
+            danger: true
+          }
+        ], e.clientX, e.clientY);
+      });
       thumbsEl.appendChild(thumb);
     });
 
