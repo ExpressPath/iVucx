@@ -32,6 +32,9 @@
   const SLIDE_HEIGHT = 720;
   const MIN_SIZE = 20;
   const MIN_TEXT_SIZE = 12;
+  const SNAP_THRESHOLD = 8;
+  const NUDGE_STEP = 10;
+  const NUDGE_FINE_STEP = 1;
   const SEED_TEXT_WIDTH = 920;
   const SEED_TEXT_MARGIN = 120;
   const DEFAULT_ANCHORS = ['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right'];
@@ -55,6 +58,8 @@
   let activeTextEditor = null;
   let activeTextNode = null;
   let contextMenuEl = null;
+  let clipboardNode = null;
+  let guideLines = [];
 
   function hasKonva(){
     return typeof window.Konva !== 'undefined';
@@ -281,6 +286,97 @@
     menu.style.top = `${top}px`;
   }
 
+  function clearGuideLines(){
+    if (!guideLines.length) return;
+    guideLines.forEach(line => line.destroy());
+    guideLines = [];
+    uiLayer.batchDraw();
+  }
+
+  function drawGuideLine(orientation, value){
+    if (!uiLayer) return;
+    const points = orientation === 'vertical'
+      ? [value, 0, value, SLIDE_HEIGHT]
+      : [0, value, SLIDE_WIDTH, value];
+    const line = new Konva.Line({
+      points,
+      stroke: '#1a73e8',
+      strokeWidth: 1,
+      dash: [6, 4],
+      listening: false
+    });
+    guideLines.push(line);
+    uiLayer.add(line);
+    transformer.moveToTop();
+  }
+
+  function collectSnapGuides(node){
+    const vertical = [0, SLIDE_WIDTH / 2, SLIDE_WIDTH];
+    const horizontal = [0, SLIDE_HEIGHT / 2, SLIDE_HEIGHT];
+
+    getContentNodes(currentLayer).forEach(otherNode => {
+      if (otherNode === node) return;
+      const box = otherNode.getClientRect({ relativeTo: currentLayer });
+      vertical.push(box.x, box.x + box.width / 2, box.x + box.width);
+      horizontal.push(box.y, box.y + box.height / 2, box.y + box.height);
+    });
+
+    return { vertical, horizontal };
+  }
+
+  function findBestGuide(candidates, guides){
+    let best = null;
+    candidates.forEach(candidate => {
+      guides.forEach(guide => {
+        const delta = guide - candidate.value;
+        if (Math.abs(delta) > SNAP_THRESHOLD) return;
+        if (!best || Math.abs(delta) < Math.abs(best.delta)){
+          best = {
+            delta,
+            guide
+          };
+        }
+      });
+    });
+    return best;
+  }
+
+  function applySnapGuides(node){
+    if (!node || !currentLayer) return;
+
+    clearGuideLines();
+
+    const box = node.getClientRect({ relativeTo: currentLayer });
+    const guides = collectSnapGuides(node);
+    const verticalMatch = findBestGuide([
+      { value: box.x },
+      { value: box.x + box.width / 2 },
+      { value: box.x + box.width }
+    ], guides.vertical);
+    const horizontalMatch = findBestGuide([
+      { value: box.y },
+      { value: box.y + box.height / 2 },
+      { value: box.y + box.height }
+    ], guides.horizontal);
+
+    if (!verticalMatch && !horizontalMatch) return;
+
+    node.position({
+      x: node.x() + (verticalMatch ? verticalMatch.delta : 0),
+      y: node.y() + (horizontalMatch ? horizontalMatch.delta : 0)
+    });
+
+    if (verticalMatch){
+      drawGuideLine('vertical', verticalMatch.guide);
+    }
+    if (horizontalMatch){
+      drawGuideLine('horizontal', horizontalMatch.guide);
+    }
+
+    currentLayer.batchDraw();
+    uiLayer.batchDraw();
+  }
+
   function setEditorActive(active){
     if (active === isEditorActive) return;
     if (!active && isEditingText()){
@@ -325,7 +421,16 @@
     uiLayer = new Konva.Layer();
     transformer = new Konva.Transformer({
       rotateEnabled: true,
+      rotateAnchorOffset: 28,
+      rotationSnaps: [0, 45, 90, 135, 180, 225, 270, 315],
       ignoreStroke: true,
+      borderStroke: '#1a73e8',
+      borderStrokeWidth: 1.25,
+      borderDash: [6, 4],
+      anchorStroke: '#1a73e8',
+      anchorFill: '#ffffff',
+      anchorCornerRadius: 8,
+      anchorSize: 12,
       boundBoxFunc: (oldBox, newBox) => {
         if (newBox.width < MIN_SIZE || newBox.height < MIN_SIZE) return oldBox;
         return newBox;
@@ -368,6 +473,8 @@
 
   function showSlide(index){
     if (!slides[index]) return;
+    hideContextMenu();
+    clearGuideLines();
     if (currentLayer){
       currentLayer.remove();
     }
@@ -693,11 +800,65 @@
       if (!isEditorActive) return;
       const tag = document.activeElement ? document.activeElement.tagName : '';
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || isEditingText()) return;
+      const isAccel = e.ctrlKey || e.metaKey;
+
+      if (isAccel && e.key.toLowerCase() === 'c'){
+        if (selectedNode){
+          copySelected();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      if (isAccel && e.key.toLowerCase() === 'v'){
+        if (clipboardNode){
+          pasteClipboard();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      if (isAccel && e.key.toLowerCase() === 'd'){
+        if (selectedNode){
+          duplicateSelected();
+        } else {
+          duplicateCurrentSlide();
+        }
+        e.preventDefault();
+        return;
+      }
+
+      if (isAccel && e.key.toLowerCase() === 'm'){
+        createSlide();
+        renderThumbs();
+        showSlide(slides.length - 1);
+        e.preventDefault();
+        return;
+      }
+
       if (e.key === 'Delete' || e.key === 'Backspace'){
         if (selectedNode){
           deleteSelected();
           e.preventDefault();
         }
+        return;
+      }
+
+      if (!selectedNode) return;
+
+      const step = e.shiftKey ? NUDGE_FINE_STEP : NUDGE_STEP;
+      if (e.key === 'ArrowLeft'){
+        nudgeSelected(-step, 0);
+        e.preventDefault();
+      } else if (e.key === 'ArrowRight'){
+        nudgeSelected(step, 0);
+        e.preventDefault();
+      } else if (e.key === 'ArrowUp'){
+        nudgeSelected(0, -step);
+        e.preventDefault();
+      } else if (e.key === 'ArrowDown'){
+        nudgeSelected(0, step);
+        e.preventDefault();
       }
     });
 
@@ -810,7 +971,8 @@
         deleteSelected();
         return;
       case 'duplicate':
-        duplicateSelected();
+        if (selectedNode) duplicateSelected();
+        else duplicateCurrentSlide();
         return;
       case 'bring-front':
         if (selectedNode) selectedNode.moveToTop();
@@ -882,6 +1044,7 @@
 
   function selectNode(node){
     selectedNode = node || null;
+    clearGuideLines();
     transformer.nodes(node ? [node] : []);
     applyTransformerConfig(node);
     uiLayer.batchDraw();
@@ -949,14 +1112,24 @@
 
   function bindNodeEvents(node){
     node.draggable(true);
-    node.on('transformstart dragstart', hideContextMenu);
+    node.on('transformstart dragstart', () => {
+      hideContextMenu();
+      clearGuideLines();
+    });
     node.on('transform', () => {
+      if (selectedNode === node){
+        updateInspector(node);
+      }
+    });
+    node.on('dragmove', () => {
+      applySnapGuides(node);
       if (selectedNode === node){
         updateInspector(node);
       }
     });
     node.on('transformend', () => normalizeNode(node));
     node.on('dragend', () => {
+      clearGuideLines();
       scheduleThumbUpdate();
     });
 
@@ -1215,6 +1388,48 @@
     });
     addNode(clone);
     syncVideoAnimation();
+  }
+
+  function copySelected(){
+    if (!selectedNode) return;
+    clipboardNode = selectedNode.clone();
+  }
+
+  function pasteClipboard(){
+    if (!clipboardNode) return;
+    const clone = clipboardNode.clone({
+      x: clipboardNode.x() + 24,
+      y: clipboardNode.y() + 24
+    });
+    addNode(clone);
+    syncVideoAnimation();
+  }
+
+  function duplicateCurrentSlide(){
+    if (!currentLayer) return;
+
+    createSlide();
+    const duplicateLayer = slides[slides.length - 1].layer;
+
+    getContentNodes(currentLayer).forEach(node => {
+      const clone = node.clone();
+      bindNodeEvents(clone);
+      duplicateLayer.add(clone);
+    });
+
+    renderThumbs();
+    showSlide(slides.length - 1);
+  }
+
+  function nudgeSelected(dx, dy){
+    if (!selectedNode) return;
+    selectedNode.position({
+      x: selectedNode.x() + dx,
+      y: selectedNode.y() + dy
+    });
+    currentLayer.batchDraw();
+    updateInspector(selectedNode);
+    scheduleThumbUpdate();
   }
 
   function alignSelected(action){
