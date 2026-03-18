@@ -1833,7 +1833,7 @@
       <button class="sub-button active" id="aBtn">Solved&amp; Proofs</button>
     </div>
 
-    <div class="hint">Scroll to switch 窶・Enter for a new line, Shift + Enter to confirm</div>
+    <div class="hint">Scroll to switch - Enter for a new line, Shift + Enter to confirm</div>
 
   </div>
 </div>
@@ -2027,7 +2027,7 @@
       const remove = document.createElement('button');
       remove.className = 'remove';
       remove.type = 'button';
-      remove.textContent = 'ﾃ・;
+      remove.textContent = '×';
       remove.setAttribute('aria-label', 'Remove ' + (file.name || 'file'));
       remove.addEventListener('click', ()=>{
         if(remove.disabled) return;
@@ -3540,7 +3540,7 @@
 
     const attachedNames = hasFiles ? attachedFiles.map(file=>file.name).join(', ') : '';
     const message = hasFiles ? `${v}\n\nFiles: ${attachedNames}` : v;
-    alert('讀懃ｴ｢蜀・ｮｹ: ' + message);
+    alert('Selection: ' + message);
 
     input.value = '';
     attachedFiles = [];
