@@ -365,7 +365,7 @@
 
     body.scrolled .search-container.expanded .slide-canvas{
       grid-area:canvas;
-      display:block;
+      display:flex;
       position:relative;
       min-height:0;
       border-radius:12px;
@@ -2460,6 +2460,8 @@
 
   if(editorCloseKeep){
     editorCloseKeep.addEventListener('click', ()=>{
+      resetSearchModeDraft();
+      clearSuggestionPane();
       if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
         window.slideEditorControls.preserveInBackground();
       }
@@ -2471,6 +2473,8 @@
   if(editorCloseDiscard){
     editorCloseDiscard.addEventListener('click', ()=>{
       skipNextGrayDraftSave = true;
+      resetSearchModeDraft();
+      clearSuggestionPane();
       resetGrayModeDraft();
       if(window.slideEditorControls && typeof window.slideEditorControls.discardEditorState === 'function'){
         window.slideEditorControls.discardEditorState();
@@ -2568,6 +2572,14 @@
 
   function resetGrayModeDraft(){
     modeDrafts[1] = {
+      text: '',
+      files: [],
+      ready: true
+    };
+  }
+
+  function resetSearchModeDraft(){
+    modeDrafts[0] = {
       text: '',
       files: [],
       ready: true

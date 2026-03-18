@@ -225,7 +225,7 @@ body.slide-presenting .slide-canvas{
 }
 
 .slide-canvas{
-  display:flex;
+  display:none;
   align-items:center;
   justify-content:center;
   z-index:2;
