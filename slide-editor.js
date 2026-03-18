@@ -353,7 +353,22 @@
     slide.layer.destroy();
   }
 
-  function resetSlidesToSeedState(seedText){
+  function seedFirstSlideFromText(seedText){
+    if (!slides[0] || slides[0].type !== 'canvas') return;
+    const text = typeof seedText === 'string' ? seedText.trim() : '';
+    if (!text) return;
+    const layer = slides[0].layer;
+    const node = createSeedTextNode(text);
+    addNode(node, currentLayer === layer ? false : true, layer);
+    centerNodeOnSlide(node, layer);
+    if (currentLayer === layer){
+      currentLayer.batchDraw();
+      scheduleThumbUpdate();
+    }
+  }
+
+  function resetSlidesToSeedState(seedText, options = {}){
+    const updateInput = options.updateInput !== false;
     hideContextMenu();
     clearGuideLines();
 
@@ -374,50 +389,61 @@
     currentSlideIndex = 0;
     clipboardNode = null;
 
-    if (searchInput){
-      searchInput.value = typeof seedText === 'string' ? seedText : '';
+    const normalizedSeedText = typeof seedText === 'string' ? seedText : '';
+
+    if (searchInput && updateInput){
+      searchInput.value = normalizedSeedText;
     }
 
     createSlide();
     showSlide(0);
-    syncSeedTextFromInput();
+    if (updateInput){
+      syncSeedTextFromInput();
+    } else {
+      seedFirstSlideFromText(normalizedSeedText);
+    }
     renderThumbs();
     refreshHasContent();
     scheduleThumbUpdate();
   }
 
-  function requestCloseEditor(){
-    if (!isEditorActive && !sessionBaselineDigest) return false;
-
-    const hasChanges = hasPendingEditorChanges();
-    if (hasChanges){
-      const shouldDiscard = window.confirm('このエディタには編集内容があります。閉じるとスライドの編集内容はすべて破棄され、元の入力テキストに戻ります。続けますか？');
-      if (!shouldDiscard){
-        return true;
-      }
+  function preserveEditorStateInBackground(){
+    hideContextMenu();
+    clearGuideLines();
+    if (isEditingText()){
+      closeActiveTextEditor(true);
     }
-
-    if (!isInitialized || !stage){
-      clearEditorSession();
-      if (typeof window.closeSlideEditorMode === 'function'){
-        window.closeSlideEditorMode();
-      } else {
-        window.dispatchEvent(new CustomEvent('slide-editor:close-requested'));
-      }
-      return true;
-    }
-
-    resetSlidesToSeedState(sessionSeedText);
-    clearEditorSession();
-    if (typeof window.closeSlideEditorMode === 'function'){
-      window.closeSlideEditorMode();
-    } else {
-      window.dispatchEvent(new CustomEvent('slide-editor:close-requested'));
-    }
+    refreshHasContent();
+    scheduleThumbUpdate();
     return true;
   }
 
+  function discardEditorState(){
+    if (!isInitialized || !stage){
+      clearEditorSession();
+      return true;
+    }
+    resetSlidesToSeedState('', { updateInput: false });
+    clearEditorSession();
+    return true;
+  }
+
+  function requestCloseEditor(){
+    if (!isEditorActive && !sessionBaselineDigest) return false;
+    if (typeof window.dispatchEvent === 'function'){
+      window.dispatchEvent(new CustomEvent('slide-editor:close-requested'));
+      return true;
+    }
+    if (typeof window.closeSlideEditorMode === 'function'){
+      window.closeSlideEditorMode();
+      return true;
+    }
+    return false;
+  }
+
   window.slideEditorControls = {
+    preserveInBackground: preserveEditorStateInBackground,
+    discardEditorState,
     requestClose: requestCloseEditor,
     hasPendingChanges: hasPendingEditorChanges
   };

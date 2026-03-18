@@ -786,6 +786,83 @@
       color:#101826;
     }
 
+    .editor-close-menu{
+      position:fixed;
+      inset:0;
+      z-index:42;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      background:rgba(15,23,42,0.28);
+      backdrop-filter:blur(12px);
+    }
+
+    .editor-close-menu.is-open{
+      display:flex;
+    }
+
+    .editor-close-card{
+      width:min(420px, 100%);
+      border-radius:18px;
+      border:1px solid rgba(15,23,42,0.12);
+      background:rgba(255,255,255,0.96);
+      box-shadow:0 28px 56px rgba(15,23,42,0.26);
+      padding:20px;
+      color:#111;
+      text-align:left;
+    }
+
+    .editor-close-title{
+      margin:0 0 10px;
+      font-size:18px;
+      font-weight:700;
+      letter-spacing:.01em;
+    }
+
+    .editor-close-copy{
+      font-size:13px;
+      line-height:1.6;
+      color:#536173;
+    }
+
+    .editor-close-actions{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      gap:10px;
+      margin-top:18px;
+    }
+
+    .editor-close-btn{
+      appearance:none;
+      border:1px solid rgba(15,23,42,0.12);
+      border-radius:12px;
+      background:#ffffff;
+      color:#111;
+      font-size:13px;
+      font-weight:700;
+      padding:10px 14px;
+      cursor:pointer;
+      transition:transform .18s ease,background-color .18s ease,color .18s ease,border-color .18s ease;
+    }
+
+    .editor-close-btn:hover{
+      transform:translateY(-1px);
+    }
+
+    .editor-close-btn.keep{
+      background:#111827;
+      border-color:#111827;
+      color:#ffffff;
+    }
+
+    .editor-close-btn.discard{
+      border-color:rgba(198,40,40,0.22);
+      color:#b3261e;
+      background:#fff7f6;
+    }
+
     body.scrolled .hint,
     body.login-check .hint{ opacity:0; }
 
@@ -1838,6 +1915,18 @@
   </div>
 </div>
 
+<div class="editor-close-menu" id="editorCloseMenu" hidden>
+  <div class="editor-close-card" role="dialog" aria-modal="true" aria-labelledby="editorCloseTitle">
+    <h2 class="editor-close-title" id="editorCloseTitle">エディタを閉じますか？</h2>
+    <div class="editor-close-copy">保持すると現在のエディタ内容を見えないバックグラウンドにそのまま残し、白い検索モードへ戻ります。次にグレーモードへ戻ったときはその状態から復元されます。完全に破棄すると編集内容は一切保持されず、次回のグレーモードは初期状態から始まります。</div>
+    <div class="editor-close-actions">
+      <button class="editor-close-btn" id="editorCloseCancel" type="button">戻る</button>
+      <button class="editor-close-btn discard" id="editorCloseDiscard" type="button">完全に破棄</button>
+      <button class="editor-close-btn keep" id="editorCloseKeep" type="button">保持</button>
+    </div>
+  </div>
+</div>
+
 <section class="suggestion-pane" id="suggestionPane" aria-live="polite" aria-label="Suggestion results">
   <div class="suggestion-panel">
     <div id="suggestionBody" class="suggestion-thread"></div>
@@ -1927,6 +2016,10 @@
   const sendButton = document.getElementById('sendButton');
   const searchModeClose = document.getElementById('searchModeClose');
   const attachmentList = document.getElementById('attachmentList');
+  const editorCloseMenu = document.getElementById('editorCloseMenu');
+  const editorCloseCancel = document.getElementById('editorCloseCancel');
+  const editorCloseDiscard = document.getElementById('editorCloseDiscard');
+  const editorCloseKeep = document.getElementById('editorCloseKeep');
   const suggestionPane = document.getElementById('suggestionPane');
   const suggestionBody = document.getElementById('suggestionBody');
   const suggestionPanel = suggestionPane ? suggestionPane.querySelector('.suggestion-panel') : null;
@@ -2318,18 +2411,21 @@
       closeLoginPopup(true);
       return;
     }
-    if(state === 1 && container.classList.contains('expanded') && !document.fullscreenElement){
+    if(editorCloseMenu && !editorCloseMenu.hidden){
       e.preventDefault();
-      if(window.slideEditorControls && typeof window.slideEditorControls.requestClose === 'function'){
-        const handled = window.slideEditorControls.requestClose();
-        if(handled){
-          if(state === 1 && container.classList.contains('expanded')){
-            applyState(0);
-          }
-          return;
-        }
-      }
-      applyState(0);
+      closeEditorCloseMenu();
+      return;
+    }
+    const activeEl = document.activeElement;
+    const isSecondaryTextarea = activeEl
+      && activeEl !== input
+      && activeEl.tagName === 'TEXTAREA';
+    if(isSecondaryTextarea){
+      return;
+    }
+    if(isExpandedEditorActive() && !document.fullscreenElement){
+      e.preventDefault();
+      openEditorCloseMenu();
       return;
     }
     if(hasSuggestionResults && state === 0){
@@ -2340,25 +2436,55 @@
 
   if(searchModeClose){
     searchModeClose.addEventListener('click', ()=>{
-      if(state === 1 && container.classList.contains('expanded')){
-        if(window.slideEditorControls && typeof window.slideEditorControls.requestClose === 'function'){
-          const handled = window.slideEditorControls.requestClose();
-          if(handled){
-            if(state === 1 && container.classList.contains('expanded')){
-              applyState(0);
-            }
-            return;
-          }
-        }
-        applyState(0);
+      if(isExpandedEditorActive()){
+        openEditorCloseMenu();
         return;
       }
       exitSearchMode();
     });
   }
 
+  if(editorCloseMenu){
+    editorCloseMenu.addEventListener('click', e=>{
+      if(e.target === editorCloseMenu){
+        closeEditorCloseMenu();
+      }
+    });
+  }
+
+  if(editorCloseCancel){
+    editorCloseCancel.addEventListener('click', ()=>{
+      closeEditorCloseMenu();
+    });
+  }
+
+  if(editorCloseKeep){
+    editorCloseKeep.addEventListener('click', ()=>{
+      if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
+        window.slideEditorControls.preserveInBackground();
+      }
+      closeEditorCloseMenu();
+      applyState(0);
+    });
+  }
+
+  if(editorCloseDiscard){
+    editorCloseDiscard.addEventListener('click', ()=>{
+      skipNextGrayDraftSave = true;
+      resetGrayModeDraft();
+      if(window.slideEditorControls && typeof window.slideEditorControls.discardEditorState === 'function'){
+        window.slideEditorControls.discardEditorState();
+      }
+      closeEditorCloseMenu();
+      applyState(0);
+    });
+  }
+
   window.addEventListener('slide-editor:close-requested', ()=>{
     if(state === 1 && container.classList.contains('expanded')){
+      if(openEditorCloseMenu()){
+        return;
+      }
       applyState(0);
     }
   });
@@ -2388,6 +2514,7 @@
   let previousLineCount = null;
   let state = 0;
   let blueModeDraft = '';
+  let skipNextGrayDraftSave = false;
   let blueModeLoggedIn = false;
   let blueModeRewards = [];
   let blueModeCheckToken = 0;
@@ -2438,6 +2565,36 @@
     lastInputValue = input.value;
     renderAttachments();
   }
+
+  function resetGrayModeDraft(){
+    modeDrafts[1] = {
+      text: '',
+      files: [],
+      ready: true
+    };
+  }
+
+  function isExpandedEditorActive(){
+    return state === 1 && container.classList.contains('expanded');
+  }
+
+  function openEditorCloseMenu(){
+    if(!editorCloseMenu || !isExpandedEditorActive()) return false;
+    editorCloseMenu.hidden = false;
+    editorCloseMenu.classList.add('is-open');
+    if(editorCloseCancel){
+      requestAnimationFrame(()=>editorCloseCancel.focus());
+    }
+    return true;
+  }
+
+  function closeEditorCloseMenu(){
+    if(!editorCloseMenu) return;
+    editorCloseMenu.classList.remove('is-open');
+    editorCloseMenu.hidden = true;
+  }
+
+  window.resetGrayModeDraft = resetGrayModeDraft;
 
   function setPopupStatus(message){
     if(!loginPopupStatus) return;
@@ -3649,8 +3806,11 @@
     const previousInputValue = input.value;
     const previousFiles = [...attachedFiles];
 
-    if(previousState === 0 || previousState === 1){
+    if(previousState === 0 || (previousState === 1 && !skipNextGrayDraftSave)){
       setModeDraft(previousState, previousInputValue, previousFiles);
+    }
+    if(previousState === 1){
+      skipNextGrayDraftSave = false;
     }
 
     isAnimating = true;
@@ -3769,6 +3929,7 @@
   function handleScrollDelta(deltaY){
     if(isAnimating) return false;
     if(hasSuggestionResults && state === 0) return false;
+    if(isExpandedEditorActive()) return false;
 
     wheelAccum += deltaY;
 
@@ -3793,6 +3954,11 @@
       return;
     }
 
+    if(isExpandedEditorActive()){
+      wheelAccum = 0;
+      return;
+    }
+
     if(shouldSkipScrollDetection(e.target)){
       wheelAccum = 0;
       return;
@@ -3812,6 +3978,10 @@
   window.addEventListener('touchmove', e=>{
     if(touchLastY === null || e.touches.length !== 1) return;
     if(hasSuggestionResults && state === 0) return;
+    if(isExpandedEditorActive()){
+      wheelAccum = 0;
+      return;
+    }
     if(shouldSkipScrollDetection(e.target)){
       wheelAccum = 0;
       return;
