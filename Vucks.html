@@ -1932,6 +1932,19 @@
   const suggestionPanel = suggestionPane ? suggestionPane.querySelector('.suggestion-panel') : null;
   const EDITOR_RETURN_KEY = 'ivucxEditorReturn';
   let attachedFiles = [];
+  let lastInputValue = input.value;
+  const modeDrafts = {
+    0: {
+      text: input.value,
+      files: [],
+      ready: true
+    },
+    1: {
+      text: '',
+      files: [],
+      ready: false
+    }
+  };
   const MAX_ATTACHMENTS = 5;
   const ATTACHMENT_ANIM_MS = 180;
   let selectionMode = false;
@@ -2093,6 +2106,8 @@
     if(restore){
       input.value = rememberedContent;
       attachedFiles = [...rememberedFiles];
+      lastInputValue = input.value;
+      setModeDraft(1, input.value, attachedFiles);
     }
     renderAttachments();
     fixedWrapper.style.removeProperty('display');
@@ -2392,6 +2407,37 @@
   const LEGACY_AUTH_KEY = 'ivucxBlueModeAuthV1';
   let popupAuthView = AUTH_VIEW_LOGIN;
   let generatedCredentials = null;
+
+  function setModeDraft(modeId, text = input.value, files = attachedFiles){
+    if(modeId !== 0 && modeId !== 1) return;
+    modeDrafts[modeId] = {
+      text: typeof text === 'string' ? text : '',
+      files: Array.isArray(files) ? [...files] : [],
+      ready: true
+    };
+  }
+
+  function ensureModeDraft(modeId, fallbackText = input.value, fallbackFiles = attachedFiles){
+    if(modeId !== 0 && modeId !== 1) return;
+    const draft = modeDrafts[modeId];
+    if(draft && draft.ready) return;
+    setModeDraft(modeId, fallbackText, fallbackFiles);
+  }
+
+  function restoreModeDraft(modeId, fallbackText = '', fallbackFiles = []){
+    if(modeId !== 0 && modeId !== 1) return;
+    const draft = modeDrafts[modeId] && modeDrafts[modeId].ready
+      ? modeDrafts[modeId]
+      : {
+          text: typeof fallbackText === 'string' ? fallbackText : '',
+          files: Array.isArray(fallbackFiles) ? [...fallbackFiles] : []
+        };
+
+    input.value = draft.text;
+    attachedFiles = [...draft.files];
+    lastInputValue = input.value;
+    renderAttachments();
+  }
 
   function setPopupStatus(message){
     if(!loginPopupStatus) return;
@@ -2813,6 +2859,7 @@
     clearSuggestionPane();
     input.value = '';
     lastInputValue = '';
+    setModeDraft(0, input.value, attachedFiles);
     adjustTextarea();
   }
 
@@ -3330,6 +3377,8 @@
     rememberedContent = summary;
     rememberedFiles = [];
     attachedFiles = [];
+    setModeDraft(1, summary, []);
+    lastInputValue = input.value;
     renderAttachments();
     clearSuggestionPane();
     fixedWrapper.style.removeProperty('display');
@@ -3491,10 +3540,12 @@
   adjustTextarea();
 
   window.addEventListener('resize', adjustTextarea);
-  let lastInputValue = input.value;
   function syncInputChanges(){
     if(input.value === lastInputValue) return;
     lastInputValue = input.value;
+    if(state === 0 || state === 1){
+      setModeDraft(state);
+    }
     adjustTextarea();
   }
 
@@ -3532,6 +3583,7 @@
       const attachedNames = hasFiles ? attachedFiles.map(file=>file.name) : [];
       input.value = '';
       lastInputValue = '';
+      setModeDraft(0, input.value, attachedFiles);
       adjustTextarea();
       await requestSuggestions(queryText, attachedNames);
       adjustTextarea();
@@ -3594,6 +3646,13 @@
     if(isAnimating || next === state) return;
 
     const previousState = state;
+    const previousInputValue = input.value;
+    const previousFiles = [...attachedFiles];
+
+    if(previousState === 0 || previousState === 1){
+      setModeDraft(previousState, previousInputValue, previousFiles);
+    }
+
     isAnimating = true;
 
     // Exit selection mode if changing states
@@ -3605,17 +3664,23 @@
 
     if(next === 0){
       input.placeholder = 'Search...';
+      restoreModeDraft(0, previousState === 2 ? blueModeDraft : previousInputValue, previousFiles);
     }
 
     if(next === 1){
       bodyEl.classList.add('scrolled');
       input.placeholder = 'Make Puzzler - Write a summary of the puzzler';
+      ensureModeDraft(1, previousState === 2 ? blueModeDraft : previousInputValue, previousFiles);
+      restoreModeDraft(1, previousState === 2 ? blueModeDraft : previousInputValue, previousFiles);
     }
 
     if(next === 2){
       // Entering Blue Mode: save current input value and clear input
-      blueModeDraft = input.value;
+      blueModeDraft = previousInputValue;
       input.value = '';
+      attachedFiles = [];
+      lastInputValue = '';
+      renderAttachments();
       bodyEl.classList.add('login-check');
       input.placeholder = 'Search...';
       enterBlueMode();
@@ -3630,13 +3695,7 @@
     if(previousState === 2 && next !== 2){
       exitBlueMode();
     }
-    
-    // Exiting Blue Mode: restore saved input value if it exists
-    if(previousState === 2 && next !== 2 && blueModeDraft){
-      input.value = blueModeDraft;
-      lastInputValue = input.value;
-    }
-    
+
     if(next !== 2){
       adjustTextarea();
     }

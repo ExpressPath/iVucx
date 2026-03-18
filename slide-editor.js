@@ -863,6 +863,7 @@
     if (active === isPresentationMode) return;
     isPresentationMode = active;
     bodyEl.classList.toggle('slide-presenting', active);
+    slideCanvas.classList.toggle('is-presenting', active);
     if (active && typeof slideCanvas.focus === 'function'){
       slideCanvas.focus();
     }
@@ -870,6 +871,9 @@
       clearGuideLines();
     }
     resizeStage();
+    if (active){
+      requestAnimationFrame(() => resizeStage());
+    }
   }
 
   document.addEventListener('fullscreenchange', () => {
