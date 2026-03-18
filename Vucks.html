@@ -3896,23 +3896,40 @@
     else if(state === 2) applyState(1);
   }
 
-  function canElementConsumeScroll(el){
+  function performAutoSavedEditorTransition(nextState){
+    if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
+      window.slideEditorControls.preserveInBackground();
+    }
+    if(nextState === 0){
+      resetSearchModeDraft();
+      clearSuggestionPane();
+    }
+    applyState(nextState);
+  }
+
+  function canElementConsumeScroll(el, deltaY = 0){
     if(!el || el === document.body || el === document.documentElement) return false;
     if(!(el instanceof HTMLElement)) return false;
     const style = window.getComputedStyle(el);
     const overflowY = style.overflowY || style.overflow;
     const isScrollable = /(auto|scroll|overlay)/.test(overflowY);
-    return isScrollable && (el.scrollHeight - el.clientHeight > 2);
+    if(!isScrollable || (el.scrollHeight - el.clientHeight <= 2)){
+      return false;
+    }
+    if(deltaY > 0){
+      return el.scrollTop + el.clientHeight < el.scrollHeight - 2;
+    }
+    if(deltaY < 0){
+      return el.scrollTop > 2;
+    }
+    return true;
   }
 
-  function shouldSkipScrollDetection(target){
+  function shouldSkipScrollDetection(target, deltaY = 0){
     if(!target || typeof target.closest !== 'function') return false;
+    const directionalSkip = isExpandedEditorActive();
 
     if(target.closest('.login-popup-card, .blue-mode-panel, .suggestion-panel')){
-      return true;
-    }
-
-    if(target.closest('.slide-thumbs, .slide-inspector, .slide-doc-scroll')){
       return true;
     }
 
@@ -3928,7 +3945,7 @@
 
       let current = target;
       while(current && current !== document.body){
-        if(canElementConsumeScroll(current)){
+        if(canElementConsumeScroll(current, directionalSkip ? deltaY : 0)){
           return true;
         }
         current = current.parentElement;
@@ -3938,10 +3955,40 @@
     return false;
   }
 
+  function handleExpandedEditorScrollDelta(deltaY){
+    if(!window.slideEditorControls || typeof window.slideEditorControls.canCycleOutByScrollDirection !== 'function'){
+      wheelAccum = 0;
+      return false;
+    }
+
+    if(!window.slideEditorControls.canCycleOutByScrollDirection(deltaY)){
+      wheelAccum = 0;
+      return false;
+    }
+
+    wheelAccum += deltaY;
+
+    if(deltaY > 0 && wheelAccum > THRESHOLD){
+      wheelAccum = 0;
+      performAutoSavedEditorTransition(2);
+      return true;
+    }
+
+    if(deltaY < 0 && wheelAccum < -THRESHOLD){
+      wheelAccum = 0;
+      performAutoSavedEditorTransition(0);
+      return true;
+    }
+
+    return false;
+  }
+
   function handleScrollDelta(deltaY){
     if(isAnimating) return false;
     if(hasSuggestionResults && state === 0) return false;
-    if(isExpandedEditorActive()) return false;
+    if(isExpandedEditorActive()){
+      return handleExpandedEditorScrollDelta(deltaY);
+    }
 
     wheelAccum += deltaY;
 
@@ -3966,19 +4013,15 @@
       return;
     }
 
-    if(isExpandedEditorActive()){
+    if(shouldSkipScrollDetection(e.target, e.deltaY)){
       wheelAccum = 0;
       return;
     }
 
-    if(shouldSkipScrollDetection(e.target)){
-      wheelAccum = 0;
-      return;
+    const changed = handleScrollDelta(e.deltaY);
+    if(changed || !isExpandedEditorActive()){
+      e.preventDefault();
     }
-
-    handleScrollDelta(e.deltaY);
-
-    e.preventDefault();
 
   },{passive:false});
 
@@ -3990,18 +4033,15 @@
   window.addEventListener('touchmove', e=>{
     if(touchLastY === null || e.touches.length !== 1) return;
     if(hasSuggestionResults && state === 0) return;
-    if(isExpandedEditorActive()){
-      wheelAccum = 0;
-      return;
-    }
-    if(shouldSkipScrollDetection(e.target)){
-      wheelAccum = 0;
-      return;
-    }
 
     const currentY = e.touches[0].clientY;
     const deltaY = touchLastY - currentY;
     touchLastY = currentY;
+
+    if(shouldSkipScrollDetection(e.target, deltaY)){
+      wheelAccum = 0;
+      return;
+    }
 
     const changed = handleScrollDelta(deltaY);
     if(changed){

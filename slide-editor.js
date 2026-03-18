@@ -41,6 +41,10 @@
   const FILE_SIZE_LIMIT = 20 * 1024 * 1024;
   const SEED_TEXT_WIDTH = 920;
   const SEED_TEXT_MARGIN = 120;
+  const EDITOR_DB_NAME = 'ivucxSlideEditorDB';
+  const EDITOR_DB_VERSION = 1;
+  const EDITOR_DB_STORE = 'editorStates';
+  const EDITOR_DB_KEY = 'latest';
   const DEFAULT_ANCHORS = ['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right'];
   const DANGEROUS_FILE_EXTENSIONS = new Set([
     'ade','adp','apk','app','bat','chm','cmd','com','cpl','dll','dmg','exe','hta','ins','iso',
@@ -80,9 +84,61 @@
   let isPresentationMode = false;
   let sessionSeedText = '';
   let sessionBaselineDigest = '';
+  let persistTimer = null;
+  let persistDbPromise = null;
+  let isApplyingPersistedState = false;
+  let hasCompletedPersistenceBootstrap = false;
 
   function hasKonva(){
     return typeof window.Konva !== 'undefined';
+  }
+
+  function openEditorPersistenceDb(){
+    if (!window.indexedDB) return Promise.resolve(null);
+    if (persistDbPromise) return persistDbPromise;
+
+    persistDbPromise = new Promise(resolve => {
+      const request = window.indexedDB.open(EDITOR_DB_NAME, EDITOR_DB_VERSION);
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(EDITOR_DB_STORE)){
+          db.createObjectStore(EDITOR_DB_STORE);
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+
+    return persistDbPromise;
+  }
+
+  async function readPersistedEditorRecord(){
+    const db = await openEditorPersistenceDb();
+    if (!db) return null;
+
+    return new Promise(resolve => {
+      const tx = db.transaction(EDITOR_DB_STORE, 'readonly');
+      const store = tx.objectStore(EDITOR_DB_STORE);
+      const request = store.get(EDITOR_DB_KEY);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => resolve(null);
+    });
+  }
+
+  async function writePersistedEditorRecord(payload){
+    const db = await openEditorPersistenceDb();
+    if (!db) return false;
+
+    return new Promise(resolve => {
+      const tx = db.transaction(EDITOR_DB_STORE, 'readwrite');
+      const store = tx.objectStore(EDITOR_DB_STORE);
+      store.put(payload, EDITOR_DB_KEY);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
+    });
   }
 
   function isEditingText(){
@@ -244,6 +300,7 @@
       ext: documentData.ext || '',
       mime: documentData.mime || '',
       size: Number(documentData.size) || 0,
+      checked: !!documentData.checked,
       url: documentData.url || '',
       text: documentData.text || ''
     };
@@ -333,6 +390,258 @@
     return JSON.stringify(serializeEditorState());
   }
 
+  function buildPersistedEditorRecord(){
+    return {
+      savedAt: new Date().toISOString(),
+      currentSlideIndex,
+      zoom,
+      editorState: serializeEditorState()
+    };
+  }
+
+  async function persistEditorStateNow(){
+    if (isApplyingPersistedState || !hasCompletedPersistenceBootstrap) return false;
+    return writePersistedEditorRecord(buildPersistedEditorRecord());
+  }
+
+  function schedulePersistentSave(){
+    if (isApplyingPersistedState || !hasCompletedPersistenceBootstrap) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(() => {
+      persistEditorStateNow();
+    }, 320);
+  }
+
+  function dispatchSearchInputSync(){
+    if (!searchInput) return;
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function createRectNodeFromSnapshot(data){
+    return new Konva.Rect({
+      x: Number(data.x) || 0,
+      y: Number(data.y) || 0,
+      width: Math.max(MIN_SIZE, Number(data.width) || MIN_SIZE),
+      height: Math.max(MIN_SIZE, Number(data.height) || MIN_SIZE),
+      fill: data.fill || '#ffffff',
+      stroke: data.stroke || '',
+      strokeWidth: Number(data.strokeWidth) || 0,
+      cornerRadius: Number(data.cornerRadius) || 0,
+      opacity: Number.isFinite(Number(data.opacity)) ? Number(data.opacity) : 1,
+      rotation: Number(data.rotation) || 0,
+      strokeScaleEnabled: false
+    });
+  }
+
+  function createEllipseNodeFromSnapshot(data){
+    return new Konva.Ellipse({
+      x: Number(data.x) || 0,
+      y: Number(data.y) || 0,
+      radius: {
+        x: Math.max(MIN_SIZE / 2, Number(data.radiusX) || MIN_SIZE / 2),
+        y: Math.max(MIN_SIZE / 2, Number(data.radiusY) || MIN_SIZE / 2)
+      },
+      fill: data.fill || '#ffffff',
+      stroke: data.stroke || '',
+      strokeWidth: Number(data.strokeWidth) || 0,
+      opacity: Number.isFinite(Number(data.opacity)) ? Number(data.opacity) : 1,
+      rotation: Number(data.rotation) || 0,
+      strokeScaleEnabled: false
+    });
+  }
+
+  function createLineNodeFromSnapshot(data){
+    return new Konva.Line({
+      x: Number(data.x) || 0,
+      y: Number(data.y) || 0,
+      points: Array.isArray(data.points) ? data.points.map(point => Number(point) || 0) : [0, 0, 120, 0],
+      stroke: data.stroke || '#111111',
+      strokeWidth: Number(data.strokeWidth) || 2,
+      opacity: Number.isFinite(Number(data.opacity)) ? Number(data.opacity) : 1,
+      rotation: Number(data.rotation) || 0,
+      lineCap: 'round',
+      lineJoin: 'round',
+      strokeScaleEnabled: false
+    });
+  }
+
+  function createTextNodeFromSnapshot(data){
+    const node = new Konva.Text({
+      x: Number(data.x) || 0,
+      y: Number(data.y) || 0,
+      text: typeof data.text === 'string' ? data.text : '',
+      width: Math.max(MIN_SIZE, Number(data.width) || 420),
+      fontSize: Math.max(MIN_TEXT_SIZE, Number(data.fontSize) || 32),
+      fontFamily: data.fontFamily || 'Arial',
+      fill: data.fill || '#111111',
+      align: data.align || 'left',
+      lineHeight: Number(data.lineHeight) || 1.2,
+      opacity: Number.isFinite(Number(data.opacity)) ? Number(data.opacity) : 1,
+      rotation: Number(data.rotation) || 0,
+      draggable: true
+    });
+    if (data.seedSource){
+      node.setAttr('seedSource', true);
+    }
+    return node;
+  }
+
+  function loadImageElement(src){
+    return new Promise(resolve => {
+      if (!src){
+        resolve(null);
+        return;
+      }
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => resolve(null);
+      image.src = src;
+    });
+  }
+
+  function loadVideoElement(src){
+    return new Promise(resolve => {
+      if (!src){
+        resolve(null);
+        return;
+      }
+      const video = document.createElement('video');
+      video.src = src;
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.addEventListener('loadeddata', () => resolve(video), { once: true });
+      video.addEventListener('error', () => resolve(null), { once: true });
+    });
+  }
+
+  async function createImageNodeFromSnapshot(data){
+    const media = data.assetType === 'video'
+      ? await loadVideoElement(data.assetSrc)
+      : await loadImageElement(data.assetSrc);
+    if (!media) return null;
+
+    const node = new Konva.Image({
+      x: Number(data.x) || 0,
+      y: Number(data.y) || 0,
+      image: media,
+      width: Math.max(MIN_SIZE, Number(data.width) || MIN_SIZE),
+      height: Math.max(MIN_SIZE, Number(data.height) || MIN_SIZE),
+      opacity: Number.isFinite(Number(data.opacity)) ? Number(data.opacity) : 1,
+      rotation: Number(data.rotation) || 0,
+      stroke: data.stroke || '',
+      strokeWidth: Number(data.strokeWidth) || 0,
+      cornerRadius: Number(data.cornerRadius) || 0,
+      strokeScaleEnabled: false
+    });
+    if (data.assetType){
+      node.setAttr('assetType', data.assetType);
+    }
+    if (data.assetSrc){
+      node.setAttr('assetSrc', data.assetSrc);
+    }
+    return node;
+  }
+
+  async function createNodeFromSnapshot(data){
+    if (!data || typeof data !== 'object') return null;
+    switch (data.className){
+      case 'Text':
+        return createTextNodeFromSnapshot(data);
+      case 'Rect':
+        return createRectNodeFromSnapshot(data);
+      case 'Ellipse':
+        return createEllipseNodeFromSnapshot(data);
+      case 'Line':
+        return createLineNodeFromSnapshot(data);
+      case 'Image':
+        return createImageNodeFromSnapshot(data);
+      default:
+        return null;
+    }
+  }
+
+  function clearAllSlides(){
+    hideContextMenu();
+    clearGuideLines();
+    if (isEditingText()){
+      closeActiveTextEditor(false);
+    }
+    if (selectedNode){
+      selectNode(null);
+    }
+    stopVideoAnimation();
+    hideDocumentSlide();
+    slides.forEach(destroySlide);
+    slides = [];
+    currentLayer = null;
+    currentSlideIndex = 0;
+    clipboardNode = null;
+  }
+
+  async function applyPersistedEditorRecord(record){
+    if (!record || !record.editorState) return false;
+    const persistedState = record.editorState;
+    if (!persistedState || !Array.isArray(persistedState.slides)) return false;
+
+    isApplyingPersistedState = true;
+    try{
+      clearAllSlides();
+
+      if (searchInput){
+        searchInput.value = typeof persistedState.inputText === 'string' ? persistedState.inputText : '';
+        dispatchSearchInputSync();
+      }
+
+      if (persistedState.slides.length === 0){
+        createSlide();
+      } else {
+        for (const persistedSlide of persistedState.slides){
+          if (persistedSlide && persistedSlide.type === 'document'){
+            createSlide('document', persistedSlide.document ? { ...persistedSlide.document } : null);
+            continue;
+          }
+
+          createSlide();
+          const layer = slides[slides.length - 1].layer;
+          const nodes = Array.isArray(persistedSlide && persistedSlide.nodes) ? persistedSlide.nodes : [];
+          for (const nodeData of nodes){
+            const node = await createNodeFromSnapshot(nodeData);
+            if (node){
+              addNode(node, true, layer);
+            }
+          }
+        }
+      }
+
+      renderThumbs();
+
+      if (typeof record.zoom === 'number'){
+        zoom = Math.max(0.5, Math.min(2, record.zoom));
+      }
+
+      const safeIndex = Math.max(0, Math.min(slides.length - 1, Number(record.currentSlideIndex) || 0));
+      showSlide(safeIndex, { syncSeedFromInput: false });
+      updateZoomPill();
+      refreshHasContent();
+      syncVideoAnimation();
+      scheduleThumbUpdate();
+      if (isEditorActive){
+        startEditorSession();
+      }
+      return true;
+    } finally {
+      isApplyingPersistedState = false;
+    }
+  }
+
+  async function restorePersistedEditorState(){
+    const record = await readPersistedEditorRecord();
+    if (!record) return false;
+    return applyPersistedEditorRecord(record);
+  }
+
   function startEditorSession(){
     sessionSeedText = searchInput ? searchInput.value : '';
     sessionBaselineDigest = getEditorStateDigest();
@@ -415,6 +724,7 @@
     }
     refreshHasContent();
     scheduleThumbUpdate();
+    persistEditorStateNow();
     return true;
   }
 
@@ -423,8 +733,13 @@
       clearEditorSession();
       return true;
     }
+    if (searchInput){
+      searchInput.value = '';
+      dispatchSearchInputSync();
+    }
     resetSlidesToSeedState('', { updateInput: false });
     clearEditorSession();
+    persistEditorStateNow();
     return true;
   }
 
@@ -444,6 +759,16 @@
   window.slideEditorControls = {
     preserveInBackground: preserveEditorStateInBackground,
     discardEditorState,
+    canCycleOutByScrollDirection(deltaY){
+      if (!slides.length) return false;
+      if (deltaY < 0){
+        return currentSlideIndex === 0;
+      }
+      if (deltaY > 0){
+        return currentSlideIndex === slides.length - 1;
+      }
+      return false;
+    },
     requestClose: requestCloseEditor,
     hasPendingChanges: hasPendingEditorChanges
   };
@@ -775,6 +1100,19 @@
     };
   }
 
+  function readFileAsDataUrl(file){
+    return new Promise((resolve, reject) => {
+      if (!file){
+        resolve('');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => reject(new Error('Could not read file data.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
   function getDocumentTypeLabel(documentInfo){
     if (!documentInfo) return 'Document';
     const baseLabel = documentInfo.kind === 'pdf'
@@ -786,13 +1124,16 @@
   }
 
   async function buildDocumentSlideData(file, verdict){
+    const inlineUrl = verdict.kind === 'pdf' || verdict.kind === 'image'
+      ? await readFileAsDataUrl(file)
+      : '';
     const documentInfo = {
       title: file.name,
       kind: verdict.kind,
       ext: verdict.ext,
       mime: file.type,
       size: file.size,
-      url: URL.createObjectURL(file),
+      url: inlineUrl,
       checked: true,
       text: ''
     };
@@ -899,6 +1240,7 @@
     resizeStage();
     if (active){
       requestAnimationFrame(() => resizeStage());
+      setTimeout(() => resizeStage(), 120);
     }
   }
 
@@ -1052,6 +1394,10 @@
     renderThumbs();
 
     isInitialized = true;
+    restorePersistedEditorState().finally(() => {
+      hasCompletedPersistenceBootstrap = true;
+      schedulePersistentSave();
+    });
   }
 
   function createSlide(type = 'canvas', payload = null){
@@ -1125,6 +1471,7 @@
     updateUiForCurrentSlide();
     resizeStage();
     scheduleThumbUpdate();
+    schedulePersistentSave();
   }
 
   function deleteSlideAt(index){
@@ -1227,6 +1574,7 @@
     if (!stage) return;
     if (thumbTimer) clearTimeout(thumbTimer);
     thumbTimer = setTimeout(updateThumbForCurrent, 250);
+    schedulePersistentSave();
   }
 
   function updateThumbForCurrent(){
@@ -1501,6 +1849,7 @@
         searchInput.addEventListener(eventName, () => {
           if (isEditorActive){
             syncSeedTextFromInput();
+            schedulePersistentSave();
           }
         });
       });
@@ -1725,6 +2074,7 @@
     zoom = Math.max(0.5, Math.min(2, value));
     updateZoomPill();
     resizeStage();
+    schedulePersistentSave();
   }
 
   function resizeStage(){
@@ -1733,7 +2083,8 @@
     const h = stageHost.clientHeight;
     if (w < 2 || h < 2) return;
     fitScale = Math.min(w / SLIDE_WIDTH, h / SLIDE_HEIGHT);
-    const scale = fitScale * zoom;
+    const effectiveZoom = isPresentationMode ? 1 : zoom;
+    const scale = fitScale * effectiveZoom;
     stage.scale({ x: scale, y: scale });
     const x = (w - SLIDE_WIDTH * scale) / 2;
     const y = (h - SLIDE_HEIGHT * scale) / 2;
@@ -2004,67 +2355,75 @@
     });
   }
 
-  function handleImageUpload(e){
+  async function handleImageUpload(e){
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const maxW = SLIDE_WIDTH / 2;
-      const maxH = SLIDE_HEIGHT / 2;
-      const scale = Math.min(maxW / img.width, maxH / img.height, 1);
-      const width = img.width * scale;
-      const height = img.height * scale;
-      const node = new Konva.Image({
-        x: SLIDE_WIDTH / 2 - width / 2,
-        y: SLIDE_HEIGHT / 2 - height / 2,
-        image: img,
-        width,
-        height,
-        strokeScaleEnabled: false
-      });
-      node.setAttr('assetType', 'image');
-      node.setAttr('assetSrc', url);
-      addNode(node);
-      setTool('select');
+    try{
+      const dataUrl = await readFileAsDataUrl(file);
+      const img = new Image();
+      img.onload = () => {
+        const maxW = SLIDE_WIDTH / 2;
+        const maxH = SLIDE_HEIGHT / 2;
+        const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+        const width = img.width * scale;
+        const height = img.height * scale;
+        const node = new Konva.Image({
+          x: SLIDE_WIDTH / 2 - width / 2,
+          y: SLIDE_HEIGHT / 2 - height / 2,
+          image: img,
+          width,
+          height,
+          strokeScaleEnabled: false
+        });
+        node.setAttr('assetType', 'image');
+        node.setAttr('assetSrc', dataUrl);
+        addNode(node);
+        setTool('select');
+        e.target.value = '';
+      };
+      img.src = dataUrl;
+    }catch(err){
       e.target.value = '';
-    };
-    img.src = url;
+    }
   }
 
-  function handleVideoUpload(e){
+  async function handleVideoUpload(e){
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    const video = document.createElement('video');
-    video.src = url;
-    video.muted = true;
-    video.loop = true;
-    video.playsInline = true;
-    video.addEventListener('loadeddata', () => {
-      const width = video.videoWidth || 640;
-      const height = video.videoHeight || 360;
-      const maxW = SLIDE_WIDTH / 2;
-      const maxH = SLIDE_HEIGHT / 2;
-      const scale = Math.min(maxW / width, maxH / height, 1);
-      const fitW = width * scale;
-      const fitH = height * scale;
-      const node = new Konva.Image({
-        x: SLIDE_WIDTH / 2 - fitW / 2,
-        y: SLIDE_HEIGHT / 2 - fitH / 2,
-        image: video,
-        width: fitW,
-        height: fitH,
-        strokeScaleEnabled: false
+    try{
+      const dataUrl = await readFileAsDataUrl(file);
+      const video = document.createElement('video');
+      video.src = dataUrl;
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.addEventListener('loadeddata', () => {
+        const width = video.videoWidth || 640;
+        const height = video.videoHeight || 360;
+        const maxW = SLIDE_WIDTH / 2;
+        const maxH = SLIDE_HEIGHT / 2;
+        const scale = Math.min(maxW / width, maxH / height, 1);
+        const fitW = width * scale;
+        const fitH = height * scale;
+        const node = new Konva.Image({
+          x: SLIDE_WIDTH / 2 - fitW / 2,
+          y: SLIDE_HEIGHT / 2 - fitH / 2,
+          image: video,
+          width: fitW,
+          height: fitH,
+          strokeScaleEnabled: false
+        });
+        node.setAttr('assetType', 'video');
+        node.setAttr('assetSrc', dataUrl);
+        addNode(node);
+        syncVideoAnimation();
+        video.play().catch(() => {});
+        setTool('select');
+        e.target.value = '';
       });
-      node.setAttr('assetType', 'video');
-      node.setAttr('assetSrc', url);
-      addNode(node);
-      syncVideoAnimation();
-      video.play().catch(() => {});
-      setTool('select');
+    }catch(err){
       e.target.value = '';
-    });
+    }
   }
 
   async function handleFileUpload(e){
