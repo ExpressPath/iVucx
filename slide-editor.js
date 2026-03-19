@@ -252,6 +252,7 @@
   let presentationAnimationIndex = 0;
   let selectionMarquee = null;
   let selectionMarqueeStart = null;
+  let cssLayoutDismissedNode = null;
   let sessionSeedText = '';
   let sessionBaselineDigest = '';
   let persistTimer = null;
@@ -420,6 +421,139 @@
 
   function hasQueuedMediaCue(node, config = getNodeAnimationConfig(node)){
     return isVideoNode(node) && config.videoAction !== 'none';
+  }
+
+  function getVideoNodesForLayer(layer){
+    if (!layer) return [];
+    return layer.find(node => node.getAttr && node.getAttr('assetType') === 'video').toArray();
+  }
+
+  function createDetachedVideoElement(src){
+    if (!src) return null;
+    const video = document.createElement('video');
+    video.src = src;
+    video.muted = true;
+    video.defaultMuted = true;
+    video.loop = true;
+    video.playsInline = true;
+    return video;
+  }
+
+  function getAllCanvasLayers(){
+    return slides
+      .filter(slide => slide && slide.type === 'canvas' && slide.layer)
+      .map(slide => slide.layer);
+  }
+
+  function getTrackedVideoNodes(excludedNodes = []){
+    const excluded = new Set((excludedNodes || []).filter(Boolean));
+    const nodes = [];
+    getAllCanvasLayers().forEach(layer => {
+      getVideoNodesForLayer(layer).forEach(node => {
+        if (!excluded.has(node)){
+          nodes.push(node);
+        }
+      });
+    });
+    (clipboardNodes || []).forEach(node => {
+      if (isVideoNode(node) && !excluded.has(node)){
+        nodes.push(node);
+      }
+    });
+    if (isVideoNode(clipboardNode) && !excluded.has(clipboardNode) && !nodes.includes(clipboardNode)){
+      nodes.push(clipboardNode);
+    }
+    return nodes;
+  }
+
+  function rebindSharedVideoReferences(video, excludedNodes = []){
+    if (!(video instanceof HTMLVideoElement)) return;
+    const source = video.currentSrc || video.src || '';
+    getTrackedVideoNodes(excludedNodes).forEach(node => {
+      if (getNodeVideoElement(node) !== video || !node.image) return;
+      const replacement = createDetachedVideoElement(node.getAttr('assetSrc') || source);
+      if (!replacement) return;
+      node.image(replacement);
+      applyVideoNodeSettings(node, getNodeAnimationConfig(node));
+    });
+  }
+
+  function disposeVideoElement(video){
+    if (!(video instanceof HTMLVideoElement)) return;
+    try{
+      video.pause();
+      video.removeAttribute('src');
+      video.src = '';
+      video.load();
+    }catch(err){
+      // ignore disposal errors
+    }
+  }
+
+  function disposeNodeMedia(node){
+    if (!node) return;
+    if (isVideoNode(node)){
+      const video = getNodeVideoElement(node);
+      rebindSharedVideoReferences(video, [node]);
+      disposeVideoElement(video);
+      if (node.image){
+        node.image(null);
+      }
+    }
+  }
+
+  function pauseLayerVideos(layer, { preserveCurrentTime = false } = {}){
+    getVideoNodesForLayer(layer).forEach(node => {
+      const video = getNodeVideoElement(node);
+      if (!video) return;
+      try{
+        video.pause();
+        if (!preserveCurrentTime){
+          video.currentTime = 0;
+        }
+      }catch(err){
+        // ignore pause issues
+      }
+    });
+  }
+
+  function pauseAllSlideVideos({ preserveCurrentTime = false, exceptLayer = null } = {}){
+    getAllCanvasLayers().forEach(layer => {
+      if (exceptLayer && layer === exceptLayer) return;
+      pauseLayerVideos(layer, { preserveCurrentTime });
+    });
+  }
+
+  function clearNodeAnimationArtifacts(nodes){
+    const removedNodes = new Set((nodes || []).filter(Boolean));
+    if (!removedNodes.size) return;
+
+    objectAnimationTweens = objectAnimationTweens.filter(entry => {
+      if (!entry || !removedNodes.has(entry.node)) return true;
+      if (entry.timeoutId) clearTimeout(entry.timeoutId);
+      if (entry.cueTimeoutId) clearTimeout(entry.cueTimeoutId);
+      if (entry.rafId) cancelAnimationFrame(entry.rafId);
+      if (entry.tween) entry.tween.destroy();
+      return false;
+    });
+
+    presentationAnimationQueue = presentationAnimationQueue.filter(entry => {
+      return !(entry && removedNodes.has(entry.node));
+    });
+    presentationAnimationIndex = Math.min(presentationAnimationIndex, presentationAnimationQueue.length);
+  }
+
+  function cloneNodeForEditor(node, overrides = {}){
+    if (!node || !node.clone) return null;
+    const clone = node.clone(overrides);
+    if (isVideoNode(node) && clone.image){
+      const replacement = createDetachedVideoElement(node.getAttr('assetSrc') || '');
+      if (replacement){
+        clone.image(replacement);
+        applyVideoNodeSettings(clone, getNodeAnimationConfig(node));
+      }
+    }
+    return clone;
   }
 
   function getEquationSource(node){
@@ -1452,6 +1586,9 @@
 
   function destroySlide(slide){
     if (!slide || slide.type !== 'canvas' || !slide.layer) return;
+    const nodes = getContentNodes(slide.layer);
+    clearNodeAnimationArtifacts(nodes);
+    nodes.forEach(node => disposeNodeMedia(node));
     slide.layer.destroy();
   }
 
@@ -2896,6 +3033,9 @@
     }
     if (!active){
       hideContextMenu();
+      cssLayoutDismissedNode = null;
+      container.classList.remove('slide-css-editing');
+      thumbsEl.classList.remove('is-stowed');
       clearEditorSession();
     }
     isEditorActive = active;
@@ -3027,6 +3167,7 @@
     clearGuideLines();
     clearObjectAnimationTweens(true);
     if (currentLayer){
+      pauseLayerVideos(currentLayer, { preserveCurrentTime: isPresentationMode });
       currentLayer.remove();
     }
     currentSlideIndex = index;
@@ -3119,6 +3260,20 @@
 
   function renderThumbs(){
     thumbsEl.innerHTML = '';
+    const isStowed = thumbsEl.classList.contains('is-stowed');
+
+    if (isStowed){
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'slide-thumbs-toggle';
+      toggleBtn.textContent = `Slides ${slides.length}`;
+      toggleBtn.title = 'Show the slide list and close CSS Edit mode';
+      toggleBtn.addEventListener('click', () => {
+        dismissCssLayoutMode();
+      });
+      thumbsEl.appendChild(toggleBtn);
+      return;
+    }
 
     slides.forEach((slide, index) => {
       const thumb = document.createElement('div');
@@ -3234,7 +3389,9 @@
   }
 
   function syncVideoAnimation(){
+    pauseAllSlideVideos({ preserveCurrentTime: isPresentationMode, exceptLayer: currentLayer });
     if (isDocumentSlide()){
+      pauseLayerVideos(currentLayer, { preserveCurrentTime: isPresentationMode });
       stopVideoAnimation();
       return;
     }
@@ -3777,6 +3934,7 @@
         if (!selectedNode || hasMultipleSelection()) return;
         const currentConfig = getNodeAnimationConfig(selectedNode);
         const nextType = propAnimType.value;
+        cssLayoutDismissedNode = nextType === 'css-edit' ? null : (cssLayoutDismissedNode === selectedNode ? null : cssLayoutDismissedNode);
         const needsOrder = nextType !== 'none' || currentConfig.videoAction !== 'none';
         const nextCssText = nextType === 'css-edit' && !(propAnimCss && propAnimCss.value.trim())
           ? 'from { opacity: 0; transform: translateX(-120px) scale(.88); }\nto { opacity: 1; transform: translateX(0px) scale(1); }'
@@ -4106,24 +4264,52 @@
     transformer.keepRatio(isMedia);
   }
 
+  function isCssLayoutExpanded(node, animationConfig){
+    return !!(node && animationConfig && animationConfig.type === 'css-edit' && cssLayoutDismissedNode !== node);
+  }
+
+  function dismissCssLayoutMode(){
+    if (!selectedNode || hasMultipleSelection()) return;
+    const animationConfig = getNodeAnimationConfig(selectedNode);
+    if (animationConfig.type !== 'css-edit') return;
+    cssLayoutDismissedNode = selectedNode;
+    updateInspector(selectedNode);
+  }
+
   function updateCssAnimationUi(node, animationConfig){
-    const isCssEdit = !!(node && animationConfig && animationConfig.type === 'css-edit');
+    const hasCssAnimation = !!(node && animationConfig && animationConfig.type === 'css-edit');
+    if (!hasCssAnimation && (!node || cssLayoutDismissedNode === node)){
+      cssLayoutDismissedNode = null;
+    }
+    const isCssEdit = isCssLayoutExpanded(node, animationConfig);
+    const wasStowed = !!(thumbsEl && thumbsEl.classList.contains('is-stowed'));
     if (commonPanel){
       commonPanel.classList.toggle('is-css-edit', isCssEdit);
     }
     if (container){
       container.classList.toggle('slide-css-editing', isCssEdit);
     }
+    if (thumbsEl){
+      thumbsEl.classList.toggle('is-stowed', isCssEdit);
+    }
+    if (thumbsEl && wasStowed !== isCssEdit && isInitialized){
+      renderThumbs();
+    }
     if (propAnimCssWrap){
       propAnimCssWrap.style.display = isCssEdit ? 'flex' : 'none';
     }
     if (propAnimCss){
-      propAnimCss.value = isCssEdit ? (animationConfig.cssText || '') : '';
+      propAnimCss.value = hasCssAnimation ? (animationConfig.cssText || '') : '';
       propAnimCss.disabled = !isCssEdit;
     }
     if (propAnimCssStatus){
-      if (!isCssEdit){
+      if (!hasCssAnimation){
         propAnimCssStatus.textContent = 'Use from/to blocks with opacity and transform.';
+        propAnimCssStatus.style.color = '#5b6878';
+        return;
+      }
+      if (!isCssEdit){
+        propAnimCssStatus.textContent = 'CSS is kept in the background. Open the Slides rail to leave compact mode, or switch Animation to adjust it again.';
         propAnimCssStatus.style.color = '#5b6878';
         return;
       }
@@ -4720,7 +4906,14 @@
   function deleteSelected(){
     const nodes = getSelectedNodes();
     if (!nodes.length) return;
-    nodes.forEach(node => node.destroy());
+    if (activeTextNode && nodes.includes(activeTextNode)){
+      closeActiveTextEditor(false);
+    }
+    clearNodeAnimationArtifacts(nodes);
+    nodes.forEach(node => {
+      disposeNodeMedia(node);
+      node.destroy();
+    });
     selectNode(null);
     currentLayer.batchDraw();
     refreshHasContent();
@@ -4731,10 +4924,10 @@
   function duplicateSelected(){
     const nodes = getSelectedNodes();
     if (!nodes.length) return;
-    const clones = nodes.map(node => node.clone({
+    const clones = nodes.map(node => cloneNodeForEditor(node, {
       x: node.x() + 20,
       y: node.y() + 20
-    }));
+    })).filter(Boolean);
     clones.forEach(clone => addNode(clone, true));
     selectNodes(clones, clones[0] || null);
     syncVideoAnimation();
@@ -4743,17 +4936,17 @@
   function copySelected(){
     const nodes = getSelectedNodes();
     if (!nodes.length) return;
-    clipboardNodes = nodes.map(node => node.clone());
+    clipboardNodes = nodes.map(node => cloneNodeForEditor(node)).filter(Boolean);
     clipboardNode = clipboardNodes[0] || null;
   }
 
   function pasteClipboard(){
     if (!clipboardNodes.length && !clipboardNode) return;
     const sourceNodes = clipboardNodes.length ? clipboardNodes : [clipboardNode];
-    const clones = sourceNodes.filter(Boolean).map(node => node.clone({
+    const clones = sourceNodes.filter(Boolean).map(node => cloneNodeForEditor(node, {
       x: node.x() + 24,
       y: node.y() + 24
-    }));
+    })).filter(Boolean);
     clones.forEach(clone => addNode(clone, true));
     selectNodes(clones, clones[0] || null);
     syncVideoAnimation();
@@ -4777,7 +4970,8 @@
     const duplicateLayer = slides[slides.length - 1].layer;
 
     getContentNodes(currentLayer).forEach(node => {
-      const clone = node.clone();
+      const clone = cloneNodeForEditor(node);
+      if (!clone) return;
       bindNodeEvents(clone);
       duplicateLayer.add(clone);
     });

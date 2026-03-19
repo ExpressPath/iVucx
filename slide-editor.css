@@ -383,6 +383,34 @@ body.slide-presenting .slide-canvas{
   gap:10px;
 }
 
+.slide-thumbs.is-stowed{
+  align-items:center;
+  justify-content:flex-start;
+  padding:8px 4px;
+  overflow:hidden;
+}
+
+.slide-thumbs-toggle{
+  width:100%;
+  min-height:164px;
+  border:none;
+  border-radius:12px;
+  background:linear-gradient(180deg, #eef4ff, #dce8ff);
+  color:#1a4fa3;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+  writing-mode:vertical-rl;
+  transform:rotate(180deg);
+  box-shadow:inset 0 0 0 1px rgba(26,115,232,0.14);
+}
+
+.slide-thumbs-toggle:hover{
+  box-shadow:inset 0 0 0 1px rgba(26,115,232,0.22), 0 10px 20px rgba(15,23,42,0.14);
+}
+
 .slide-thumb{
   cursor:pointer;
 }
