@@ -1856,8 +1856,8 @@
           <div class="slide-toolbar-group" data-group="tools">
             <button class="slide-tool is-active" type="button" data-tool="select">Select</button>
             <button class="slide-tool" type="button" data-tool="text">Text</button>
-            <button class="slide-tool" type="button" data-tool="rect">Rect</button>
-            <button class="slide-tool" type="button" data-tool="ellipse">Ellipse</button>
+            <button class="slide-tool" type="button" data-tool="equation">Equation</button>
+            <button class="slide-tool" type="button" data-tool="shape">Shape...</button>
             <button class="slide-tool" type="button" data-tool="line">Line...</button>
             <button class="slide-tool" type="button" data-tool="image">Image</button>
             <button class="slide-tool" type="button" data-tool="video">Video</button>
@@ -1963,6 +1963,7 @@
               <option value="from-right">From Right</option>
               <option value="from-top">From Top</option>
               <option value="from-bottom">From Bottom</option>
+              <option value="draw-arrow">Draw From Tail</option>
             </select>
           </label>
           <label class="slide-control">
@@ -1978,6 +1979,30 @@
             <input type="number" id="propAnimOrder" min="1" max="99" step="1" value="1" />
           </label>
           <button class="slide-toolbar-button slide-preview-button" id="propAnimPreview" type="button">Preview Motion</button>
+        </div>
+        <div class="slide-panel" id="slideMediaPanel">
+          <div class="slide-panel-title">Video</div>
+          <label class="slide-control">
+            <span>On Cue</span>
+            <select id="propVideoAction">
+              <option value="none">No media cue</option>
+              <option value="play">Play</option>
+              <option value="pause">Pause</option>
+              <option value="restart">Restart</option>
+            </select>
+          </label>
+          <label class="slide-control">
+            <span>Audio</span>
+            <select id="propVideoSound">
+              <option value="mute">Muted</option>
+              <option value="sound">With sound</option>
+            </select>
+          </label>
+          <label class="slide-control slide-control-checkbox">
+            <span>Loop</span>
+            <input type="checkbox" id="propVideoLoop" checked />
+          </label>
+          <div class="slide-panel-note">Use Order above to place this video cue with the rest of the slide animations.</div>
         </div>
       </div>
       <div class="slide-status">

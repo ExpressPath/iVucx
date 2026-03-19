@@ -13,12 +13,14 @@
   const videoInput = document.getElementById('slideVideoInput');
   const fileInput = document.getElementById('slideFileInput');
   const toolButtons = Array.from(document.querySelectorAll('[data-tool]'));
+  const shapeToolButton = document.querySelector('[data-tool="shape"]');
   const lineToolButton = document.querySelector('[data-tool="line"]');
   const actionButtons = Array.from(document.querySelectorAll('[data-action]'));
   const zoomButtons = Array.from(document.querySelectorAll('[data-zoom]'));
   const textPanel = document.getElementById('slideTextPanel');
   const shapePanel = document.getElementById('slideShapePanel');
   const commonPanel = document.getElementById('slideCommonPanel');
+  const mediaPanel = document.getElementById('slideMediaPanel');
   const propFont = document.getElementById('propFont');
   const propFontSize = document.getElementById('propFontSize');
   const propFill = document.getElementById('propFill');
@@ -32,6 +34,9 @@
   const propAnimDelay = document.getElementById('propAnimDelay');
   const propAnimOrder = document.getElementById('propAnimOrder');
   const propAnimPreview = document.getElementById('propAnimPreview');
+  const propVideoAction = document.getElementById('propVideoAction');
+  const propVideoSound = document.getElementById('propVideoSound');
+  const propVideoLoop = document.getElementById('propVideoLoop');
 
   if (!container || !stageHost || !thumbsEl || !slideCanvas) return;
 
@@ -52,16 +57,139 @@
     type: 'none',
     duration: 0.6,
     delay: 0,
-    order: 0
+    order: 0,
+    videoAction: 'none',
+    videoSound: 'mute',
+    videoLoop: true
   });
-  const NODE_ANIMATION_TYPES = new Set(['none', 'fade', 'zoom', 'from-left', 'from-right', 'from-top', 'from-bottom']);
+  const NODE_ANIMATION_TYPES = new Set(['none', 'fade', 'zoom', 'from-left', 'from-right', 'from-top', 'from-bottom', 'draw-arrow']);
   const NODE_ANIMATION_OFFSET = 84;
+  const SHAPE_KIND_LABELS = Object.freeze({
+    rect: 'Shape',
+    ellipse: 'Shape'
+  });
   const LINE_KIND_LABELS = Object.freeze({
     line: 'Line',
     arrow: 'Arrow',
     curve: 'Curve',
     'curved-arrow': 'Curved Arrow'
   });
+  const VIDEO_ANIMATION_ACTIONS = new Set(['none', 'play', 'pause', 'restart']);
+  const VIDEO_SOUND_MODES = new Set(['mute', 'sound']);
+  const EQUATION_FONT_STACK = '"Cambria Math","STIX Two Math","Times New Roman",serif';
+  const EQUATION_SHORTCUTS = Object.freeze({
+    alpha: '\u03B1',
+    beta: '\u03B2',
+    gamma: '\u03B3',
+    delta: '\u03B4',
+    epsilon: '\u03B5',
+    theta: '\u03B8',
+    lambda: '\u03BB',
+    mu: '\u03BC',
+    pi: '\u03C0',
+    sigma: '\u03C3',
+    phi: '\u03C6',
+    omega: '\u03C9',
+    Gamma: '\u0393',
+    Delta: '\u0394',
+    Theta: '\u0398',
+    Lambda: '\u039B',
+    Pi: '\u03A0',
+    Sigma: '\u03A3',
+    Phi: '\u03A6',
+    Omega: '\u03A9',
+    neq: '\u2260',
+    leq: '\u2264',
+    geq: '\u2265',
+    approx: '\u2248',
+    times: '\u00D7',
+    div: '\u00F7',
+    pm: '\u00B1',
+    mp: '\u2213',
+    cdot: '\u00B7',
+    sum: '\u2211',
+    prod: '\u220F',
+    int: '\u222B',
+    sqrt: '\u221A',
+    infty: '\u221E',
+    partial: '\u2202',
+    forall: '\u2200',
+    exists: '\u2203',
+    in: '\u2208',
+    notin: '\u2209',
+    subset: '\u2282',
+    subseteq: '\u2286',
+    supset: '\u2283',
+    supseteq: '\u2287',
+    cup: '\u222A',
+    cap: '\u2229',
+    rightarrow: '\u2192',
+    leftarrow: '\u2190',
+    leftrightarrow: '\u2194',
+    Rightarrow: '\u21D2',
+    Leftarrow: '\u21D0',
+    Leftrightarrow: '\u21D4'
+  });
+  const EQUATION_ASCII_REPLACEMENTS = Object.freeze([
+    ['<=>', '\u21D4'],
+    ['<->', '\u2194'],
+    ['=>', '\u21D2'],
+    ['<=', '\u2264'],
+    ['>=', '\u2265'],
+    ['!=', '\u2260'],
+    ['->', '\u2192'],
+    ['<-', '\u2190']
+  ]);
+  const SUPERSCRIPT_MAP = Object.freeze({
+    '0': '\u2070', '1': '\u00B9', '2': '\u00B2', '3': '\u00B3', '4': '\u2074', '5': '\u2075', '6': '\u2076', '7': '\u2077', '8': '\u2078', '9': '\u2079',
+    '+': '\u207A', '-': '\u207B', '=': '\u207C', '(': '\u207D', ')': '\u207E',
+    a: '\u1D43', b: '\u1D47', c: '\u1D9C', d: '\u1D48', e: '\u1D49', f: '\u1DA0', g: '\u1D4D', h: '\u02B0', i: '\u2071', j: '\u02B2', k: '\u1D4F', l: '\u02E1',
+    m: '\u1D50', n: '\u207F', o: '\u1D52', p: '\u1D56', r: '\u02B3', s: '\u02E2', t: '\u1D57', u: '\u1D58', v: '\u1D5B', w: '\u02B7', x: '\u02E3', y: '\u02B8', z: '\u1DBB'
+  });
+  const SUBSCRIPT_MAP = Object.freeze({
+    '0': '\u2080', '1': '\u2081', '2': '\u2082', '3': '\u2083', '4': '\u2084', '5': '\u2085', '6': '\u2086', '7': '\u2087', '8': '\u2088', '9': '\u2089',
+    '+': '\u208A', '-': '\u208B', '=': '\u208C', '(': '\u208D', ')': '\u208E',
+    a: '\u2090', e: '\u2091', h: '\u2095', i: '\u1D62', j: '\u2C7C', k: '\u2096', l: '\u2097', m: '\u2098', n: '\u2099', o: '\u2092', p: '\u209A', r: '\u1D63',
+    s: '\u209B', t: '\u209C', u: '\u1D64', v: '\u1D65', x: '\u2093'
+  });
+  const EQUATION_SYMBOL_GROUPS = Object.freeze([
+    {
+      key: 'greek',
+      label: 'Greek',
+      symbols: [
+        { text: '\u03B1', insert: '\\alpha ' }, { text: '\u03B2', insert: '\\beta ' }, { text: '\u03B3', insert: '\\gamma ' },
+        { text: '\u0394', insert: '\\Delta ' }, { text: '\u03BB', insert: '\\lambda ' }, { text: '\u03C0', insert: '\\pi ' },
+        { text: '\u03C3', insert: '\\sigma ' }, { text: '\u03C6', insert: '\\phi ' }
+      ]
+    },
+    {
+      key: 'operators',
+      label: 'Operators',
+      symbols: [
+        { text: '\u2211', insert: '\\sum ' }, { text: '\u220F', insert: '\\prod ' }, { text: '\u222B', insert: '\\int ' },
+        { text: '\u221A', insert: '\\sqrt ' }, { text: '\u221E', insert: '\\infty ' }, { text: '\u2202', insert: '\\partial ' },
+        { text: '\u00D7', insert: '\\times ' }, { text: '\u00F7', insert: '\\div ' }
+      ]
+    },
+    {
+      key: 'relations',
+      label: 'Relations',
+      symbols: [
+        { text: '=', insert: '=' }, { text: '\u2260', insert: '\\neq ' }, { text: '\u2264', insert: '\\leq ' },
+        { text: '\u2265', insert: '\\geq ' }, { text: '\u2248', insert: '\\approx ' }, { text: '\u2208', insert: '\\in ' },
+        { text: '\u2282', insert: '\\subset ' }, { text: '\u2286', insert: '\\subseteq ' }
+      ]
+    },
+    {
+      key: 'arrows',
+      label: 'Arrows',
+      symbols: [
+        { text: '\u2192', insert: '\\rightarrow ' }, { text: '\u2190', insert: '\\leftarrow ' },
+        { text: '\u2194', insert: '\\leftrightarrow ' }, { text: '\u21D2', insert: '\\Rightarrow ' },
+        { text: '\u21D0', insert: '\\Leftarrow ' }, { text: '\u21D4', insert: '\\Leftrightarrow ' }
+      ]
+    }
+  ]);
   const EDITOR_DB_NAME = 'ivucxSlideEditorDB';
   const EDITOR_DB_VERSION = 1;
   const EDITOR_DB_STORE = 'editorStates';
@@ -82,6 +210,7 @@
   let currentLayer = null;
   let currentSlideIndex = 0;
   let currentTool = 'select';
+  let currentShapeKind = 'rect';
   let currentLineKind = 'line';
   let zoom = 1;
   let fitScale = 1;
@@ -97,6 +226,8 @@
   let videoAnimation = null;
   let activeTextEditor = null;
   let activeTextNode = null;
+  let activeEquationPopover = null;
+  let activeEquationGroup = EQUATION_SYMBOL_GROUPS[0].key;
   let contextMenuEl = null;
   let clipboardNode = null;
   let clipboardNodes = [];
@@ -106,6 +237,10 @@
   let docTypeEl = null;
   let docScrollEl = null;
   let docDownloadBtn = null;
+  let docNavPopup = null;
+  let docPrevSlideBtn = null;
+  let docNextSlideBtn = null;
+  let docNavLabel = null;
   let isPresentationMode = false;
   let objectAnimationTweens = [];
   let presentationAnimationQueue = [];
@@ -125,6 +260,15 @@
 
   function normalizeLineKind(kind, fallback = 'line'){
     return Object.prototype.hasOwnProperty.call(LINE_KIND_LABELS, kind) ? kind : fallback;
+  }
+
+  function normalizeShapeKind(kind, fallback = 'rect'){
+    return Object.prototype.hasOwnProperty.call(SHAPE_KIND_LABELS, kind) ? kind : fallback;
+  }
+
+  function getShapeKindLabel(kind){
+    const normalized = normalizeShapeKind(kind);
+    return normalized === 'ellipse' ? 'Ellipse' : 'Rect';
   }
 
   function getLineKindLabel(kind){
@@ -153,10 +297,51 @@
 
   function getNodeDisplayLabel(node){
     if (!node) return '';
+    if (node.className === 'Text' && node.getAttr && node.getAttr('isEquation')){
+      return 'Equation';
+    }
+    if (isVideoNode(node)){
+      return 'Video';
+    }
+    if (node.getAttr && node.getAttr('assetType') === 'image'){
+      return 'Image';
+    }
+    if (node.className === 'Rect' || node.className === 'Ellipse'){
+      return 'Shape';
+    }
     if (isLineLikeNode(node)){
       return getLineKindLabel(getNodeLineKind(node));
     }
     return node.className || 'Object';
+  }
+
+  function updateShapeToolButton(){
+    if (!shapeToolButton) return;
+    shapeToolButton.textContent = `${getShapeKindLabel(currentShapeKind)}...`;
+    shapeToolButton.title = 'Choose rectangle or ellipse.';
+  }
+
+  function openShapeToolMenu(){
+    if (!shapeToolButton || shapeToolButton.disabled) return;
+    const rect = shapeToolButton.getBoundingClientRect();
+    showContextMenu([
+      {
+        label: `${currentShapeKind === 'rect' ? '* ' : ''}${getShapeKindLabel('rect')}`,
+        action: () => {
+          currentShapeKind = 'rect';
+          updateShapeToolButton();
+          setTool('shape');
+        }
+      },
+      {
+        label: `${currentShapeKind === 'ellipse' ? '* ' : ''}${getShapeKindLabel('ellipse')}`,
+        action: () => {
+          currentShapeKind = 'ellipse';
+          updateShapeToolButton();
+          setTool('shape');
+        }
+      }
+    ], rect.left, rect.bottom + 8);
   }
 
   function updateLineToolButton(){
@@ -206,6 +391,163 @@
 
   function buildLinePointsForKind(kind, start, end){
     return [start.x, start.y, end.x, end.y];
+  }
+
+  function isVideoNode(node){
+    return !!(node && node.getAttr && node.getAttr('assetType') === 'video');
+  }
+
+  function getNodeVideoElement(node){
+    if (!isVideoNode(node) || !node.image) return null;
+    const media = node.image();
+    return media instanceof HTMLVideoElement ? media : null;
+  }
+
+  function applyVideoNodeSettings(node, config = getNodeAnimationConfig(node)){
+    const video = getNodeVideoElement(node);
+    if (!video) return null;
+    video.muted = config.videoSound !== 'sound';
+    video.defaultMuted = video.muted;
+    video.loop = !!config.videoLoop;
+    video.playsInline = true;
+    return video;
+  }
+
+  function hasQueuedMediaCue(node, config = getNodeAnimationConfig(node)){
+    return isVideoNode(node) && config.videoAction !== 'none';
+  }
+
+  function getEquationSource(node){
+    if (!node || !node.getAttr) return '';
+    return String(node.getAttr('equationSource') || node.text() || '');
+  }
+
+  function mapEquationToken(token, mapping){
+    let output = '';
+    for (const char of String(token || '')){
+      const mapped = mapping[char] || mapping[char.toLowerCase()];
+      if (!mapped) return '';
+      output += mapped;
+    }
+    return output;
+  }
+
+  function applyEquationScripts(text){
+    let result = '';
+    for (let index = 0; index < text.length; index += 1){
+      const marker = text[index];
+      if ((marker === '^' || marker === '_') && index + 1 < text.length){
+        let token = text[index + 1];
+        let endIndex = index + 2;
+        if (token === '{'){
+          const closingIndex = text.indexOf('}', index + 2);
+          if (closingIndex !== -1){
+            token = text.slice(index + 2, closingIndex);
+            endIndex = closingIndex + 1;
+          }
+        }
+        const mapped = mapEquationToken(token, marker === '^' ? SUPERSCRIPT_MAP : SUBSCRIPT_MAP);
+        if (mapped){
+          result += mapped;
+          index = endIndex - 1;
+          continue;
+        }
+      }
+      result += marker;
+    }
+    return result;
+  }
+
+  function renderEquationSource(source){
+    let text = String(source || '');
+    EQUATION_ASCII_REPLACEMENTS.forEach(([pattern, replacement]) => {
+      text = text.split(pattern).join(replacement);
+    });
+    text = text.replace(/\\([A-Za-z]+)\b/g, (match, symbolName) => EQUATION_SHORTCUTS[symbolName] || match);
+    return applyEquationScripts(text);
+  }
+
+  function insertIntoTextarea(textarea, snippet){
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? textarea.value.length;
+    textarea.setRangeText(snippet, start, end, 'end');
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea.focus();
+  }
+
+  function positionEquationPopover(){
+    if (!activeEquationPopover || !activeTextEditor) return;
+    const editorRect = activeTextEditor.getBoundingClientRect();
+    const popover = activeEquationPopover;
+    const measuredHeight = popover.offsetHeight || 180;
+    const aboveTop = editorRect.top - measuredHeight - 12;
+    const top = aboveTop > 12
+      ? aboveTop
+      : Math.min(window.innerHeight - measuredHeight - 12, editorRect.bottom + 12);
+    const left = Math.max(12, Math.min(editorRect.left, window.innerWidth - (popover.offsetWidth || 420) - 12));
+    popover.style.left = `${left}px`;
+    popover.style.top = `${Math.max(12, top)}px`;
+  }
+
+  function destroyEquationPopover(){
+    if (!activeEquationPopover) return;
+    if (activeEquationPopover.parentNode){
+      activeEquationPopover.parentNode.removeChild(activeEquationPopover);
+    }
+    activeEquationPopover = null;
+  }
+
+  function renderEquationPopoverSymbols(popover, textarea, groupKey){
+    if (!popover) return;
+    const symbolsEl = popover.querySelector('.slide-equation-symbols');
+    const buttons = popover.querySelectorAll('[data-equation-group]');
+    buttons.forEach(button => {
+      button.classList.toggle('is-active', button.getAttribute('data-equation-group') === groupKey);
+    });
+    if (!symbolsEl) return;
+    symbolsEl.innerHTML = '';
+    const group = EQUATION_SYMBOL_GROUPS.find(item => item.key === groupKey) || EQUATION_SYMBOL_GROUPS[0];
+    activeEquationGroup = group.key;
+    group.symbols.forEach(symbol => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'slide-equation-symbol';
+      button.textContent = symbol.text;
+      button.title = symbol.insert.trim();
+      button.addEventListener('click', () => insertIntoTextarea(textarea, symbol.insert));
+      symbolsEl.appendChild(button);
+    });
+  }
+
+  function createEquationPopover(textarea){
+    destroyEquationPopover();
+    const popover = document.createElement('div');
+    popover.className = 'slide-equation-popover is-active';
+    popover.innerHTML = `
+      <div class="slide-equation-topbar">
+        <div class="slide-equation-title">Equation Toolbar</div>
+      </div>
+      <div class="slide-equation-group"></div>
+      <div class="slide-equation-symbols"></div>
+      <div class="slide-equation-hint">Google Docs-like shortcuts are supported here: try \\alpha, \\sum, x^2, x_i, or the symbol chips above.</div>
+    `;
+    popover.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+    });
+    const groupEl = popover.querySelector('.slide-equation-group');
+    EQUATION_SYMBOL_GROUPS.forEach(group => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = group.label;
+      button.setAttribute('data-equation-group', group.key);
+      button.addEventListener('click', () => renderEquationPopoverSymbols(popover, textarea, group.key));
+      groupEl.appendChild(button);
+    });
+    document.body.appendChild(popover);
+    activeEquationPopover = popover;
+    renderEquationPopoverSymbols(popover, textarea, activeEquationGroup);
+    positionEquationPopover();
   }
 
   function openEditorPersistenceDb(){
@@ -265,11 +607,17 @@
     const textarea = activeTextEditor;
     const textNode = activeTextNode;
     if (commit){
-      textNode.text(textarea.value);
+      if (textNode.getAttr && textNode.getAttr('isEquation')){
+        textNode.setAttr('equationSource', textarea.value);
+        textNode.text(renderEquationSource(textarea.value));
+      } else {
+        textNode.text(textarea.value);
+      }
     }
     if (textarea.parentNode){
       textarea.parentNode.removeChild(textarea);
     }
+    destroyEquationPopover();
     textNode.show();
     transformer.show();
     uiLayer.draw();
@@ -301,11 +649,21 @@
     const minHeight = baseHeight * absScale.y;
     activeTextEditor.style.height = 'auto';
     activeTextEditor.style.height = `${Math.max(minHeight, activeTextEditor.scrollHeight)}px`;
+    positionEquationPopover();
   }
 
   function getContentNodes(layer = currentLayer){
     if (!layer) return [];
     return layer.getChildren(node => !node.getAttr('isBackground'));
+  }
+
+  function normalizeLayerOrdering(layer = currentLayer){
+    if (!layer) return;
+    const backgroundNode = getBackgroundNode(layer);
+    if (backgroundNode){
+      backgroundNode.moveToBottom();
+    }
+    getContentNodes(layer).forEach(node => node.moveToTop());
   }
 
   function centerNodeOnSlide(node, layer = currentLayer){
@@ -416,13 +774,26 @@
     const durationValue = Number(rawConfig && (rawConfig.duration ?? rawConfig.animDuration));
     const delayValue = Number(rawConfig && (rawConfig.delay ?? rawConfig.animDelay));
     const orderValue = Number(rawConfig && (rawConfig.order ?? rawConfig.animOrder));
+    const videoAction = rawConfig && VIDEO_ANIMATION_ACTIONS.has(rawConfig.videoAction)
+      ? rawConfig.videoAction
+      : (rawConfig && VIDEO_ANIMATION_ACTIONS.has(rawConfig.animVideoAction) ? rawConfig.animVideoAction : 'none');
+    const videoSound = rawConfig && VIDEO_SOUND_MODES.has(rawConfig.videoSound)
+      ? rawConfig.videoSound
+      : (rawConfig && VIDEO_SOUND_MODES.has(rawConfig.animVideoSound) ? rawConfig.animVideoSound : 'mute');
+    const videoLoopValue = rawConfig && (rawConfig.videoLoop ?? rawConfig.animVideoLoop);
+    const needsOrder = type !== 'none' || videoAction !== 'none';
     return {
       type,
       duration: Number.isFinite(durationValue) ? Math.max(0.1, Math.min(8, roundMetric(durationValue))) : DEFAULT_NODE_ANIMATION.duration,
       delay: Number.isFinite(delayValue) ? Math.max(0, Math.min(8, roundMetric(delayValue))) : DEFAULT_NODE_ANIMATION.delay,
-      order: type === 'none'
+      order: !needsOrder
         ? 0
-        : (Number.isFinite(orderValue) ? Math.max(1, Math.min(99, Math.round(orderValue))) : DEFAULT_NODE_ANIMATION.order)
+        : (Number.isFinite(orderValue) ? Math.max(1, Math.min(99, Math.round(orderValue))) : 1),
+      videoAction,
+      videoSound,
+      videoLoop: typeof videoLoopValue === 'boolean'
+        ? videoLoopValue
+        : !(String(videoLoopValue).toLowerCase() === 'false' || String(videoLoopValue) === '0')
     };
   }
 
@@ -432,7 +803,10 @@
       type: node.getAttr('animType'),
       duration: node.getAttr('animDuration'),
       delay: node.getAttr('animDelay'),
-      order: node.getAttr('animOrder')
+      order: node.getAttr('animOrder'),
+      videoAction: node.getAttr('animVideoAction'),
+      videoSound: node.getAttr('animVideoSound'),
+      videoLoop: node.getAttr('animVideoLoop')
     });
   }
 
@@ -443,6 +817,9 @@
     node.setAttr('animDuration', normalized.duration);
     node.setAttr('animDelay', normalized.delay);
     node.setAttr('animOrder', normalized.order);
+    node.setAttr('animVideoAction', normalized.videoAction);
+    node.setAttr('animVideoSound', normalized.videoSound);
+    node.setAttr('animVideoLoop', normalized.videoLoop);
     return normalized;
   }
 
@@ -460,6 +837,8 @@
         return 'From Top';
       case 'from-bottom':
         return 'From Bottom';
+      case 'draw-arrow':
+        return 'Draw From Tail';
       default:
         return 'None';
     }
@@ -502,7 +881,9 @@
         fontFamily: node.fontFamily() || '',
         fill: node.fill() || '',
         align: node.align ? (node.align() || 'left') : 'left',
-        lineHeight: roundMetric(node.lineHeight ? node.lineHeight() : 1.2)
+        lineHeight: roundMetric(node.lineHeight ? node.lineHeight() : 1.2),
+        isEquation: !!(node.getAttr && node.getAttr('isEquation')),
+        equationSource: node.getAttr ? (node.getAttr('equationSource') || '') : ''
       };
     }
 
@@ -657,13 +1038,15 @@
   }
 
   function createTextNodeFromSnapshot(data){
+    const isEquation = !!data.isEquation;
+    const equationSource = typeof data.equationSource === 'string' ? data.equationSource : '';
     const node = new Konva.Text({
       x: Number(data.x) || 0,
       y: Number(data.y) || 0,
-      text: typeof data.text === 'string' ? data.text : '',
+      text: isEquation ? renderEquationSource(equationSource) : (typeof data.text === 'string' ? data.text : ''),
       width: Math.max(MIN_SIZE, Number(data.width) || 420),
       fontSize: Math.max(MIN_TEXT_SIZE, Number(data.fontSize) || 32),
-      fontFamily: data.fontFamily || 'Arial',
+      fontFamily: isEquation ? EQUATION_FONT_STACK : (data.fontFamily || 'Arial'),
       fill: data.fill || '#111111',
       align: data.align || 'left',
       lineHeight: Number(data.lineHeight) || 1.2,
@@ -673,6 +1056,10 @@
     });
     if (data.seedSource){
       node.setAttr('seedSource', true);
+    }
+    if (isEquation){
+      node.setAttr('isEquation', true);
+      node.setAttr('equationSource', equationSource || data.text || '');
     }
     return node;
   }
@@ -731,6 +1118,7 @@
     if (data.assetSrc){
       node.setAttr('assetSrc', data.assetSrc);
     }
+    applyVideoNodeSettings(node, data.animation || {});
     return node;
   }
 
@@ -1092,7 +1480,7 @@
         index,
         config: getNodeAnimationConfig(node)
       }))
-      .filter(entry => entry.config.type !== 'none');
+      .filter(entry => entry.config.type !== 'none' || hasQueuedMediaCue(entry.node, entry.config));
 
     nodes.sort((a, b) => {
       const aOrder = a.config.order > 0 ? a.config.order : 1000 + a.index;
@@ -1403,8 +1791,26 @@
     docScrollEl = document.createElement('div');
     docScrollEl.className = 'slide-doc-scroll';
 
+    docNavPopup = document.createElement('div');
+    docNavPopup.className = 'slide-doc-nav';
+
+    docPrevSlideBtn = document.createElement('button');
+    docPrevSlideBtn.type = 'button';
+    docPrevSlideBtn.textContent = 'Prev';
+    docPrevSlideBtn.addEventListener('click', () => moveSlide(-1));
+
+    docNavLabel = document.createElement('div');
+    docNavLabel.className = 'slide-doc-nav-label';
+
+    docNextSlideBtn = document.createElement('button');
+    docNextSlideBtn.type = 'button';
+    docNextSlideBtn.textContent = 'Next';
+    docNextSlideBtn.addEventListener('click', () => moveSlide(1));
+
+    docNavPopup.append(docPrevSlideBtn, docNavLabel, docNextSlideBtn);
+
     shell.append(header, docScrollEl);
-    docViewer.appendChild(shell);
+    docViewer.append(shell, docNavPopup);
     docViewer.addEventListener('contextmenu', (e) => {
       const slide = getCurrentSlide();
       if (!slide || slide.type !== 'document' || !slide.document) return;
@@ -1417,13 +1823,23 @@
   }
 
   function downloadDocumentFile(fileInfo){
-    if (!fileInfo || !fileInfo.url) return;
+    if (!fileInfo) return;
+    let objectUrl = '';
+    const href = fileInfo.url || (
+      fileInfo.kind === 'text'
+        ? (objectUrl = URL.createObjectURL(new Blob([fileInfo.text || ''], { type: fileInfo.mime || 'text/plain;charset=utf-8' })))
+        : ''
+    );
+    if (!href) return;
     const link = document.createElement('a');
-    link.href = fileInfo.url;
+    link.href = href;
     link.download = fileInfo.title || 'document';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    if (objectUrl){
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    }
   }
 
   function getDocumentContextMenuItems(index){
@@ -1582,10 +1998,21 @@
     return documentInfo;
   }
 
+  function updateDocumentNavPopup(){
+    if (!docNavPopup || !docPrevSlideBtn || !docNextSlideBtn || !docNavLabel) return;
+    const active = isPresentationMode && isDocumentSlide();
+    docNavPopup.classList.toggle('is-active', active);
+    if (!active) return;
+    docPrevSlideBtn.disabled = currentSlideIndex <= 0;
+    docNextSlideBtn.disabled = currentSlideIndex >= slides.length - 1;
+    docNavLabel.textContent = `Slide ${currentSlideIndex + 1} / ${slides.length}`;
+  }
+
   function renderDocumentSlide(slide){
     ensureDocViewer();
     if (!slide || !slide.document){
       docViewer.classList.remove('is-active');
+      updateDocumentNavPopup();
       return;
     }
 
@@ -1620,6 +2047,7 @@
 
     docScrollEl.scrollTop = 0;
     docViewer.classList.add('is-active');
+    updateDocumentNavPopup();
   }
 
   function hideDocumentSlide(){
@@ -1628,6 +2056,7 @@
     if (docScrollEl){
       docScrollEl.innerHTML = '';
     }
+    updateDocumentNavPopup();
   }
 
   function updateUiForCurrentSlide(){
@@ -1669,8 +2098,7 @@
         presentationAnimationQueue.forEach(entry => {
           if (!entry || !entry.node) return;
           try{
-            const { finalState } = buildNodeAnimationStates(entry.node, entry.config || getNodeAnimationConfig(entry.node));
-            applyNodeAnimationState(entry.node, finalState);
+            applyAnimationFinalState(entry.node, entry.config || getNodeAnimationConfig(entry.node));
             const nodeLayer = entry.node.getLayer ? entry.node.getLayer() : null;
             if (nodeLayer) nodeLayer.batchDraw();
           }catch(err){
@@ -1685,6 +2113,8 @@
     objectAnimationTweens.forEach(entry => {
       if (!entry) return;
       if (entry.timeoutId) clearTimeout(entry.timeoutId);
+      if (entry.cueTimeoutId) clearTimeout(entry.cueTimeoutId);
+      if (entry.rafId) cancelAnimationFrame(entry.rafId);
       if (entry.tween){
         entry.tween.destroy();
       }
@@ -1701,8 +2131,7 @@
       presentationAnimationQueue.forEach(entry => {
         if (!entry || !entry.node) return;
         try{
-          const { finalState } = buildNodeAnimationStates(entry.node, entry.config || getNodeAnimationConfig(entry.node));
-          applyNodeAnimationState(entry.node, finalState);
+          applyAnimationFinalState(entry.node, entry.config || getNodeAnimationConfig(entry.node));
           const nodeLayer = entry.node.getLayer ? entry.node.getLayer() : null;
           if (nodeLayer) nodeLayer.batchDraw();
         }catch(err){
@@ -1762,23 +2191,233 @@
     node.opacity(state.opacity);
   }
 
+  function getLineRevealPoints(points, progress){
+    const source = Array.isArray(points) ? points.slice() : [];
+    if (source.length < 4) return source;
+    const start = { x: source[0], y: source[1] };
+    if (progress <= 0){
+      return [start.x, start.y, start.x, start.y];
+    }
+    if (progress >= 1){
+      return source;
+    }
+    let totalLength = 0;
+    for (let index = 0; index < source.length - 2; index += 2){
+      totalLength += Math.hypot(source[index + 2] - source[index], source[index + 3] - source[index + 1]);
+    }
+    if (totalLength <= 0){
+      return [start.x, start.y, start.x, start.y];
+    }
+    const targetLength = totalLength * progress;
+    let walked = 0;
+    const output = [start.x, start.y];
+    for (let index = 0; index < source.length - 2; index += 2){
+      const fromX = source[index];
+      const fromY = source[index + 1];
+      const toX = source[index + 2];
+      const toY = source[index + 3];
+      const segmentLength = Math.hypot(toX - fromX, toY - fromY);
+      if (walked + segmentLength <= targetLength){
+        output.push(toX, toY);
+        walked += segmentLength;
+        continue;
+      }
+      const remain = Math.max(0, targetLength - walked);
+      const ratio = segmentLength > 0 ? remain / segmentLength : 0;
+      output.push(
+        fromX + (toX - fromX) * ratio,
+        fromY + (toY - fromY) * ratio
+      );
+      break;
+    }
+    if (output.length < 4){
+      output.push(start.x, start.y);
+    }
+    return output;
+  }
+
+  function applyAnimationStartState(node, config){
+    if (!node) return;
+    if (config.type === 'draw-arrow' && isLineLikeNode(node)){
+      const finalPoints = (node.points ? node.points() : []).slice();
+      node.setAttr('animFinalPoints', finalPoints);
+      node.points(getLineRevealPoints(finalPoints, 0));
+      return;
+    }
+    const states = buildNodeAnimationStates(node, config);
+    node.setAttr('animPreparedStartState', states.startState);
+    node.setAttr('animPreparedFinalState', states.finalState);
+    const { startState } = states;
+    applyNodeAnimationState(node, startState);
+  }
+
+  function applyAnimationFinalState(node, config){
+    if (!node) return;
+    if (config.type === 'draw-arrow' && isLineLikeNode(node)){
+      const finalPoints = node.getAttr('animFinalPoints');
+      if (Array.isArray(finalPoints) && finalPoints.length >= 4){
+        node.points(finalPoints.slice());
+      }
+      node.setAttr('animFinalPoints', null);
+      return;
+    }
+    const preparedFinalState = node.getAttr('animPreparedFinalState');
+    const finalState = preparedFinalState && typeof preparedFinalState === 'object'
+      ? preparedFinalState
+      : buildNodeAnimationStates(node, config).finalState;
+    applyNodeAnimationState(node, finalState);
+    node.setAttr('animPreparedStartState', null);
+    node.setAttr('animPreparedFinalState', null);
+  }
+
+  function triggerVideoCue(node, config){
+    const video = applyVideoNodeSettings(node, config);
+    if (!video || config.videoAction === 'none') return false;
+    try{
+      switch (config.videoAction){
+        case 'pause':
+          video.pause();
+          break;
+        case 'restart':
+          video.pause();
+          video.currentTime = 0;
+          video.play().catch(() => {});
+          break;
+        case 'play':
+          video.play().catch(() => {});
+          break;
+        default:
+          return false;
+      }
+    }catch(err){
+      return false;
+    }
+    return true;
+  }
+
+  function prepareVideoNodesForPresentation(layer = currentLayer){
+    if (!layer) return;
+    getContentNodes(layer).forEach(node => {
+      if (!isVideoNode(node)) return;
+      const config = getNodeAnimationConfig(node);
+      const video = applyVideoNodeSettings(node, config);
+      if (!video) return;
+      try{
+        if ((config.videoAction === 'play' || config.videoAction === 'restart') && config.order > 0){
+          video.pause();
+          video.currentTime = 0;
+        } else if (config.videoAction === 'pause'){
+          video.play().catch(() => {});
+        } else {
+          video.play().catch(() => {});
+        }
+      }catch(err){
+        // ignore media issues during presentation prep
+      }
+    });
+  }
+
   function runNodeEntryAnimation(node, options = {}){
     const nodeLayer = node && node.getLayer ? node.getLayer() : currentLayer;
     if (!node || !nodeLayer || !stage || !hasKonva()) return false;
     const config = getNodeAnimationConfig(node);
-    if (config.type === 'none') return false;
+    const hasVisualAnimation = config.type !== 'none';
+    const hasMediaCue = hasQueuedMediaCue(node, config);
+    if (!hasVisualAnimation && !hasMediaCue) return false;
+    const preparedStartState = node.getAttr('animPreparedStartState');
+    const preparedFinalState = node.getAttr('animPreparedFinalState');
+    const standardStates = hasVisualAnimation && config.type !== 'draw-arrow'
+      ? (
+          preparedStartState && preparedFinalState
+            ? { startState: preparedStartState, finalState: preparedFinalState }
+            : buildNodeAnimationStates(node, config)
+        )
+      : null;
 
-    const { startState, finalState } = buildNodeAnimationStates(node, config);
+    const delayOffset = Math.max(0, Number(options.delayOffset) || 0);
+    const totalDelay = (options.ignoreDelay ? 0 : config.delay) + delayOffset;
+    const delayMs = Math.round(totalDelay * 1000);
+    let cueTriggered = false;
+    const ensureCue = () => {
+      if (!hasMediaCue || cueTriggered) return;
+      cueTriggered = true;
+      triggerVideoCue(node, config);
+    };
     const applyFinal = () => {
-      applyNodeAnimationState(node, finalState);
+      if (standardStates){
+        applyNodeAnimationState(node, standardStates.finalState);
+        node.setAttr('animPreparedStartState', null);
+        node.setAttr('animPreparedFinalState', null);
+      } else {
+        applyAnimationFinalState(node, config);
+      }
       if (nodeLayer){
         nodeLayer.batchDraw();
       }
     };
 
-    applyNodeAnimationState(node, startState);
+    if (standardStates){
+      applyNodeAnimationState(node, standardStates.startState);
+    } else {
+      applyAnimationStartState(node, config);
+    }
     if (nodeLayer){
       nodeLayer.batchDraw();
+    }
+
+    if (!hasVisualAnimation){
+      const record = {
+        node,
+        tween: null,
+        timeoutId: null,
+        cueTimeoutId: hasMediaCue ? setTimeout(() => ensureCue(), delayMs) : null,
+        rafId: null,
+        applyFinal
+      };
+      record.timeoutId = setTimeout(() => {
+        applyFinal();
+        objectAnimationTweens = objectAnimationTweens.filter(entry => entry !== record);
+      }, delayMs + 40);
+      objectAnimationTweens.push(record);
+      return true;
+    }
+
+    if (config.type === 'draw-arrow' && isLineLikeNode(node)){
+      const finalPoints = (node.getAttr('animFinalPoints') || (node.points ? node.points() : [])).slice();
+      const easing = window.Konva && Konva.Easings
+        ? (Konva.Easings.EaseOutCubic || Konva.Easings.StrongEaseOut || Konva.Easings.EaseOut || Konva.Easings.Linear)
+        : (value => value);
+      const durationMs = Math.max(120, Math.round(config.duration * 1000));
+      const startAt = performance.now() + delayMs;
+      const record = {
+        node,
+        tween: null,
+        timeoutId: null,
+        cueTimeoutId: null,
+        rafId: null,
+        applyFinal
+      };
+      const frame = (now) => {
+        if (!record) return;
+        if (now < startAt){
+          record.rafId = requestAnimationFrame(frame);
+          return;
+        }
+        ensureCue();
+        const progress = Math.min(1, (now - startAt) / durationMs);
+        const eased = typeof easing === 'function' ? easing(progress) : progress;
+        node.points(getLineRevealPoints(finalPoints, eased));
+        nodeLayer.batchDraw();
+        if (progress >= 1){
+          applyFinal();
+          objectAnimationTweens = objectAnimationTweens.filter(entry => entry !== record);
+          return;
+        }
+        record.rafId = requestAnimationFrame(frame);
+      };
+      record.rafId = requestAnimationFrame(frame);
+      objectAnimationTweens.push(record);
+      return true;
     }
 
     const easing = window.Konva && Konva.Easings
@@ -1788,12 +2427,12 @@
     const tween = new Konva.Tween({
       node,
       duration: config.duration,
-      delay: (options.ignoreDelay ? 0 : config.delay) + Math.max(0, Number(options.delayOffset) || 0),
-      x: finalState.x,
-      y: finalState.y,
-      scaleX: finalState.scaleX,
-      scaleY: finalState.scaleY,
-      opacity: finalState.opacity,
+      delay: totalDelay,
+      x: standardStates.finalState.x,
+      y: standardStates.finalState.y,
+      scaleX: standardStates.finalState.scaleX,
+      scaleY: standardStates.finalState.scaleY,
+      opacity: standardStates.finalState.opacity,
       easing
     });
 
@@ -1801,13 +2440,15 @@
       node,
       tween,
       applyFinal,
-      timeoutId: null
+      timeoutId: null,
+      cueTimeoutId: hasMediaCue ? setTimeout(() => ensureCue(), delayMs + 10) : null,
+      rafId: null
     };
 
     record.timeoutId = setTimeout(() => {
       applyFinal();
       objectAnimationTweens = objectAnimationTweens.filter(entry => entry !== record);
-    }, Math.round((((options.ignoreDelay ? 0 : config.delay) + Math.max(0, Number(options.delayOffset) || 0)) + config.duration) * 1000) + 40);
+    }, Math.round((totalDelay + config.duration) * 1000) + 40);
 
     objectAnimationTweens.push(record);
     tween.play();
@@ -1824,11 +2465,12 @@
     clearObjectAnimationTweens(true);
     const slide = getCurrentSlide();
     if (!isPresentationMode || !slide || slide.type !== 'canvas' || !currentLayer) return;
+    normalizeLayerOrdering(currentLayer);
     presentationAnimationQueue = getAnimatedNodesInDisplayOrder(currentLayer);
     presentationAnimationIndex = 0;
+    prepareVideoNodesForPresentation(currentLayer);
     presentationAnimationQueue.forEach(entry => {
-      const { startState } = buildNodeAnimationStates(entry.node, entry.config);
-      applyNodeAnimationState(entry.node, startState);
+      applyAnimationStartState(entry.node, entry.config);
     });
     currentLayer.batchDraw();
   }
@@ -1852,6 +2494,7 @@
     if (!active){
       clearGuideLines();
     }
+    updateDocumentNavPopup();
     resizeStage();
     if (active){
       requestAnimationFrame(() => {
@@ -2012,6 +2655,7 @@
     createSlide();
     showSlide(0);
 
+    updateShapeToolButton();
     updateLineToolButton();
     bindStageEvents();
     bindUiEvents();
@@ -2080,6 +2724,7 @@
       hideDocumentSlide();
       stageHost.style.display = '';
       stage.add(currentLayer);
+      normalizeLayerOrdering(currentLayer);
       if (uiLayer && uiLayer.getParent()){
         uiLayer.moveToTop();
       }
@@ -2148,6 +2793,7 @@
     if (statusLabel){
       statusLabel.textContent = `Slide ${currentSlideIndex + 1} of ${slides.length}`;
     }
+    updateDocumentNavPopup();
   }
 
   function renderThumbs(){
@@ -2224,6 +2870,7 @@
       return;
     }
     if (!stage) return;
+    normalizeLayerOrdering(slide.layer);
     transformer.visible(false);
     uiLayer.draw();
     try{
@@ -2262,7 +2909,24 @@
       stopVideoAnimation();
       return;
     }
-    if (hasVideoContent()) startVideoAnimation();
+    if (!currentLayer){
+      stopVideoAnimation();
+      return;
+    }
+    const nodes = currentLayer.find(node => node.getAttr && node.getAttr('assetType') === 'video');
+    nodes.forEach(node => {
+      const video = getNodeVideoElement(node);
+      if (!video) return;
+      if (isPresentationMode){
+        applyVideoNodeSettings(node, getNodeAnimationConfig(node));
+      } else {
+        video.muted = true;
+        video.defaultMuted = true;
+        video.loop = true;
+        video.play().catch(() => {});
+      }
+    });
+    if (nodes.length) startVideoAnimation();
     else stopVideoAnimation();
   }
 
@@ -2326,18 +2990,21 @@
         return;
       }
 
-      if (currentTool === 'rect'){
+      if (currentTool === 'equation'){
         if (!pos) return;
-        const rect = createRectNode(pos.x, pos.y);
-        addNode(rect);
+        const equationNode = createEquationNode(pos.x, pos.y);
+        addNode(equationNode);
+        editText(equationNode);
         setTool('select');
         return;
       }
 
-      if (currentTool === 'ellipse'){
+      if (currentTool === 'shape'){
         if (!pos) return;
-        const ellipse = createEllipseNode(pos.x, pos.y);
-        addNode(ellipse);
+        const shapeNode = currentShapeKind === 'ellipse'
+          ? createEllipseNode(pos.x, pos.y)
+          : createRectNode(pos.x, pos.y);
+        addNode(shapeNode);
         setTool('select');
         return;
       }
@@ -2474,6 +3141,15 @@
           }
         });
         items.push({
+          label: 'Add equation',
+          action: () => {
+            const equationNode = createEquationNode(point.x, point.y);
+            addNode(equationNode);
+            editText(equationNode);
+            setTool('select');
+          }
+        });
+        items.push({
           label: 'Add rectangle',
           action: () => {
             addNode(createRectNode(point.x, point.y));
@@ -2522,6 +3198,10 @@
         }
         if (tool === 'file'){
           if (fileInput) fileInput.click();
+          return;
+        }
+        if (tool === 'shape'){
+          openShapeToolMenu();
           return;
         }
         if (tool === 'line'){
@@ -2673,6 +3353,7 @@
     if (propFont){
       propFont.addEventListener('change', () => {
         if (!selectedNode || selectedNode.className !== 'Text') return;
+        if (selectedNode.getAttr && selectedNode.getAttr('isEquation')) return;
         selectedNode.fontFamily(propFont.value);
         currentLayer.batchDraw();
         scheduleThumbUpdate();
@@ -2767,13 +3448,17 @@
         if (!selectedNode || hasMultipleSelection()) return;
         const currentConfig = getNodeAnimationConfig(selectedNode);
         const nextType = propAnimType.value;
+        const needsOrder = nextType !== 'none' || currentConfig.videoAction !== 'none';
         setNodeAnimationConfig(selectedNode, {
-          type: propAnimType.value,
+          type: nextType,
           duration: propAnimDuration ? propAnimDuration.value : undefined,
           delay: propAnimDelay ? propAnimDelay.value : undefined,
-          order: nextType !== 'none'
+          order: needsOrder
             ? (currentConfig.order > 0 ? currentConfig.order : getNextAnimationOrder(currentLayer, selectedNode))
-            : 0
+            : 0,
+          videoAction: currentConfig.videoAction,
+          videoSound: currentConfig.videoSound,
+          videoLoop: currentConfig.videoLoop
         });
         updateInspector(selectedNode);
         scheduleThumbUpdate();
@@ -2788,7 +3473,10 @@
           type: propAnimType ? propAnimType.value : undefined,
           duration: propAnimDuration.value,
           delay: propAnimDelay ? propAnimDelay.value : undefined,
-          order: propAnimOrder ? propAnimOrder.value : undefined
+          order: propAnimOrder ? propAnimOrder.value : undefined,
+          videoAction: propVideoAction ? propVideoAction.value : undefined,
+          videoSound: propVideoSound ? propVideoSound.value : undefined,
+          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined
         });
         updateInspector(selectedNode);
         scheduleThumbUpdate();
@@ -2803,7 +3491,10 @@
           type: propAnimType ? propAnimType.value : undefined,
           duration: propAnimDuration ? propAnimDuration.value : undefined,
           delay: propAnimDelay.value,
-          order: propAnimOrder ? propAnimOrder.value : undefined
+          order: propAnimOrder ? propAnimOrder.value : undefined,
+          videoAction: propVideoAction ? propVideoAction.value : undefined,
+          videoSound: propVideoSound ? propVideoSound.value : undefined,
+          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined
         });
         updateInspector(selectedNode);
         scheduleThumbUpdate();
@@ -2818,8 +3509,69 @@
           type: propAnimType ? propAnimType.value : undefined,
           duration: propAnimDuration ? propAnimDuration.value : undefined,
           delay: propAnimDelay ? propAnimDelay.value : undefined,
-          order: propAnimOrder.value
+          order: propAnimOrder.value,
+          videoAction: propVideoAction ? propVideoAction.value : undefined,
+          videoSound: propVideoSound ? propVideoSound.value : undefined,
+          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined
         });
+        updateInspector(selectedNode);
+        scheduleThumbUpdate();
+        schedulePersistentSave();
+      });
+    }
+
+    if (propVideoAction){
+      propVideoAction.addEventListener('change', () => {
+        if (!selectedNode || hasMultipleSelection() || !isVideoNode(selectedNode)) return;
+        const currentConfig = getNodeAnimationConfig(selectedNode);
+        const nextAction = propVideoAction.value;
+        const needsOrder = currentConfig.type !== 'none' || nextAction !== 'none';
+        setNodeAnimationConfig(selectedNode, {
+          type: currentConfig.type,
+          duration: currentConfig.duration,
+          delay: currentConfig.delay,
+          order: needsOrder
+            ? (currentConfig.order > 0 ? currentConfig.order : getNextAnimationOrder(currentLayer, selectedNode))
+            : 0,
+          videoAction: nextAction,
+          videoSound: propVideoSound ? propVideoSound.value : undefined,
+          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined
+        });
+        applyVideoNodeSettings(selectedNode);
+        updateInspector(selectedNode);
+        scheduleThumbUpdate();
+        schedulePersistentSave();
+      });
+    }
+
+    if (propVideoSound){
+      propVideoSound.addEventListener('change', () => {
+        if (!selectedNode || hasMultipleSelection() || !isVideoNode(selectedNode)) return;
+        const currentConfig = getNodeAnimationConfig(selectedNode);
+        setNodeAnimationConfig(selectedNode, {
+          ...currentConfig,
+          videoAction: propVideoAction ? propVideoAction.value : currentConfig.videoAction,
+          videoSound: propVideoSound.value,
+          videoLoop: propVideoLoop ? propVideoLoop.checked : currentConfig.videoLoop
+        });
+        applyVideoNodeSettings(selectedNode);
+        updateInspector(selectedNode);
+        scheduleThumbUpdate();
+        schedulePersistentSave();
+      });
+    }
+
+    if (propVideoLoop){
+      propVideoLoop.addEventListener('change', () => {
+        if (!selectedNode || hasMultipleSelection() || !isVideoNode(selectedNode)) return;
+        const currentConfig = getNodeAnimationConfig(selectedNode);
+        setNodeAnimationConfig(selectedNode, {
+          ...currentConfig,
+          videoAction: propVideoAction ? propVideoAction.value : currentConfig.videoAction,
+          videoSound: propVideoSound ? propVideoSound.value : currentConfig.videoSound,
+          videoLoop: propVideoLoop.checked
+        });
+        applyVideoNodeSettings(selectedNode);
         updateInspector(selectedNode);
         scheduleThumbUpdate();
         schedulePersistentSave();
@@ -2858,6 +3610,7 @@
         return;
       case 'bring-front':
         getSelectedNodes().forEach(node => node.moveToTop());
+        normalizeLayerOrdering(currentLayer);
         currentLayer.draw();
         scheduleThumbUpdate();
         return;
@@ -2868,6 +3621,7 @@
             node.zIndex(1);
           }
         });
+        normalizeLayerOrdering(currentLayer);
         currentLayer.draw();
         scheduleThumbUpdate();
         return;
@@ -3003,9 +3757,11 @@
       if (textPanel) textPanel.style.display = 'none';
       if (shapePanel) shapePanel.style.display = 'none';
       if (commonPanel) commonPanel.style.display = 'none';
+      if (mediaPanel) mediaPanel.style.display = 'none';
       if (propShapeFill) propShapeFill.disabled = false;
       if (propAnimOrder) propAnimOrder.disabled = true;
       if (propAnimPreview) propAnimPreview.disabled = true;
+      if (propFont) propFont.disabled = false;
       return;
     }
 
@@ -3014,34 +3770,48 @@
       if (textPanel) textPanel.style.display = 'none';
       if (shapePanel) shapePanel.style.display = 'none';
       if (commonPanel) commonPanel.style.display = 'none';
+      if (mediaPanel) mediaPanel.style.display = 'none';
       if (propShapeFill) propShapeFill.disabled = false;
       if (propAnimOrder) propAnimOrder.disabled = true;
       if (propAnimPreview) propAnimPreview.disabled = true;
+      if (propFont) propFont.disabled = false;
       return;
     }
 
     const animationConfig = getNodeAnimationConfig(node);
     const displayLabel = getNodeDisplayLabel(node);
-    selectionLabel.textContent = animationConfig.type === 'none'
-      ? displayLabel
-      : `${displayLabel} - ${getNodeAnimationLabel(animationConfig.type)}`;
+    if (animationConfig.type !== 'none'){
+      selectionLabel.textContent = `${displayLabel} - ${getNodeAnimationLabel(animationConfig.type)}`;
+    } else if (isVideoNode(node) && animationConfig.videoAction !== 'none'){
+      selectionLabel.textContent = `${displayLabel} - ${animationConfig.videoAction} cue`;
+    } else {
+      selectionLabel.textContent = displayLabel;
+    }
     if (commonPanel) commonPanel.style.display = 'flex';
 
     const isText = node.className === 'Text';
     const isShape = node.className === 'Rect' || node.className === 'Ellipse' || isLineLikeNode(node);
     const isLineLike = isLineLikeNode(node);
+    const isEquation = !!(node.getAttr && node.getAttr('isEquation'));
+    const isVideo = isVideoNode(node);
 
     if (textPanel) textPanel.style.display = isText ? 'flex' : 'none';
     if (shapePanel) shapePanel.style.display = isShape ? 'flex' : 'none';
+    if (mediaPanel) mediaPanel.style.display = isVideo ? 'flex' : 'none';
     if (propShapeFill && !isShape){
       propShapeFill.disabled = false;
     }
 
     if (isText){
-      if (propFont) propFont.value = node.fontFamily() || 'Arial';
+      if (propFont){
+        propFont.value = isEquation ? 'Times New Roman' : (node.fontFamily() || 'Arial');
+        propFont.disabled = isEquation;
+      }
       if (propFontSize) propFontSize.value = String(Math.round(node.fontSize()));
       if (propFill) propFill.value = normalizeColor(node.fill(), '#111111');
       if (propAlign) propAlign.value = node.align() || 'left';
+    } else if (propFont){
+      propFont.disabled = false;
     }
 
     if (isShape){
@@ -3054,13 +3824,30 @@
     }
 
     if (propOpacity) propOpacity.value = String(node.opacity() ?? 1);
-    if (propAnimType) propAnimType.value = animationConfig.type;
+    if (propAnimType){
+      const drawArrowOption = Array.from(propAnimType.options || []).find(option => option.value === 'draw-arrow');
+      if (drawArrowOption){
+        drawArrowOption.disabled = !isLineLike;
+        if (!isLineLike && animationConfig.type === 'draw-arrow'){
+          propAnimType.value = 'none';
+        } else {
+          propAnimType.value = animationConfig.type;
+        }
+      } else {
+        propAnimType.value = animationConfig.type;
+      }
+    }
     if (propAnimDuration) propAnimDuration.value = String(animationConfig.duration);
     if (propAnimDelay) propAnimDelay.value = String(animationConfig.delay);
     if (propAnimOrder) propAnimOrder.value = String(animationConfig.order > 0 ? animationConfig.order : 1);
-    if (propAnimOrder) propAnimOrder.disabled = animationConfig.type === 'none';
+    if (propAnimOrder) propAnimOrder.disabled = animationConfig.type === 'none' && animationConfig.videoAction === 'none';
     if (propAnimPreview){
-      propAnimPreview.disabled = animationConfig.type === 'none';
+      propAnimPreview.disabled = animationConfig.type === 'none' && animationConfig.videoAction === 'none';
+    }
+    if (isVideo){
+      if (propVideoAction) propVideoAction.value = animationConfig.videoAction;
+      if (propVideoSound) propVideoSound.value = animationConfig.videoSound;
+      if (propVideoLoop) propVideoLoop.checked = !!animationConfig.videoLoop;
     }
   }
 
@@ -3141,6 +3928,7 @@
     bindNodeEvents(node);
 
     layer.add(node);
+    normalizeLayerOrdering(layer);
 
     if (layer === currentLayer){
       currentLayer.draw();
@@ -3407,6 +4195,24 @@
     });
   }
 
+  function createEquationNode(x, y, source = 'x^2 + y^2 = z^2'){
+    const node = new Konva.Text({
+      x,
+      y,
+      text: renderEquationSource(source),
+      fontSize: 38,
+      fontFamily: EQUATION_FONT_STACK,
+      fill: '#111111',
+      width: 520,
+      draggable: true,
+      align: 'left',
+      lineHeight: 1.25
+    });
+    node.setAttr('isEquation', true);
+    node.setAttr('equationSource', source);
+    return node;
+  }
+
   async function handleImageUpload(e){
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -3469,6 +4275,7 @@
         });
         node.setAttr('assetType', 'video');
         node.setAttr('assetSrc', dataUrl);
+        applyVideoNodeSettings(node);
         addNode(node);
         syncVideoAnimation();
         video.play().catch(() => {});
@@ -3587,6 +4394,7 @@
       bindNodeEvents(clone);
       duplicateLayer.add(clone);
     });
+    normalizeLayerOrdering(duplicateLayer);
 
     renderThumbs();
     showSlide(slides.length - 1);
@@ -3682,14 +4490,15 @@
     if (isEditingText()){
       closeActiveTextEditor(true);
     }
+    const isEquation = !!(textNode.getAttr && textNode.getAttr('isEquation'));
 
     const textarea = document.createElement('textarea');
     document.body.appendChild(textarea);
-    textarea.value = textNode.text();
+    textarea.value = isEquation ? getEquationSource(textNode) : textNode.text();
     textarea.style.position = 'absolute';
     textarea.style.boxSizing = 'border-box';
     textarea.style.padding = '0';
-    textarea.style.fontFamily = textNode.fontFamily();
+    textarea.style.fontFamily = isEquation ? EQUATION_FONT_STACK : textNode.fontFamily();
     textarea.style.lineHeight = textNode.lineHeight();
     textarea.style.color = textNode.fill();
     textarea.style.margin = '0';
@@ -3700,6 +4509,7 @@
     textarea.style.overflow = 'hidden';
     textarea.style.transformOrigin = 'left top';
     textarea.style.zIndex = 1000;
+    textarea.spellcheck = false;
 
     textNode.hide();
     transformer.hide();
@@ -3708,6 +4518,10 @@
     activeTextEditor = textarea;
     activeTextNode = textNode;
     positionTextEditor();
+    if (isEquation){
+      createEquationPopover(textarea);
+      positionEquationPopover();
+    }
 
     textarea.addEventListener('keydown', (e) => {
       if (e.key === 'Escape'){
@@ -3721,6 +4535,7 @@
     textarea.addEventListener('input', () => {
       textarea.style.height = 'auto';
       textarea.style.height = `${textarea.scrollHeight + 3}px`;
+      positionEquationPopover();
     });
   }
 })();
