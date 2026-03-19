@@ -72,6 +72,7 @@
       text-align:center;
       pointer-events:auto;
       transition:max-width .45s cubic-bezier(.4,0,.2,1), height .45s cubic-bezier(.4,0,.2,1), padding .45s cubic-bezier(.4,0,.2,1);
+      will-change:max-width,height,padding;
       height:auto;
     }
 
@@ -98,6 +99,7 @@
       background:#111;
       position:relative;
       transition:all .45s cubic-bezier(.4,0,.2,1);
+      will-change:border-radius,padding,transform,box-shadow,background-color;
       max-height:calc(100vh - 160px);
       max-height:calc(100dvh - 160px);
       flex-direction:row;
@@ -153,6 +155,7 @@
       overflow:auto;
       width:100%;
       transition:height .45s cubic-bezier(.4,0,.2,1);
+      will-change:height;
     }
 
     .search-container.expanded .search-input{
@@ -861,6 +864,76 @@
       border-color:rgba(198,40,40,0.22);
       color:#b3261e;
       background:#fff7f6;
+    }
+
+    .title-decision-menu{
+      position:fixed;
+      inset:0;
+      z-index:1300;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      background:rgba(15,23,42,0.32);
+      backdrop-filter:blur(12px);
+    }
+
+    .title-decision-menu.is-open{
+      display:flex;
+    }
+
+    .title-decision-card{
+      width:min(420px, 100%);
+      border-radius:18px;
+      border:1px solid rgba(15,23,42,0.12);
+      background:rgba(255,255,255,0.97);
+      box-shadow:0 28px 56px rgba(15,23,42,0.26);
+      padding:20px;
+      color:#111;
+      text-align:left;
+    }
+
+    .title-decision-title{
+      margin:0 0 10px;
+      font-size:18px;
+      font-weight:700;
+      letter-spacing:.01em;
+    }
+
+    .title-decision-copy{
+      font-size:13px;
+      line-height:1.6;
+      color:#536173;
+    }
+
+    .title-decision-actions{
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+      margin-top:18px;
+    }
+
+    .title-decision-btn{
+      appearance:none;
+      border:1px solid rgba(15,23,42,0.12);
+      border-radius:12px;
+      background:#ffffff;
+      color:#111;
+      font-size:13px;
+      font-weight:700;
+      padding:10px 16px;
+      cursor:pointer;
+      transition:transform .18s ease,background-color .18s ease,color .18s ease,border-color .18s ease;
+    }
+
+    .title-decision-btn:hover{
+      transform:translateY(-1px);
+    }
+
+    .title-decision-btn.confirm{
+      background:#111827;
+      border-color:#111827;
+      color:#ffffff;
     }
 
     body.scrolled .hint,
@@ -1927,6 +2000,17 @@
   </div>
 </div>
 
+<div class="title-decision-menu" id="titleDecisionMenu" hidden>
+  <div class="title-decision-card" role="dialog" aria-modal="true" aria-labelledby="titleDecisionTitle">
+    <h2 class="title-decision-title" id="titleDecisionTitle">題名はこれ以上長くできません。この題名で決定しますか</h2>
+    <div class="title-decision-copy">YES を選ぶと題名をバックグラウンドに保持したままスライドエディタへ移行します。NO を選ぶと現在の題名の長さで止めます。</div>
+    <div class="title-decision-actions">
+      <button class="title-decision-btn" id="titleDecisionNo" type="button">NO</button>
+      <button class="title-decision-btn confirm" id="titleDecisionYes" type="button">YES</button>
+    </div>
+  </div>
+</div>
+
 <section class="suggestion-pane" id="suggestionPane" aria-live="polite" aria-label="Suggestion results">
   <div class="suggestion-panel">
     <div id="suggestionBody" class="suggestion-thread"></div>
@@ -2020,6 +2104,9 @@
   const editorCloseCancel = document.getElementById('editorCloseCancel');
   const editorCloseDiscard = document.getElementById('editorCloseDiscard');
   const editorCloseKeep = document.getElementById('editorCloseKeep');
+  const titleDecisionMenu = document.getElementById('titleDecisionMenu');
+  const titleDecisionNo = document.getElementById('titleDecisionNo');
+  const titleDecisionYes = document.getElementById('titleDecisionYes');
   const suggestionPane = document.getElementById('suggestionPane');
   const suggestionBody = document.getElementById('suggestionBody');
   const suggestionPanel = suggestionPane ? suggestionPane.querySelector('.suggestion-panel') : null;
@@ -2187,8 +2274,9 @@
   window.addEventListener('paste', handlePasteFiles);
 
   function enterSelectionMode(){
+    closeTitleDecisionMenu();
     selectionMode = true;
-    rememberedContent = input.value;
+    rememberedContent = input.value || compactGrayAcceptedValue;
     rememberedFiles = [...attachedFiles];
     fixedWrapper.style.display = 'none';
     selectionModeEl.style.display = 'flex';
@@ -2201,6 +2289,7 @@
       attachedFiles = [...rememberedFiles];
       lastInputValue = input.value;
       setModeDraft(1, input.value, attachedFiles);
+      compactGrayAcceptedValue = input.value;
     }
     renderAttachments();
     fixedWrapper.style.removeProperty('display');
@@ -2411,6 +2500,12 @@
       closeLoginPopup(true);
       return;
     }
+    if(titleDecisionMenu && !titleDecisionMenu.hidden){
+      e.preventDefault();
+      closeTitleDecisionMenu();
+      requestAnimationFrame(()=>input.focus());
+      return;
+    }
     if(editorCloseMenu && !editorCloseMenu.hidden){
       e.preventDefault();
       closeEditorCloseMenu();
@@ -2449,6 +2544,22 @@
       if(e.target === editorCloseMenu){
         closeEditorCloseMenu();
       }
+    });
+  }
+
+  if(titleDecisionMenu){
+    titleDecisionMenu.addEventListener('click', e=>{
+      if(e.target === titleDecisionMenu){
+        closeTitleDecisionMenu();
+        requestAnimationFrame(()=>input.focus());
+      }
+    });
+  }
+
+  if(titleDecisionNo){
+    titleDecisionNo.addEventListener('click', ()=>{
+      closeTitleDecisionMenu();
+      requestAnimationFrame(()=>input.focus());
     });
   }
 
@@ -2512,11 +2623,13 @@
   }
 
   let expandedFixedHeight = null;
+  let containerHeightCleanupTimer = null;
   const fixedWrapper = document.querySelector('.fixed-wrapper');
   const EXPAND_THRESHOLD = 100; // Expand when height exceeds this (pixels)
   const COLLAPSE_AT_OR_BELOW_LINES = 5; // Collapse when rendered lines are 5 or fewer
   let previousLineCount = null;
   let forceExpandedEditor = false;
+  let compactGrayAcceptedValue = input.value;
   let state = 0;
   let blueModeDraft = '';
   let skipNextGrayDraftSave = false;
@@ -2593,6 +2706,7 @@
 
   function openEditorCloseMenu(){
     if(!editorCloseMenu || !isExpandedEditorActive()) return false;
+    closeTitleDecisionMenu();
     editorCloseMenu.hidden = false;
     editorCloseMenu.classList.add('is-open');
     if(editorCloseCancel){
@@ -2605,6 +2719,26 @@
     if(!editorCloseMenu) return;
     editorCloseMenu.classList.remove('is-open');
     editorCloseMenu.hidden = true;
+  }
+
+  function openTitleDecisionMenu(){
+    if(!titleDecisionMenu || !isCompactGrayMode()) return false;
+    titleDecisionMenu.hidden = false;
+    titleDecisionMenu.classList.add('is-open');
+    if(titleDecisionYes){
+      requestAnimationFrame(()=>titleDecisionYes.focus());
+    }
+    return true;
+  }
+
+  function closeTitleDecisionMenu(){
+    if(!titleDecisionMenu) return;
+    titleDecisionMenu.classList.remove('is-open');
+    titleDecisionMenu.hidden = true;
+  }
+
+  function isCompactGrayMode(){
+    return state === 1 && !container.classList.contains('expanded');
   }
 
   window.resetGrayModeDraft = resetGrayModeDraft;
@@ -3554,7 +3688,8 @@
     fixedWrapper.style.removeProperty('display');
     bodyEl.classList.remove('login-check');
     bodyEl.classList.add('scrolled');
-    input.placeholder = 'Make Puzzler - Write a summary of the puzzler';
+    input.placeholder = 'Write - Problem name';
+    compactGrayAcceptedValue = input.value;
     state = 1;
     adjustTextarea();
   }
@@ -3616,7 +3751,99 @@
     return Math.ceil(lineHeight + paddingTop + paddingBottom);
   }
 
+  function clearContainerHeightCleanup(){
+    if(containerHeightCleanupTimer){
+      clearTimeout(containerHeightCleanupTimer);
+      containerHeightCleanupTimer = null;
+    }
+  }
+
+  function transitionContainerHeight(startHeight, targetHeight, clearAfterTransition = false){
+    const from = Math.max(0, Math.round(startHeight || 0));
+    const to = Math.max(0, Math.round(targetHeight || 0));
+
+    clearContainerHeightCleanup();
+
+    if(!from || Math.abs(from - to) < 2){
+      if(clearAfterTransition){
+        container.style.height = '';
+      }else{
+        container.style.height = to + 'px';
+      }
+      return;
+    }
+
+    container.style.height = from + 'px';
+    requestAnimationFrame(()=>{
+      container.style.height = to + 'px';
+    });
+
+    if(clearAfterTransition){
+      containerHeightCleanupTimer = setTimeout(()=>{
+        if(!container.classList.contains('expanded')){
+          container.style.height = '';
+        }
+      }, 470);
+    }
+  }
+
+  function measureCurrentInputLayout(){
+    const { contentHeight, lineCount } = measureInputContent();
+    const shouldCollapseByLineCount = isAtOrBelowLineLimit(contentHeight, COLLAPSE_AT_OR_BELOW_LINES);
+    return {
+      contentHeight,
+      lineCount,
+      shouldCollapseByLineCount,
+      wouldExpand: contentHeight > EXPAND_THRESHOLD && !shouldCollapseByLineCount
+    };
+  }
+
+  function updateCompactGrayAcceptedValue(){
+    if(!isCompactGrayMode()) return;
+    const layout = measureCurrentInputLayout();
+    if(!layout.wouldExpand){
+      compactGrayAcceptedValue = input.value;
+    }
+  }
+
+  function enforceCompactGrayTitleLimit(){
+    if(!isCompactGrayMode()) return false;
+    const layout = measureCurrentInputLayout();
+    if(!layout.wouldExpand){
+      compactGrayAcceptedValue = input.value;
+      return false;
+    }
+
+    input.value = compactGrayAcceptedValue;
+    lastInputValue = input.value;
+    setModeDraft(1, input.value, attachedFiles);
+    requestAnimationFrame(()=>{
+      adjustTextarea();
+      openTitleDecisionMenu();
+    });
+    return true;
+  }
+
+  function confirmGrayModeTitleAndExpand(){
+    closeTitleDecisionMenu();
+    compactGrayAcceptedValue = input.value;
+    forceExpandedEditor = true;
+    bodyEl.classList.add('scrolled');
+    setModeDraft(1, input.value, attachedFiles);
+    adjustTextarea();
+    requestAnimationFrame(()=>input.focus());
+  }
+
+  if(titleDecisionYes){
+    titleDecisionYes.addEventListener('click', ()=>{
+      confirmGrayModeTitleAndExpand();
+    });
+  }
+
   function collapseToInitialSearchBox(contentHeight){
+    const wasExpanded = container.classList.contains('expanded');
+    const startHeight = wasExpanded ? container.getBoundingClientRect().height : 0;
+
     container.classList.remove('expanded');
     expandedFixedHeight = null;
     forceExpandedEditor = false;
@@ -3635,10 +3862,19 @@
       input.style.height = Math.min(contentHeight, 220) + 'px';
     }
     input.scrollTop = 0;
+
+    if(wasExpanded){
+      container.style.height = '';
+      const targetHeight = container.getBoundingClientRect().height;
+      transitionContainerHeight(startHeight, targetHeight, true);
+    } else {
+      clearContainerHeightCleanup();
+      container.style.height = '';
+    }
   }
 
   function adjustTextarea(){
-    const { contentHeight, lineCount } = measureInputContent();
+    const { contentHeight, lineCount, shouldCollapseByLineCount, wouldExpand } = measureCurrentInputLayout();
     updateLineCount(lineCount);
 
     const hasExternalContent = bodyEl.classList.contains('scrolled')
@@ -3661,11 +3897,12 @@
       return;
     }
 
-    const shouldCollapseByLineCount = isAtOrBelowLineLimit(contentHeight, COLLAPSE_AT_OR_BELOW_LINES);
     const shouldForceExpand = bodyEl.classList.contains('scrolled') && forceExpandedEditor;
-    const shouldExpand = shouldForceExpand || (contentHeight > EXPAND_THRESHOLD && !shouldCollapseByLineCount);
+    const shouldExpand = shouldForceExpand || wouldExpand;
 
     if(shouldExpand){
+      const wasExpanded = container.classList.contains('expanded');
+      const startHeight = container.getBoundingClientRect().height;
       if(!container.classList.contains('expanded')){
         container.classList.add('expanded');
 
@@ -3681,6 +3918,7 @@
       // container height to fill most of viewport
       const maxContainerHeight = Math.max(200, Math.floor(viewportH - topMargin - bottomSafe));
       container.style.height = maxContainerHeight + 'px';
+      expandedFixedHeight = maxContainerHeight;
 
       // Account for button (44px) + gap (8px) + padding (16px top/bottom)
       const buttonHeight = 44;
@@ -3704,6 +3942,12 @@
         input.scrollTop = input.scrollHeight - input.clientHeight;
       });
 
+      if(!wasExpanded){
+        transitionContainerHeight(startHeight, maxContainerHeight, false);
+      } else {
+        clearContainerHeightCleanup();
+      }
+
     } else {
       collapseToInitialSearchBox(contentHeight);
     }
@@ -3713,11 +3957,15 @@
 
   window.addEventListener('resize', adjustTextarea);
   function syncInputChanges(){
+    if(enforceCompactGrayTitleLimit()){
+      return;
+    }
     if(input.value === lastInputValue) return;
     lastInputValue = input.value;
     if(state === 0 || state === 1){
       setModeDraft(state);
     }
+    updateCompactGrayAcceptedValue();
     adjustTextarea();
   }
 
@@ -3741,21 +3989,21 @@
 
     const v = input.value.trim();
     const hasFiles = attachedFiles.length > 0;
-
-    if(!v && !hasFiles) return;
+    const hasEditorContent = !!(window.slideEditorState && window.slideEditorState.hasContent);
 
     // In gray mode, first submit expands into the full editor.
     if(state === 1){
       if(!container.classList.contains('expanded')){
-        forceExpandedEditor = true;
-        bodyEl.classList.add('scrolled');
-        adjustTextarea();
-        requestAnimationFrame(()=>input.focus());
+        if(!v && !hasFiles) return;
+        confirmGrayModeTitleAndExpand();
         return;
       }
+      if(!v && !hasFiles && !hasEditorContent) return;
       enterSelectionMode();
       return;
     }
+
+    if(!v && !hasFiles) return;
 
     if(state === 0){
       const queryText = v;
@@ -3836,6 +4084,7 @@
     }
 
     isAnimating = true;
+    closeTitleDecisionMenu();
 
     // Exit selection mode if changing states
     if(selectionMode){
@@ -3855,9 +4104,10 @@
 
     if(next === 1){
       bodyEl.classList.add('scrolled');
-      input.placeholder = 'Make Puzzler - Write a summary of the puzzler';
+      input.placeholder = 'Write - Problem name';
       ensureModeDraft(1, previousState === 2 ? blueModeDraft : previousInputValue, previousFiles);
       restoreModeDraft(1, previousState === 2 ? blueModeDraft : previousInputValue, previousFiles);
+      compactGrayAcceptedValue = input.value;
     }
 
     if(next === 2){

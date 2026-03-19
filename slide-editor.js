@@ -41,6 +41,7 @@
   const FILE_SIZE_LIMIT = 20 * 1024 * 1024;
   const SEED_TEXT_WIDTH = 920;
   const SEED_TEXT_MARGIN = 120;
+  const MIRROR_SEARCH_INPUT_TO_SLIDES = false;
   const EDITOR_DB_NAME = 'ivucxSlideEditorDB';
   const EDITOR_DB_VERSION = 1;
   const EDITOR_DB_STORE = 'editorStates';
@@ -235,6 +236,7 @@
   }
 
   function syncSeedTextFromInput(){
+    if (!MIRROR_SEARCH_INPUT_TO_SLIDES) return;
     if (!slides[0] || !searchInput) return;
 
     const layer = slides[0].layer;
