@@ -162,36 +162,36 @@
       key: 'greek',
       label: 'Greek',
       symbols: [
-        { text: '\u03B1', insert: '\\alpha ' }, { text: '\u03B2', insert: '\\beta ' }, { text: '\u03B3', insert: '\\gamma ' },
-        { text: '\u0394', insert: '\\Delta ' }, { text: '\u03BB', insert: '\\lambda ' }, { text: '\u03C0', insert: '\\pi ' },
-        { text: '\u03C3', insert: '\\sigma ' }, { text: '\u03C6', insert: '\\phi ' }
+        { text: 'theta', insert: 'theta ' }, { text: 'pi', insert: 'pi ' }, { text: 'alpha', insert: 'alpha ' },
+        { text: 'beta', insert: 'beta ' }, { text: 'lambda', insert: 'lambda ' }, { text: 'phi', insert: 'phi ' },
+        { text: 'sigma', insert: 'sigma ' }, { text: 'infty', insert: 'infty ' }
       ]
     },
     {
-      key: 'operators',
-      label: 'Operators',
+      key: 'functions',
+      label: 'Functions',
       symbols: [
-        { text: '\u2211', insert: '\\sum ' }, { text: '\u220F', insert: '\\prod ' }, { text: '\u222B', insert: '\\int ' },
-        { text: '\u221A', insert: '\\sqrt ' }, { text: '\u221E', insert: '\\infty ' }, { text: '\u2202', insert: '\\partial ' },
-        { text: '\u00D7', insert: '\\times ' }, { text: '\u00F7', insert: '\\div ' }
+        { text: 'sqrt()', insert: 'sqrt(|)' }, { text: 'nthroot()', insert: 'nthroot(|, )' }, { text: 'abs()', insert: 'abs(|)' },
+        { text: 'sin()', insert: 'sin(|)' }, { text: 'cos()', insert: 'cos(|)' }, { text: 'tan()', insert: 'tan(|)' },
+        { text: 'arcsin()', insert: 'arcsin(|)' }, { text: 'ln()', insert: 'ln(|)' }
       ]
     },
     {
       key: 'relations',
       label: 'Relations',
       symbols: [
-        { text: '=', insert: '=' }, { text: '\u2260', insert: '\\neq ' }, { text: '\u2264', insert: '\\leq ' },
-        { text: '\u2265', insert: '\\geq ' }, { text: '\u2248', insert: '\\approx ' }, { text: '\u2208', insert: '\\in ' },
-        { text: '\u2282', insert: '\\subset ' }, { text: '\u2286', insert: '\\subseteq ' }
+        { text: '<=', insert: '<=' }, { text: '>=', insert: '>=' }, { text: '!=', insert: '!=' },
+        { text: '{x>0}', insert: '{x>0}' }, { text: 'sum', insert: 'sum ' }, { text: 'prod', insert: 'prod ' },
+        { text: 'int', insert: 'int ' }, { text: '... ', insert: '... ' }
       ]
     },
     {
-      key: 'arrows',
-      label: 'Arrows',
+      key: 'structures',
+      label: 'Structures',
       symbols: [
-        { text: '\u2192', insert: '\\rightarrow ' }, { text: '\u2190', insert: '\\leftarrow ' },
-        { text: '\u2194', insert: '\\leftrightarrow ' }, { text: '\u21D2', insert: '\\Rightarrow ' },
-        { text: '\u21D0', insert: '\\Leftarrow ' }, { text: '\u21D4', insert: '\\Leftrightarrow ' }
+        { text: 'y=x^2+1', insert: 'y=x^2+1' }, { text: 'f(x)=', insert: 'f(x)=|' },
+        { text: '(1,3)', insert: '(1,3)' }, { text: '[1,3,4]', insert: '[1,3,4]' },
+        { text: '[1...10]', insert: '[1...10]' }, { text: '(a,a) for...', insert: '(a,a) for a=[1,2,3]' }
       ]
     }
   ]);
@@ -304,7 +304,7 @@
   function getNodeDisplayLabel(node){
     if (!node) return '';
     if (node.className === 'Text' && node.getAttr && node.getAttr('isEquation')){
-      return 'Equation';
+      return 'Text';
     }
     if (isVideoNode(node)){
       return 'Video';
@@ -575,7 +575,7 @@
 
   function getEquationSource(node){
     if (!node || !node.getAttr) return '';
-    return String(node.getAttr('equationSource') || node.text() || '');
+    return normalizeEquationSource(node.getAttr('equationSource') || node.text() || '');
   }
 
   function mapEquationToken(token, mapping){
@@ -614,20 +614,75 @@
     return result;
   }
 
-  function renderEquationSource(source){
-    let text = String(source || '');
-    EQUATION_ASCII_REPLACEMENTS.forEach(([pattern, replacement]) => {
-      text = text.split(pattern).join(replacement);
+  function normalizeEquationSource(source){
+    let text = String(source || '').replace(/\r\n?/g, '\n');
+    const tokenReplacements = [
+      ['\\alpha', 'alpha'],
+      ['\\beta', 'beta'],
+      ['\\gamma', 'gamma'],
+      ['\\delta', 'delta'],
+      ['\\theta', 'theta'],
+      ['\\lambda', 'lambda'],
+      ['\\mu', 'mu'],
+      ['\\pi', 'pi'],
+      ['\\sigma', 'sigma'],
+      ['\\phi', 'phi'],
+      ['\\omega', 'omega'],
+      ['\\neq', '!='],
+      ['\\leq', '<='],
+      ['\\geq', '>='],
+      ['\\approx', 'approx'],
+      ['\\times', '*'],
+      ['\\div', '/'],
+      ['\\sum', 'sum'],
+      ['\\prod', 'prod'],
+      ['\\int', 'int'],
+      ['\\sqrt', 'sqrt'],
+      ['\\sin', 'sin'],
+      ['\\cos', 'cos'],
+      ['\\tan', 'tan'],
+      ['\\arcsin', 'arcsin'],
+      ['\\arccos', 'arccos'],
+      ['\\arctan', 'arctan'],
+      ['\\ln', 'ln'],
+      ['\\log', 'log'],
+      ['\\infty', 'infty'],
+      ['\\partial', 'partial'],
+      ['\\rightarrow', '->'],
+      ['\\leftarrow', '<-'],
+      ['\\leftrightarrow', '<->']
+    ];
+    tokenReplacements.forEach(([fromToken, toToken]) => {
+      text = text.split(fromToken).join(toToken);
     });
-    text = text.replace(/\\([A-Za-z]+)\b/g, (match, symbolName) => EQUATION_SHORTCUTS[symbolName] || match);
-    return applyEquationScripts(text);
+    const glyphReplacements = [
+      ['\u03B1', 'alpha'], ['\u03B2', 'beta'], ['\u03B3', 'gamma'], ['\u03B4', 'delta'],
+      ['\u03B8', 'theta'], ['\u03BB', 'lambda'], ['\u03BC', 'mu'], ['\u03C0', 'pi'],
+      ['\u03C3', 'sigma'], ['\u03C6', 'phi'], ['\u03C9', 'omega'], ['\u221E', 'infty'],
+      ['\u2260', '!='], ['\u2264', '<='], ['\u2265', '>='], ['\u2248', 'approx'], ['\u00D7', '*'], ['\u00F7', '/']
+    ];
+    glyphReplacements.forEach(([fromToken, toToken]) => {
+      text = text.split(fromToken).join(toToken);
+    });
+    return text;
+  }
+
+  function renderEquationSource(source){
+    return normalizeEquationSource(source);
   }
 
   function insertIntoTextarea(textarea, snippet){
     if (!textarea) return;
     const start = textarea.selectionStart ?? textarea.value.length;
     const end = textarea.selectionEnd ?? textarea.value.length;
-    textarea.setRangeText(snippet, start, end, 'end');
+    const rawSnippet = String(snippet || '');
+    const cursorMarkerIndex = rawSnippet.indexOf('|');
+    const text = cursorMarkerIndex === -1 ? rawSnippet : rawSnippet.replace('|', '');
+    textarea.setRangeText(text, start, end, 'end');
+    if (cursorMarkerIndex !== -1){
+      const caret = start + cursorMarkerIndex;
+      textarea.setSelectionRange(caret, caret);
+    }
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
     textarea.focus();
   }
@@ -670,7 +725,7 @@
       button.type = 'button';
       button.className = 'slide-equation-symbol';
       button.textContent = symbol.text;
-      button.title = symbol.insert.trim();
+      button.title = String(symbol.insert || '').replace('|', '').trim();
       button.addEventListener('click', () => insertIntoTextarea(textarea, symbol.insert));
       symbolsEl.appendChild(button);
     });
@@ -682,11 +737,11 @@
     popover.className = 'slide-equation-popover is-active';
     popover.innerHTML = `
       <div class="slide-equation-topbar">
-        <div class="slide-equation-title">Equation Toolbar</div>
+        <div class="slide-equation-title">Math Text</div>
       </div>
       <div class="slide-equation-group"></div>
       <div class="slide-equation-symbols"></div>
-      <div class="slide-equation-hint">Google Docs-like shortcuts are supported here: try \\alpha, \\sum, x^2, x_i, or the symbol chips above.</div>
+      <div class="slide-equation-hint">Desmos-style text is supported here: try <code>y=x^2+1</code>, <code>sqrt(x)</code>, <code>nthroot(x,3)</code>, <code>(a,a) for a=[1,2,3]</code>, or <code>{x&gt;0}</code>.</div>
     `;
     popover.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -1399,7 +1454,9 @@
       text: isEquation ? renderEquationSource(equationSource) : (typeof data.text === 'string' ? data.text : ''),
       width: Math.max(MIN_SIZE, Number(data.width) || 420),
       fontSize: Math.max(MIN_TEXT_SIZE, Number(data.fontSize) || 32),
-      fontFamily: isEquation ? EQUATION_FONT_STACK : (data.fontFamily || 'Arial'),
+      fontFamily: data.fontFamily
+        ? (isEquation && data.fontFamily === EQUATION_FONT_STACK ? 'Times New Roman' : data.fontFamily)
+        : (isEquation ? 'Times New Roman' : 'Arial'),
       fill: data.fill || '#111111',
       align: data.align || 'left',
       lineHeight: Number(data.lineHeight) || 1.2,
@@ -2672,12 +2729,46 @@
     return output;
   }
 
+  function getPolylineLength(points){
+    const source = Array.isArray(points) ? points : [];
+    let total = 0;
+    for (let index = 0; index < source.length - 2; index += 2){
+      total += Math.hypot(source[index + 2] - source[index], source[index + 3] - source[index + 1]);
+    }
+    return total;
+  }
+
+  function updateArrowPointerForReveal(node, points){
+    if (!node || node.className !== 'Arrow') return;
+    const finalPointerLength = Math.max(0, Number(node.getAttr('animFinalPointerLength')) || (typeof node.pointerLength === 'function' ? node.pointerLength() : 0));
+    const finalPointerWidth = Math.max(0, Number(node.getAttr('animFinalPointerWidth')) || (typeof node.pointerWidth === 'function' ? node.pointerWidth() : 0));
+    const visibleLength = getPolylineLength(points);
+    const nextPointerLength = finalPointerLength <= 0
+      ? 0
+      : Math.min(finalPointerLength, visibleLength * 0.72);
+    const nextPointerWidth = finalPointerWidth <= 0
+      ? 0
+      : Math.min(finalPointerWidth, visibleLength * 0.58);
+    if (typeof node.pointerLength === 'function'){
+      node.pointerLength(Math.max(0.01, nextPointerLength));
+    }
+    if (typeof node.pointerWidth === 'function'){
+      node.pointerWidth(Math.max(0.01, nextPointerWidth));
+    }
+  }
+
   function applyAnimationStartState(node, config){
     if (!node) return;
     if (config.type === 'draw-arrow' && isLineLikeNode(node)){
       const finalPoints = (node.points ? node.points() : []).slice();
       node.setAttr('animFinalPoints', finalPoints);
-      node.points(getLineRevealPoints(finalPoints, 0));
+      if (node.className === 'Arrow'){
+        node.setAttr('animFinalPointerLength', typeof node.pointerLength === 'function' ? node.pointerLength() : 0);
+        node.setAttr('animFinalPointerWidth', typeof node.pointerWidth === 'function' ? node.pointerWidth() : 0);
+      }
+      const startPoints = getLineRevealPoints(finalPoints, 0);
+      node.points(startPoints);
+      updateArrowPointerForReveal(node, startPoints);
       return;
     }
     const states = buildNodeAnimationStates(node, config);
@@ -2694,7 +2785,17 @@
       if (Array.isArray(finalPoints) && finalPoints.length >= 4){
         node.points(finalPoints.slice());
       }
+      if (node.className === 'Arrow'){
+        if (typeof node.pointerLength === 'function'){
+          node.pointerLength(Math.max(0.01, Number(node.getAttr('animFinalPointerLength')) || node.pointerLength()));
+        }
+        if (typeof node.pointerWidth === 'function'){
+          node.pointerWidth(Math.max(0.01, Number(node.getAttr('animFinalPointerWidth')) || node.pointerWidth()));
+        }
+      }
       node.setAttr('animFinalPoints', null);
+      node.setAttr('animFinalPointerLength', null);
+      node.setAttr('animFinalPointerWidth', null);
       return;
     }
     const preparedFinalState = node.getAttr('animPreparedFinalState');
@@ -2851,7 +2952,9 @@
         ensureCue();
         const progress = Math.min(1, (now - startAt) / durationMs);
         const eased = typeof easing === 'function' ? easing(progress) : progress;
-        node.points(getLineRevealPoints(finalPoints, eased));
+        const visiblePoints = getLineRevealPoints(finalPoints, eased);
+        node.points(visiblePoints);
+        updateArrowPointerForReveal(node, visiblePoints);
         nodeLayer.batchDraw();
         if (progress >= 1){
           applyFinal();
@@ -3644,7 +3747,7 @@
           }
         });
         items.push({
-          label: 'Add equation',
+          label: 'Add math text',
           action: () => {
             const equationNode = createEquationNode(point.x, point.y);
             addNode(equationNode);
@@ -3856,7 +3959,6 @@
     if (propFont){
       propFont.addEventListener('change', () => {
         if (!selectedNode || selectedNode.className !== 'Text') return;
-        if (selectedNode.getAttr && selectedNode.getAttr('isEquation')) return;
         selectedNode.fontFamily(propFont.value);
         currentLayer.batchDraw();
         scheduleThumbUpdate();
@@ -4393,8 +4495,11 @@
 
     if (isText){
       if (propFont){
-        propFont.value = isEquation ? 'Times New Roman' : (node.fontFamily() || 'Arial');
-        propFont.disabled = isEquation;
+        const currentFontFamily = node.fontFamily() || '';
+        propFont.value = isEquation && currentFontFamily === EQUATION_FONT_STACK
+          ? 'Times New Roman'
+          : (currentFontFamily || (isEquation ? 'Times New Roman' : 'Arial'));
+        propFont.disabled = false;
       }
       if (propFontSize) propFontSize.value = String(Math.round(node.fontSize()));
       if (propFill) propFill.value = normalizeColor(node.fill(), '#111111');
@@ -4786,13 +4891,13 @@
     });
   }
 
-  function createEquationNode(x, y, source = 'x^2 + y^2 = z^2'){
+  function createEquationNode(x, y, source = 'y=x^2+1'){
     const node = new Konva.Text({
       x,
       y,
       text: renderEquationSource(source),
       fontSize: 38,
-      fontFamily: EQUATION_FONT_STACK,
+      fontFamily: 'Times New Roman',
       fill: '#111111',
       width: 520,
       draggable: true,
@@ -5097,7 +5202,7 @@
     textarea.style.position = 'absolute';
     textarea.style.boxSizing = 'border-box';
     textarea.style.padding = '0';
-    textarea.style.fontFamily = isEquation ? EQUATION_FONT_STACK : textNode.fontFamily();
+    textarea.style.fontFamily = textNode.fontFamily();
     textarea.style.lineHeight = textNode.lineHeight();
     textarea.style.color = textNode.fill();
     textarea.style.margin = '0';

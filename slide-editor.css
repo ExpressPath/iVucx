@@ -667,6 +667,14 @@ body.scrolled .search-container.expanded.slide-css-editing #slideCommonPanel{
   color:#5c6b7d;
 }
 
+.slide-equation-hint code{
+  padding:1px 4px;
+  border-radius:6px;
+  background:rgba(15,23,42,0.06);
+  color:#233142;
+  font-family:"Consolas","SFMono-Regular",monospace;
+}
+
 body.scrolled .search-container.expanded .slide-toolbar,
 body.scrolled .search-container.expanded .slide-thumbs,
 body.scrolled .search-container.expanded .slide-inspector,
