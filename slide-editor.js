@@ -30,6 +30,7 @@
   const propAnimType = document.getElementById('propAnimType');
   const propAnimDuration = document.getElementById('propAnimDuration');
   const propAnimDelay = document.getElementById('propAnimDelay');
+  const propAnimOrder = document.getElementById('propAnimOrder');
   const propAnimPreview = document.getElementById('propAnimPreview');
 
   if (!container || !stageHost || !thumbsEl || !slideCanvas) return;
@@ -50,7 +51,8 @@
   const DEFAULT_NODE_ANIMATION = Object.freeze({
     type: 'none',
     duration: 0.6,
-    delay: 0
+    delay: 0,
+    order: 0
   });
   const NODE_ANIMATION_TYPES = new Set(['none', 'fade', 'zoom', 'from-left', 'from-right', 'from-top', 'from-bottom']);
   const NODE_ANIMATION_OFFSET = 84;
@@ -84,6 +86,7 @@
   let zoom = 1;
   let fitScale = 1;
   let selectedNode = null;
+  let selectedNodes = [];
   let slides = [];
   let isInitialized = false;
   let isEditorActive = false;
@@ -96,6 +99,7 @@
   let activeTextNode = null;
   let contextMenuEl = null;
   let clipboardNode = null;
+  let clipboardNodes = [];
   let guideLines = [];
   let docViewer = null;
   let docTitleEl = null;
@@ -104,6 +108,10 @@
   let docDownloadBtn = null;
   let isPresentationMode = false;
   let objectAnimationTweens = [];
+  let presentationAnimationQueue = [];
+  let presentationAnimationIndex = 0;
+  let selectionMarquee = null;
+  let selectionMarqueeStart = null;
   let sessionSeedText = '';
   let sessionBaselineDigest = '';
   let persistTimer = null;
@@ -407,10 +415,14 @@
       : (rawConfig && NODE_ANIMATION_TYPES.has(rawConfig.animType) ? rawConfig.animType : DEFAULT_NODE_ANIMATION.type);
     const durationValue = Number(rawConfig && (rawConfig.duration ?? rawConfig.animDuration));
     const delayValue = Number(rawConfig && (rawConfig.delay ?? rawConfig.animDelay));
+    const orderValue = Number(rawConfig && (rawConfig.order ?? rawConfig.animOrder));
     return {
       type,
       duration: Number.isFinite(durationValue) ? Math.max(0.1, Math.min(8, roundMetric(durationValue))) : DEFAULT_NODE_ANIMATION.duration,
-      delay: Number.isFinite(delayValue) ? Math.max(0, Math.min(8, roundMetric(delayValue))) : DEFAULT_NODE_ANIMATION.delay
+      delay: Number.isFinite(delayValue) ? Math.max(0, Math.min(8, roundMetric(delayValue))) : DEFAULT_NODE_ANIMATION.delay,
+      order: type === 'none'
+        ? 0
+        : (Number.isFinite(orderValue) ? Math.max(1, Math.min(99, Math.round(orderValue))) : DEFAULT_NODE_ANIMATION.order)
     };
   }
 
@@ -419,7 +431,8 @@
     return normalizeNodeAnimationConfig({
       type: node.getAttr('animType'),
       duration: node.getAttr('animDuration'),
-      delay: node.getAttr('animDelay')
+      delay: node.getAttr('animDelay'),
+      order: node.getAttr('animOrder')
     });
   }
 
@@ -429,6 +442,7 @@
     node.setAttr('animType', normalized.type);
     node.setAttr('animDuration', normalized.duration);
     node.setAttr('animDelay', normalized.delay);
+    node.setAttr('animOrder', normalized.order);
     return normalized;
   }
 
@@ -752,6 +766,7 @@
   function clearAllSlides(){
     hideContextMenu();
     clearGuideLines();
+    hideSelectionMarquee();
     if (isEditingText()){
       closeActiveTextEditor(false);
     }
@@ -765,6 +780,7 @@
     currentLayer = null;
     currentSlideIndex = 0;
     clipboardNode = null;
+    clipboardNodes = [];
   }
 
   async function applyPersistedEditorRecord(record){
@@ -884,6 +900,7 @@
     currentLayer = null;
     currentSlideIndex = 0;
     clipboardNode = null;
+    clipboardNodes = [];
 
     const normalizedSeedText = typeof seedText === 'string' ? seedText : '';
 
@@ -969,6 +986,129 @@
       return null;
     }
     return target;
+  }
+
+  function getSelectedNodes(){
+    return selectedNodes.slice();
+  }
+
+  function hasMultipleSelection(){
+    return selectedNodes.length > 1;
+  }
+
+  function isNodeSelected(node){
+    return !!node && selectedNodes.includes(node);
+  }
+
+  function getSelectionBounds(nodes = selectedNodes){
+    if (!currentLayer || !nodes.length) return null;
+    const boxes = nodes
+      .map(node => node.getClientRect({ relativeTo: currentLayer }))
+      .filter(box => box && Number.isFinite(box.width) && Number.isFinite(box.height));
+    if (!boxes.length) return null;
+    const left = Math.min(...boxes.map(box => box.x));
+    const top = Math.min(...boxes.map(box => box.y));
+    const right = Math.max(...boxes.map(box => box.x + box.width));
+    const bottom = Math.max(...boxes.map(box => box.y + box.height));
+    return {
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top
+    };
+  }
+
+  function getBackgroundNode(layer = currentLayer){
+    if (!layer) return null;
+    return layer.getChildren(node => node.getAttr && node.getAttr('isBackground'))[0] || null;
+  }
+
+  function ensureSelectionMarquee(){
+    if (selectionMarquee || !uiLayer || !hasKonva()) return selectionMarquee;
+    selectionMarquee = new Konva.Rect({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      fill: 'rgba(26,115,232,0.14)',
+      stroke: '#1a73e8',
+      strokeWidth: 1,
+      dash: [6, 4],
+      listening: false,
+      visible: false
+    });
+    uiLayer.add(selectionMarquee);
+    if (transformer) transformer.moveToTop();
+    return selectionMarquee;
+  }
+
+  function hideSelectionMarquee(){
+    selectionMarqueeStart = null;
+    if (!selectionMarquee) return;
+    selectionMarquee.visible(false);
+    selectionMarquee.width(0);
+    selectionMarquee.height(0);
+    uiLayer.batchDraw();
+  }
+
+  function openBackgroundColorPicker(layer = currentLayer){
+    const backgroundNode = getBackgroundNode(layer);
+    if (!backgroundNode) return;
+    const picker = document.createElement('input');
+    picker.type = 'color';
+    picker.value = normalizeColor(backgroundNode.fill ? backgroundNode.fill() : '', '#ffffff');
+    picker.style.position = 'fixed';
+    picker.style.opacity = '0';
+    picker.style.pointerEvents = 'none';
+    picker.style.left = '-9999px';
+    document.body.appendChild(picker);
+
+    const cleanup = () => {
+      picker.removeEventListener('input', applyColor);
+      picker.removeEventListener('change', applyColor);
+      if (picker.parentNode) picker.parentNode.removeChild(picker);
+    };
+
+    const applyColor = () => {
+      backgroundNode.fill(picker.value);
+      if (currentLayer === layer){
+        currentLayer.batchDraw();
+      }
+      scheduleThumbUpdate();
+      schedulePersistentSave();
+    };
+
+    picker.addEventListener('input', applyColor);
+    picker.addEventListener('change', applyColor);
+    picker.addEventListener('blur', cleanup, { once: true });
+    picker.click();
+  }
+
+  function getAnimatedNodesInDisplayOrder(layer = currentLayer){
+    if (!layer) return [];
+    const nodes = getContentNodes(layer)
+      .map((node, index) => ({
+        node,
+        index,
+        config: getNodeAnimationConfig(node)
+      }))
+      .filter(entry => entry.config.type !== 'none');
+
+    nodes.sort((a, b) => {
+      const aOrder = a.config.order > 0 ? a.config.order : 1000 + a.index;
+      const bOrder = b.config.order > 0 ? b.config.order : 1000 + b.index;
+      return aOrder - bOrder || a.index - b.index;
+    });
+
+    return nodes;
+  }
+
+  function getNextAnimationOrder(layer = currentLayer, excludeNode = null){
+    const animated = getAnimatedNodesInDisplayOrder(layer)
+      .filter(entry => entry.node !== excludeNode)
+      .map(entry => entry.config.order)
+      .filter(order => order > 0);
+    return animated.length ? Math.min(99, Math.max(...animated) + 1) : 1;
   }
 
   function hideContextMenu(){
@@ -1225,6 +1365,11 @@
 
     docViewer = document.createElement('div');
     docViewer.className = 'slide-doc-viewer';
+    docViewer.addEventListener('pointerdown', () => {
+      if (isPresentationMode && typeof slideCanvas.focus === 'function'){
+        slideCanvas.focus();
+      }
+    });
 
     const shell = document.createElement('div');
     shell.className = 'slide-doc-shell';
@@ -1519,7 +1664,24 @@
   }
 
   function clearObjectAnimationTweens(finalize = true){
-    if (!objectAnimationTweens.length) return;
+    if (!objectAnimationTweens.length){
+      if (finalize && presentationAnimationQueue.length){
+        presentationAnimationQueue.forEach(entry => {
+          if (!entry || !entry.node) return;
+          try{
+            const { finalState } = buildNodeAnimationStates(entry.node, entry.config || getNodeAnimationConfig(entry.node));
+            applyNodeAnimationState(entry.node, finalState);
+            const nodeLayer = entry.node.getLayer ? entry.node.getLayer() : null;
+            if (nodeLayer) nodeLayer.batchDraw();
+          }catch(err){
+            // ignore removed nodes
+          }
+        });
+      }
+      presentationAnimationQueue = [];
+      presentationAnimationIndex = 0;
+      return;
+    }
     objectAnimationTweens.forEach(entry => {
       if (!entry) return;
       if (entry.timeoutId) clearTimeout(entry.timeoutId);
@@ -1535,6 +1697,21 @@
       }
     });
     objectAnimationTweens = [];
+    if (finalize && presentationAnimationQueue.length){
+      presentationAnimationQueue.forEach(entry => {
+        if (!entry || !entry.node) return;
+        try{
+          const { finalState } = buildNodeAnimationStates(entry.node, entry.config || getNodeAnimationConfig(entry.node));
+          applyNodeAnimationState(entry.node, finalState);
+          const nodeLayer = entry.node.getLayer ? entry.node.getLayer() : null;
+          if (nodeLayer) nodeLayer.batchDraw();
+        }catch(err){
+          // ignore removed nodes
+        }
+      });
+    }
+    presentationAnimationQueue = [];
+    presentationAnimationIndex = 0;
   }
 
   function buildNodeAnimationStates(node, config){
@@ -1611,7 +1788,7 @@
     const tween = new Konva.Tween({
       node,
       duration: config.duration,
-      delay: options.ignoreDelay ? 0 : config.delay,
+      delay: (options.ignoreDelay ? 0 : config.delay) + Math.max(0, Number(options.delayOffset) || 0),
       x: finalState.x,
       y: finalState.y,
       scaleX: finalState.scaleX,
@@ -1630,7 +1807,7 @@
     record.timeoutId = setTimeout(() => {
       applyFinal();
       objectAnimationTweens = objectAnimationTweens.filter(entry => entry !== record);
-    }, Math.round(((options.ignoreDelay ? 0 : config.delay) + config.duration) * 1000) + 40);
+    }, Math.round((((options.ignoreDelay ? 0 : config.delay) + Math.max(0, Number(options.delayOffset) || 0)) + config.duration) * 1000) + 40);
 
     objectAnimationTweens.push(record);
     tween.play();
@@ -1647,9 +1824,21 @@
     clearObjectAnimationTweens(true);
     const slide = getCurrentSlide();
     if (!isPresentationMode || !slide || slide.type !== 'canvas' || !currentLayer) return;
-    getContentNodes(currentLayer).forEach(node => {
-      runNodeEntryAnimation(node);
+    presentationAnimationQueue = getAnimatedNodesInDisplayOrder(currentLayer);
+    presentationAnimationIndex = 0;
+    presentationAnimationQueue.forEach(entry => {
+      const { startState } = buildNodeAnimationStates(entry.node, entry.config);
+      applyNodeAnimationState(entry.node, startState);
     });
+    currentLayer.batchDraw();
+  }
+
+  function playNextPresentationAnimation(){
+    if (!isPresentationMode) return false;
+    if (presentationAnimationIndex >= presentationAnimationQueue.length) return false;
+    const entry = presentationAnimationQueue[presentationAnimationIndex];
+    presentationAnimationIndex += 1;
+    return runNodeEntryAnimation(entry.node);
   }
 
   function setPresentationMode(active){
@@ -1713,17 +1902,13 @@
     }
 
     if (isDocumentSlide()){
-      if (e.key === 'PageDown' || isSpace){
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || isSpace){
         moveSlide(1);
         e.preventDefault();
         return true;
       }
-      if (e.key === 'PageUp' || e.key === 'Backspace'){
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace'){
         moveSlide(-1);
-        e.preventDefault();
-        return true;
-      }
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
         e.preventDefault();
         return true;
       }
@@ -1741,6 +1926,10 @@
     }
 
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown' || isSpace){
+      if (playNextPresentationAnimation()){
+        e.preventDefault();
+        return true;
+      }
       moveSlide(1);
       e.preventDefault();
       return true;
@@ -1876,6 +2065,7 @@
     if (lineDraft){
       cancelLineDraft();
     }
+    hideSelectionMarquee();
     hideContextMenu();
     clearGuideLines();
     clearObjectAnimationTweens(true);
@@ -2110,7 +2300,20 @@
       const isEmpty = !target;
 
       if (!isEmpty){
-        selectNode(target);
+        if (!(currentTool === 'select' && hasMultipleSelection() && isNodeSelected(target))){
+          selectNode(target);
+        }
+        return;
+      }
+
+      if (currentTool === 'select' && pos){
+        selectionMarqueeStart = pos;
+        const marquee = ensureSelectionMarquee();
+        marquee.position(pos);
+        marquee.width(0);
+        marquee.height(0);
+        marquee.visible(true);
+        uiLayer.batchDraw();
         return;
       }
 
@@ -2146,6 +2349,17 @@
       if (!isEditorActive) return;
       const pos = getStagePointer();
       if (!pos) return;
+      if (selectionMarqueeStart && selectionMarquee){
+        const x = Math.min(selectionMarqueeStart.x, pos.x);
+        const y = Math.min(selectionMarqueeStart.y, pos.y);
+        const width = Math.abs(pos.x - selectionMarqueeStart.x);
+        const height = Math.abs(pos.y - selectionMarqueeStart.y);
+        selectionMarquee.position({ x, y });
+        selectionMarquee.width(width);
+        selectionMarquee.height(height);
+        uiLayer.batchDraw();
+        return;
+      }
       if (lineDraft && lineStart){
         updateLineDraftPoints(pos);
         currentLayer.batchDraw();
@@ -2158,6 +2372,21 @@
 
     stage.on('mouseup touchend', () => {
       if (!isEditorActive) return;
+      if (selectionMarqueeStart && selectionMarquee){
+        const selectionBox = selectionMarquee.getClientRect({ relativeTo: currentLayer });
+        const wasClick = selectionBox.width < 4 && selectionBox.height < 4;
+        hideSelectionMarquee();
+        if (wasClick){
+          selectNode(null);
+          return;
+        }
+        const matches = getContentNodes(currentLayer).filter(node => {
+          const box = node.getClientRect({ relativeTo: currentLayer });
+          return Konva.Util.haveIntersection(selectionBox, box);
+        });
+        selectNodes(matches, matches[0] || null);
+        return;
+      }
       if (!lineDraft || !lineStart) return;
       const completedNode = lineDraft;
       clearLineDraftState();
@@ -2181,7 +2410,9 @@
       const point = getStagePointer();
 
       if (target){
-        selectNode(target);
+        if (!isNodeSelected(target)){
+          selectNode(target);
+        }
       } else {
         selectNode(null);
       }
@@ -2229,6 +2460,10 @@
           danger: true
         });
       } else if (point){
+        items.push({
+          label: 'Edit background color',
+          action: () => openBackgroundColorPicker()
+        });
         items.push({
           label: 'Add text here',
           action: () => {
@@ -2529,11 +2764,16 @@
 
     if (propAnimType){
       propAnimType.addEventListener('change', () => {
-        if (!selectedNode) return;
+        if (!selectedNode || hasMultipleSelection()) return;
+        const currentConfig = getNodeAnimationConfig(selectedNode);
+        const nextType = propAnimType.value;
         setNodeAnimationConfig(selectedNode, {
           type: propAnimType.value,
           duration: propAnimDuration ? propAnimDuration.value : undefined,
-          delay: propAnimDelay ? propAnimDelay.value : undefined
+          delay: propAnimDelay ? propAnimDelay.value : undefined,
+          order: nextType !== 'none'
+            ? (currentConfig.order > 0 ? currentConfig.order : getNextAnimationOrder(currentLayer, selectedNode))
+            : 0
         });
         updateInspector(selectedNode);
         scheduleThumbUpdate();
@@ -2543,11 +2783,12 @@
 
     if (propAnimDuration){
       propAnimDuration.addEventListener('change', () => {
-        if (!selectedNode) return;
+        if (!selectedNode || hasMultipleSelection()) return;
         setNodeAnimationConfig(selectedNode, {
           type: propAnimType ? propAnimType.value : undefined,
           duration: propAnimDuration.value,
-          delay: propAnimDelay ? propAnimDelay.value : undefined
+          delay: propAnimDelay ? propAnimDelay.value : undefined,
+          order: propAnimOrder ? propAnimOrder.value : undefined
         });
         updateInspector(selectedNode);
         scheduleThumbUpdate();
@@ -2557,11 +2798,27 @@
 
     if (propAnimDelay){
       propAnimDelay.addEventListener('change', () => {
-        if (!selectedNode) return;
+        if (!selectedNode || hasMultipleSelection()) return;
         setNodeAnimationConfig(selectedNode, {
           type: propAnimType ? propAnimType.value : undefined,
           duration: propAnimDuration ? propAnimDuration.value : undefined,
-          delay: propAnimDelay.value
+          delay: propAnimDelay.value,
+          order: propAnimOrder ? propAnimOrder.value : undefined
+        });
+        updateInspector(selectedNode);
+        scheduleThumbUpdate();
+        schedulePersistentSave();
+      });
+    }
+
+    if (propAnimOrder){
+      propAnimOrder.addEventListener('change', () => {
+        if (!selectedNode || hasMultipleSelection()) return;
+        setNodeAnimationConfig(selectedNode, {
+          type: propAnimType ? propAnimType.value : undefined,
+          duration: propAnimDuration ? propAnimDuration.value : undefined,
+          delay: propAnimDelay ? propAnimDelay.value : undefined,
+          order: propAnimOrder.value
         });
         updateInspector(selectedNode);
         scheduleThumbUpdate();
@@ -2581,6 +2838,9 @@
     if (lineDraft && nextTool !== 'line'){
       cancelLineDraft();
     }
+    if (nextTool !== 'select'){
+      hideSelectionMarquee();
+    }
     currentTool = nextTool;
     toolButtons.forEach(btn => {
       btn.classList.toggle('is-active', btn.getAttribute('data-tool') === currentTool);
@@ -2597,17 +2857,17 @@
         else duplicateCurrentSlide();
         return;
       case 'bring-front':
-        if (selectedNode) selectedNode.moveToTop();
+        getSelectedNodes().forEach(node => node.moveToTop());
         currentLayer.draw();
         scheduleThumbUpdate();
         return;
       case 'send-back':
-        if (selectedNode){
-          selectedNode.moveToBottom();
-          if (selectedNode.zIndex() === 0){
-            selectedNode.zIndex(1);
+        getSelectedNodes().slice().reverse().forEach(node => {
+          node.moveToBottom();
+          if (node.zIndex() === 0){
+            node.zIndex(1);
           }
-        }
+        });
         currentLayer.draw();
         scheduleThumbUpdate();
         return;
@@ -2701,18 +2961,25 @@
     return transform.point(pos);
   }
 
-  function selectNode(node){
-    selectedNode = node || null;
+  function selectNodes(nodes, primaryNode = null){
+    selectedNodes = Array.from(new Set((nodes || []).filter(Boolean)));
+    selectedNode = primaryNode && selectedNodes.includes(primaryNode)
+      ? primaryNode
+      : (selectedNodes[0] || null);
     clearGuideLines();
-    transformer.nodes(node ? [node] : []);
-    applyTransformerConfig(node);
+    transformer.nodes(selectedNodes);
+    applyTransformerConfig(selectedNode);
     uiLayer.batchDraw();
-    updateInspector(node);
+    updateInspector(selectedNode);
+  }
+
+  function selectNode(node){
+    selectNodes(node ? [node] : [], node || null);
   }
 
   function applyTransformerConfig(node){
     if (!transformer) return;
-    if (!node){
+    if (!node || hasMultipleSelection()){
       transformer.enabledAnchors(DEFAULT_ANCHORS);
       transformer.keepRatio(false);
       return;
@@ -2737,6 +3004,18 @@
       if (shapePanel) shapePanel.style.display = 'none';
       if (commonPanel) commonPanel.style.display = 'none';
       if (propShapeFill) propShapeFill.disabled = false;
+      if (propAnimOrder) propAnimOrder.disabled = true;
+      if (propAnimPreview) propAnimPreview.disabled = true;
+      return;
+    }
+
+    if (hasMultipleSelection()){
+      selectionLabel.textContent = `${selectedNodes.length} items selected`;
+      if (textPanel) textPanel.style.display = 'none';
+      if (shapePanel) shapePanel.style.display = 'none';
+      if (commonPanel) commonPanel.style.display = 'none';
+      if (propShapeFill) propShapeFill.disabled = false;
+      if (propAnimOrder) propAnimOrder.disabled = true;
       if (propAnimPreview) propAnimPreview.disabled = true;
       return;
     }
@@ -2778,6 +3057,8 @@
     if (propAnimType) propAnimType.value = animationConfig.type;
     if (propAnimDuration) propAnimDuration.value = String(animationConfig.duration);
     if (propAnimDelay) propAnimDelay.value = String(animationConfig.delay);
+    if (propAnimOrder) propAnimOrder.value = String(animationConfig.order > 0 ? animationConfig.order : 1);
+    if (propAnimOrder) propAnimOrder.disabled = animationConfig.type === 'none';
     if (propAnimPreview){
       propAnimPreview.disabled = animationConfig.type === 'none';
     }
@@ -2793,6 +3074,19 @@
     node.on('transformstart dragstart', () => {
       hideContextMenu();
       clearGuideLines();
+      if (selectionMarqueeStart){
+        hideSelectionMarquee();
+      }
+      if (node.isDragging && node.isDragging() && hasMultipleSelection() && isNodeSelected(node)){
+        const originX = node.x();
+        const originY = node.y();
+        selectedNodes.forEach(item => {
+          item.setAttr('multiDragAnchorX', originX);
+          item.setAttr('multiDragAnchorY', originY);
+          item.setAttr('multiDragOriginX', item.x());
+          item.setAttr('multiDragOriginY', item.y());
+        });
+      }
     });
     node.on('transform', () => {
       applySnapGuides(node);
@@ -2802,6 +3096,22 @@
     });
     node.on('dragmove', () => {
       applySnapGuides(node);
+      if (hasMultipleSelection() && isNodeSelected(node)){
+        const anchorX = Number(node.getAttr('multiDragAnchorX'));
+        const anchorY = Number(node.getAttr('multiDragAnchorY'));
+        if (Number.isFinite(anchorX) && Number.isFinite(anchorY)){
+          const deltaX = node.x() - anchorX;
+          const deltaY = node.y() - anchorY;
+          selectedNodes.forEach(item => {
+            if (item === node) return;
+            const startX = Number(item.getAttr('multiDragOriginX'));
+            const startY = Number(item.getAttr('multiDragOriginY'));
+            if (!Number.isFinite(startX) || !Number.isFinite(startY)) return;
+            item.position({ x: startX + deltaX, y: startY + deltaY });
+          });
+          currentLayer.batchDraw();
+        }
+      }
       if (selectedNode === node){
         updateInspector(node);
       }
@@ -2811,6 +3121,12 @@
       normalizeNode(node);
     });
     node.on('dragend', () => {
+      selectedNodes.forEach(item => {
+        item.setAttr('multiDragAnchorX', null);
+        item.setAttr('multiDragAnchorY', null);
+        item.setAttr('multiDragOriginX', null);
+        item.setAttr('multiDragOriginY', null);
+      });
       clearGuideLines();
       scheduleThumbUpdate();
     });
@@ -3208,8 +3524,9 @@
   }
 
   function deleteSelected(){
-    if (!selectedNode) return;
-    selectedNode.destroy();
+    const nodes = getSelectedNodes();
+    if (!nodes.length) return;
+    nodes.forEach(node => node.destroy());
     selectNode(null);
     currentLayer.batchDraw();
     refreshHasContent();
@@ -3218,27 +3535,33 @@
   }
 
   function duplicateSelected(){
-    if (!selectedNode) return;
-    const clone = selectedNode.clone({
-      x: selectedNode.x() + 20,
-      y: selectedNode.y() + 20
-    });
-    addNode(clone);
+    const nodes = getSelectedNodes();
+    if (!nodes.length) return;
+    const clones = nodes.map(node => node.clone({
+      x: node.x() + 20,
+      y: node.y() + 20
+    }));
+    clones.forEach(clone => addNode(clone, true));
+    selectNodes(clones, clones[0] || null);
     syncVideoAnimation();
   }
 
   function copySelected(){
-    if (!selectedNode) return;
-    clipboardNode = selectedNode.clone();
+    const nodes = getSelectedNodes();
+    if (!nodes.length) return;
+    clipboardNodes = nodes.map(node => node.clone());
+    clipboardNode = clipboardNodes[0] || null;
   }
 
   function pasteClipboard(){
-    if (!clipboardNode) return;
-    const clone = clipboardNode.clone({
-      x: clipboardNode.x() + 24,
-      y: clipboardNode.y() + 24
-    });
-    addNode(clone);
+    if (!clipboardNodes.length && !clipboardNode) return;
+    const sourceNodes = clipboardNodes.length ? clipboardNodes : [clipboardNode];
+    const clones = sourceNodes.filter(Boolean).map(node => node.clone({
+      x: node.x() + 24,
+      y: node.y() + 24
+    }));
+    clones.forEach(clone => addNode(clone, true));
+    selectNodes(clones, clones[0] || null);
     syncVideoAnimation();
   }
 
@@ -3270,10 +3593,13 @@
   }
 
   function nudgeSelected(dx, dy){
-    if (!selectedNode) return;
-    selectedNode.position({
-      x: selectedNode.x() + dx,
-      y: selectedNode.y() + dy
+    const nodes = getSelectedNodes();
+    if (!nodes.length) return;
+    nodes.forEach(node => {
+      node.position({
+        x: node.x() + dx,
+        y: node.y() + dy
+      });
     });
     currentLayer.batchDraw();
     updateInspector(selectedNode);
@@ -3281,35 +3607,44 @@
   }
 
   function alignSelected(action){
-    if (!selectedNode) return;
+    const nodes = getSelectedNodes();
+    if (!nodes.length) return;
     const frameRect = getSlideFrameRect(currentLayer);
-    const box = selectedNode.getClientRect({ relativeTo: currentLayer });
-    const target = { x: selectedNode.x(), y: selectedNode.y() };
+    const box = hasMultipleSelection()
+      ? getSelectionBounds(nodes)
+      : selectedNode.getClientRect({ relativeTo: currentLayer });
+    if (!box) return;
+    const delta = { x: 0, y: 0 };
 
     switch(action){
       case 'align-left':
-        target.x = selectedNode.x() + (frameRect.x - box.x);
+        delta.x = frameRect.x - box.x;
         break;
       case 'align-center':
-        target.x = selectedNode.x() + (frameRect.x + frameRect.width / 2 - (box.x + box.width / 2));
+        delta.x = frameRect.x + frameRect.width / 2 - (box.x + box.width / 2);
         break;
       case 'align-right':
-        target.x = selectedNode.x() + (frameRect.x + frameRect.width - (box.x + box.width));
+        delta.x = frameRect.x + frameRect.width - (box.x + box.width);
         break;
       case 'align-top':
-        target.y = selectedNode.y() + (frameRect.y - box.y);
+        delta.y = frameRect.y - box.y;
         break;
       case 'align-middle':
-        target.y = selectedNode.y() + (frameRect.y + frameRect.height / 2 - (box.y + box.height / 2));
+        delta.y = frameRect.y + frameRect.height / 2 - (box.y + box.height / 2);
         break;
       case 'align-bottom':
-        target.y = selectedNode.y() + (frameRect.y + frameRect.height - (box.y + box.height));
+        delta.y = frameRect.y + frameRect.height - (box.y + box.height);
         break;
       default:
         return;
     }
 
-    selectedNode.position(target);
+    nodes.forEach(node => {
+      node.position({
+        x: node.x() + delta.x,
+        y: node.y() + delta.y
+      });
+    });
     currentLayer.batchDraw();
     scheduleThumbUpdate();
   }
