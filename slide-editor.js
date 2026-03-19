@@ -856,16 +856,25 @@
     uiLayer.batchDraw();
   }
 
-  function drawGuideLine(orientation, value){
+  function drawGuideLine(orientation, guide, box){
     if (!uiLayer) return;
+    const guideValue = typeof guide.value === 'number' ? guide.value : guide;
+    const isCenterGuide = guide && guide.kind === 'slide-center';
+    const start = orientation === 'vertical'
+      ? (isCenterGuide ? 0 : Math.max(0, Math.min(guide.start ?? 0, box ? box.y : 0)))
+      : (isCenterGuide ? 0 : Math.max(0, Math.min(guide.start ?? 0, box ? box.x : 0)));
+    const end = orientation === 'vertical'
+      ? (isCenterGuide ? SLIDE_HEIGHT : Math.min(SLIDE_HEIGHT, Math.max(guide.end ?? SLIDE_HEIGHT, box ? (box.y + box.height) : SLIDE_HEIGHT)))
+      : (isCenterGuide ? SLIDE_WIDTH : Math.min(SLIDE_WIDTH, Math.max(guide.end ?? SLIDE_WIDTH, box ? (box.x + box.width) : SLIDE_WIDTH)));
     const points = orientation === 'vertical'
-      ? [value, 0, value, SLIDE_HEIGHT]
-      : [0, value, SLIDE_WIDTH, value];
+      ? [guideValue, start, guideValue, end]
+      : [start, guideValue, end, guideValue];
     const line = new Konva.Line({
       points,
-      stroke: '#1a73e8',
-      strokeWidth: 1,
-      dash: [6, 4],
+      stroke: isCenterGuide ? '#0b57d0' : '#1a73e8',
+      strokeWidth: isCenterGuide ? 1.5 : 1,
+      dash: isCenterGuide ? [10, 6] : [6, 4],
+      opacity: isCenterGuide ? 0.95 : 0.82,
       listening: false
     });
     guideLines.push(line);
@@ -874,14 +883,30 @@
   }
 
   function collectSnapGuides(node){
-    const vertical = [0, SLIDE_WIDTH / 2, SLIDE_WIDTH];
-    const horizontal = [0, SLIDE_HEIGHT / 2, SLIDE_HEIGHT];
+    const vertical = [
+      { value: 0, start: 0, end: SLIDE_HEIGHT, kind: 'slide-edge', priority: 8 },
+      { value: SLIDE_WIDTH / 2, start: 0, end: SLIDE_HEIGHT, kind: 'slide-center', priority: 0 },
+      { value: SLIDE_WIDTH, start: 0, end: SLIDE_HEIGHT, kind: 'slide-edge', priority: 8 }
+    ];
+    const horizontal = [
+      { value: 0, start: 0, end: SLIDE_WIDTH, kind: 'slide-edge', priority: 8 },
+      { value: SLIDE_HEIGHT / 2, start: 0, end: SLIDE_WIDTH, kind: 'slide-center', priority: 0 },
+      { value: SLIDE_HEIGHT, start: 0, end: SLIDE_WIDTH, kind: 'slide-edge', priority: 8 }
+    ];
 
     getContentNodes(currentLayer).forEach(otherNode => {
       if (otherNode === node) return;
       const box = otherNode.getClientRect({ relativeTo: currentLayer });
-      vertical.push(box.x, box.x + box.width / 2, box.x + box.width);
-      horizontal.push(box.y, box.y + box.height / 2, box.y + box.height);
+      vertical.push(
+        { value: box.x, start: box.y, end: box.y + box.height, kind: 'object-edge', priority: 6 },
+        { value: box.x + box.width / 2, start: box.y, end: box.y + box.height, kind: 'object-center', priority: 2 },
+        { value: box.x + box.width, start: box.y, end: box.y + box.height, kind: 'object-edge', priority: 6 }
+      );
+      horizontal.push(
+        { value: box.y, start: box.x, end: box.x + box.width, kind: 'object-edge', priority: 6 },
+        { value: box.y + box.height / 2, start: box.x, end: box.x + box.width, kind: 'object-center', priority: 2 },
+        { value: box.y + box.height, start: box.x, end: box.x + box.width, kind: 'object-edge', priority: 6 }
+      );
     });
 
     return { vertical, horizontal };
@@ -891,12 +916,16 @@
     let best = null;
     candidates.forEach(candidate => {
       guides.forEach(guide => {
-        const delta = guide - candidate.value;
+        const delta = guide.value - candidate.value;
         if (Math.abs(delta) > SNAP_THRESHOLD) return;
-        if (!best || Math.abs(delta) < Math.abs(best.delta)){
+        const score = (Math.abs(delta) * 100)
+          + (candidate.priority || 0)
+          + (guide.priority || 0);
+        if (!best || score < best.score){
           best = {
             delta,
-            guide
+            guide,
+            score
           };
         }
       });
@@ -912,14 +941,14 @@
     const box = node.getClientRect({ relativeTo: currentLayer });
     const guides = collectSnapGuides(node);
     const verticalMatch = findBestGuide([
-      { value: box.x },
-      { value: box.x + box.width / 2 },
-      { value: box.x + box.width }
+      { value: box.x, priority: 6 },
+      { value: box.x + box.width / 2, priority: 0 },
+      { value: box.x + box.width, priority: 6 }
     ], guides.vertical);
     const horizontalMatch = findBestGuide([
-      { value: box.y },
-      { value: box.y + box.height / 2 },
-      { value: box.y + box.height }
+      { value: box.y, priority: 6 },
+      { value: box.y + box.height / 2, priority: 0 },
+      { value: box.y + box.height, priority: 6 }
     ], guides.horizontal);
 
     if (!verticalMatch && !horizontalMatch) return;
@@ -929,11 +958,13 @@
       y: node.y() + (horizontalMatch ? horizontalMatch.delta : 0)
     });
 
+    const snappedBox = node.getClientRect({ relativeTo: currentLayer });
+
     if (verticalMatch){
-      drawGuideLine('vertical', verticalMatch.guide);
+      drawGuideLine('vertical', verticalMatch.guide, snappedBox);
     }
     if (horizontalMatch){
-      drawGuideLine('horizontal', horizontalMatch.guide);
+      drawGuideLine('horizontal', horizontalMatch.guide, snappedBox);
     }
 
     currentLayer.batchDraw();
@@ -2177,6 +2208,7 @@
       clearGuideLines();
     });
     node.on('transform', () => {
+      applySnapGuides(node);
       if (selectedNode === node){
         updateInspector(node);
       }
@@ -2187,7 +2219,10 @@
         updateInspector(node);
       }
     });
-    node.on('transformend', () => normalizeNode(node));
+    node.on('transformend', () => {
+      clearGuideLines();
+      normalizeNode(node);
+    });
     node.on('dragend', () => {
       clearGuideLines();
       scheduleThumbUpdate();

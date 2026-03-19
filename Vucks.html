@@ -2516,6 +2516,7 @@
   const EXPAND_THRESHOLD = 100; // Expand when height exceeds this (pixels)
   const COLLAPSE_AT_OR_BELOW_LINES = 5; // Collapse when rendered lines are 5 or fewer
   let previousLineCount = null;
+  let forceExpandedEditor = false;
   let state = 0;
   let blueModeDraft = '';
   let skipNextGrayDraftSave = false;
@@ -3618,6 +3619,7 @@
   function collapseToInitialSearchBox(contentHeight){
     container.classList.remove('expanded');
     expandedFixedHeight = null;
+    forceExpandedEditor = false;
 
     if(fixedWrapper){
       fixedWrapper.style.justifyContent = hasSuggestionResults ? 'flex-end' : 'center';
@@ -3660,7 +3662,8 @@
     }
 
     const shouldCollapseByLineCount = isAtOrBelowLineLimit(contentHeight, COLLAPSE_AT_OR_BELOW_LINES);
-    const shouldExpand = contentHeight > EXPAND_THRESHOLD && !shouldCollapseByLineCount;
+    const shouldForceExpand = bodyEl.classList.contains('scrolled') && forceExpandedEditor;
+    const shouldExpand = shouldForceExpand || (contentHeight > EXPAND_THRESHOLD && !shouldCollapseByLineCount);
 
     if(shouldExpand){
       if(!container.classList.contains('expanded')){
@@ -3741,8 +3744,15 @@
 
     if(!v && !hasFiles) return;
 
-    // If in scrolled mode (gray background), enter selection mode
+    // In gray mode, first submit expands into the full editor.
     if(state === 1){
+      if(!container.classList.contains('expanded')){
+        forceExpandedEditor = true;
+        bodyEl.classList.add('scrolled');
+        adjustTextarea();
+        requestAnimationFrame(()=>input.focus());
+        return;
+      }
       enterSelectionMode();
       return;
     }
@@ -3830,6 +3840,10 @@
     // Exit selection mode if changing states
     if(selectionMode){
       exitSelectionMode();
+    }
+
+    if(next !== 1){
+      forceExpandedEditor = false;
     }
 
     bodyEl.classList.remove('scrolled','login-check');
