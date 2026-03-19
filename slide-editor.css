@@ -251,6 +251,7 @@ body.slide-presenting .slide-canvas{
 .slide-canvas:fullscreen .slide-stage,
 .slide-canvas:-webkit-full-screen .slide-stage,
 .slide-canvas.is-presenting .slide-stage{
+  flex:1 1 auto;
   width:100%;
   height:100%;
 }

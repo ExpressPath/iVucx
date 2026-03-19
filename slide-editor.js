@@ -912,10 +912,26 @@
     return { vertical, horizontal };
   }
 
+  function areGuidePairCompatible(candidate, guide){
+    const candidateKind = candidate && candidate.kind ? candidate.kind : 'edge';
+    const guideKind = guide && guide.kind ? guide.kind : 'object-edge';
+
+    if (guideKind === 'slide-center' || guideKind === 'object-center'){
+      return candidateKind === 'center';
+    }
+
+    if (guideKind === 'slide-edge' || guideKind === 'object-edge'){
+      return candidateKind !== 'center';
+    }
+
+    return true;
+  }
+
   function findBestGuide(candidates, guides){
     let best = null;
     candidates.forEach(candidate => {
       guides.forEach(guide => {
+        if (!areGuidePairCompatible(candidate, guide)) return;
         const delta = guide.value - candidate.value;
         if (Math.abs(delta) > SNAP_THRESHOLD) return;
         const score = (Math.abs(delta) * 100)
@@ -941,14 +957,14 @@
     const box = node.getClientRect({ relativeTo: currentLayer });
     const guides = collectSnapGuides(node);
     const verticalMatch = findBestGuide([
-      { value: box.x, priority: 6 },
-      { value: box.x + box.width / 2, priority: 0 },
-      { value: box.x + box.width, priority: 6 }
+      { value: box.x, priority: 6, kind: 'edge-start' },
+      { value: box.x + box.width / 2, priority: 0, kind: 'center' },
+      { value: box.x + box.width, priority: 6, kind: 'edge-end' }
     ], guides.vertical);
     const horizontalMatch = findBestGuide([
-      { value: box.y, priority: 6 },
-      { value: box.y + box.height / 2, priority: 0 },
-      { value: box.y + box.height, priority: 6 }
+      { value: box.y, priority: 6, kind: 'edge-start' },
+      { value: box.y + box.height / 2, priority: 0, kind: 'center' },
+      { value: box.y + box.height, priority: 6, kind: 'edge-end' }
     ], guides.horizontal);
 
     if (!verticalMatch && !horizontalMatch) return;
@@ -1283,6 +1299,7 @@
     if (!slideCanvas.requestFullscreen) return;
     try{
       await slideCanvas.requestFullscreen();
+      setPresentationMode(true);
     }catch(err){
       // ignore fullscreen rejections
     }
@@ -2110,8 +2127,17 @@
 
   function resizeStage(){
     if (!stage || !stageHost) return;
-    const w = stageHost.clientWidth;
-    const h = stageHost.clientHeight;
+    const hostWidth = isPresentationMode && slideCanvas ? slideCanvas.clientWidth : stageHost.clientWidth;
+    const hostHeight = isPresentationMode && slideCanvas ? slideCanvas.clientHeight : stageHost.clientHeight;
+    if (isPresentationMode){
+      stageHost.style.width = `${hostWidth}px`;
+      stageHost.style.height = `${hostHeight}px`;
+    } else {
+      stageHost.style.removeProperty('width');
+      stageHost.style.removeProperty('height');
+    }
+    const w = hostWidth;
+    const h = hostHeight;
     if (w < 2 || h < 2) return;
     fitScale = Math.min(w / SLIDE_WIDTH, h / SLIDE_HEIGHT);
     const effectiveZoom = isPresentationMode ? 1 : zoom;
