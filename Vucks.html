@@ -1953,6 +1953,27 @@
             <span>Opacity</span>
             <input type="range" id="propOpacity" min="0" max="1" step="0.05" />
           </label>
+          <label class="slide-control">
+            <span>Animation</span>
+            <select id="propAnimType">
+              <option value="none">None</option>
+              <option value="fade">Fade In</option>
+              <option value="zoom">Zoom In</option>
+              <option value="from-left">From Left</option>
+              <option value="from-right">From Right</option>
+              <option value="from-top">From Top</option>
+              <option value="from-bottom">From Bottom</option>
+            </select>
+          </label>
+          <label class="slide-control">
+            <span>Duration</span>
+            <input type="number" id="propAnimDuration" min="0.1" max="8" step="0.1" value="0.6" />
+          </label>
+          <label class="slide-control">
+            <span>Delay</span>
+            <input type="number" id="propAnimDelay" min="0" max="8" step="0.1" value="0" />
+          </label>
+          <button class="slide-toolbar-button slide-preview-button" id="propAnimPreview" type="button">Preview Motion</button>
         </div>
       </div>
       <div class="slide-status">
@@ -2275,6 +2296,10 @@
 
   function enterSelectionMode(){
     closeTitleDecisionMenu();
+    if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
+      window.slideEditorControls.preserveInBackground();
+    }
+    setModeDraft(1, input.value || compactGrayAcceptedValue, attachedFiles);
     selectionMode = true;
     rememberedContent = input.value || compactGrayAcceptedValue;
     rememberedFiles = [...attachedFiles];
@@ -2298,9 +2323,13 @@
   }
 
   function openEditor(choice){
+    if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
+      window.slideEditorControls.preserveInBackground();
+    }
+    setModeDraft(1, rememberedContent || compactGrayAcceptedValue, rememberedFiles);
     const initPayload = {
       proofAssistant: choice,
-      summary: rememberedContent || '',
+      summary: rememberedContent || compactGrayAcceptedValue || '',
       draft: '',
       keepSummaryBackground: true,
       attachedFileNames: rememberedFiles.map(file=>file.name),

@@ -26,6 +26,10 @@
   const propStroke = document.getElementById('propStroke');
   const propStrokeWidth = document.getElementById('propStrokeWidth');
   const propOpacity = document.getElementById('propOpacity');
+  const propAnimType = document.getElementById('propAnimType');
+  const propAnimDuration = document.getElementById('propAnimDuration');
+  const propAnimDelay = document.getElementById('propAnimDelay');
+  const propAnimPreview = document.getElementById('propAnimPreview');
 
   if (!container || !stageHost || !thumbsEl || !slideCanvas) return;
 
@@ -42,6 +46,13 @@
   const SEED_TEXT_WIDTH = 920;
   const SEED_TEXT_MARGIN = 120;
   const MIRROR_SEARCH_INPUT_TO_SLIDES = false;
+  const DEFAULT_NODE_ANIMATION = Object.freeze({
+    type: 'none',
+    duration: 0.6,
+    delay: 0
+  });
+  const NODE_ANIMATION_TYPES = new Set(['none', 'fade', 'zoom', 'from-left', 'from-right', 'from-top', 'from-bottom']);
+  const NODE_ANIMATION_OFFSET = 84;
   const EDITOR_DB_NAME = 'ivucxSlideEditorDB';
   const EDITOR_DB_VERSION = 1;
   const EDITOR_DB_STORE = 'editorStates';
@@ -83,6 +94,7 @@
   let docScrollEl = null;
   let docDownloadBtn = null;
   let isPresentationMode = false;
+  let objectAnimationTweens = [];
   let sessionSeedText = '';
   let sessionBaselineDigest = '';
   let persistTimer = null;
@@ -295,6 +307,56 @@
     return Math.round(numeric * 100) / 100;
   }
 
+  function normalizeNodeAnimationConfig(rawConfig){
+    const type = rawConfig && NODE_ANIMATION_TYPES.has(rawConfig.type)
+      ? rawConfig.type
+      : (rawConfig && NODE_ANIMATION_TYPES.has(rawConfig.animType) ? rawConfig.animType : DEFAULT_NODE_ANIMATION.type);
+    const durationValue = Number(rawConfig && (rawConfig.duration ?? rawConfig.animDuration));
+    const delayValue = Number(rawConfig && (rawConfig.delay ?? rawConfig.animDelay));
+    return {
+      type,
+      duration: Number.isFinite(durationValue) ? Math.max(0.1, Math.min(8, roundMetric(durationValue))) : DEFAULT_NODE_ANIMATION.duration,
+      delay: Number.isFinite(delayValue) ? Math.max(0, Math.min(8, roundMetric(delayValue))) : DEFAULT_NODE_ANIMATION.delay
+    };
+  }
+
+  function getNodeAnimationConfig(node){
+    if (!node || !node.getAttr) return { ...DEFAULT_NODE_ANIMATION };
+    return normalizeNodeAnimationConfig({
+      type: node.getAttr('animType'),
+      duration: node.getAttr('animDuration'),
+      delay: node.getAttr('animDelay')
+    });
+  }
+
+  function setNodeAnimationConfig(node, config){
+    if (!node || !node.setAttr) return { ...DEFAULT_NODE_ANIMATION };
+    const normalized = normalizeNodeAnimationConfig(config);
+    node.setAttr('animType', normalized.type);
+    node.setAttr('animDuration', normalized.duration);
+    node.setAttr('animDelay', normalized.delay);
+    return normalized;
+  }
+
+  function getNodeAnimationLabel(type){
+    switch (type){
+      case 'fade':
+        return 'Fade In';
+      case 'zoom':
+        return 'Zoom In';
+      case 'from-left':
+        return 'From Left';
+      case 'from-right':
+        return 'From Right';
+      case 'from-top':
+        return 'From Top';
+      case 'from-bottom':
+        return 'From Bottom';
+      default:
+        return 'None';
+    }
+  }
+
   function serializeDocumentData(documentData){
     if (!documentData) return null;
     return {
@@ -319,7 +381,8 @@
       opacity: roundMetric(node.opacity ? node.opacity() : 1),
       seedSource: !!(node.getAttr && node.getAttr('seedSource')),
       assetType: node.getAttr ? (node.getAttr('assetType') || '') : '',
-      assetSrc: node.getAttr ? (node.getAttr('assetSrc') || '') : ''
+      assetSrc: node.getAttr ? (node.getAttr('assetSrc') || '') : '',
+      animation: getNodeAnimationConfig(node)
     };
 
     if (node.className === 'Text'){
@@ -549,20 +612,30 @@
 
   async function createNodeFromSnapshot(data){
     if (!data || typeof data !== 'object') return null;
+    let node = null;
     switch (data.className){
       case 'Text':
-        return createTextNodeFromSnapshot(data);
+        node = createTextNodeFromSnapshot(data);
+        break;
       case 'Rect':
-        return createRectNodeFromSnapshot(data);
+        node = createRectNodeFromSnapshot(data);
+        break;
       case 'Ellipse':
-        return createEllipseNodeFromSnapshot(data);
+        node = createEllipseNodeFromSnapshot(data);
+        break;
       case 'Line':
-        return createLineNodeFromSnapshot(data);
+        node = createLineNodeFromSnapshot(data);
+        break;
       case 'Image':
-        return createImageNodeFromSnapshot(data);
+        node = await createImageNodeFromSnapshot(data);
+        break;
       default:
-        return null;
+        node = null;
     }
+    if (node){
+      setNodeAnimationConfig(node, data.animation);
+    }
+    return node;
   }
 
   function clearAllSlides(){
@@ -1309,6 +1382,140 @@
     updateZoomPill();
   }
 
+  function clearObjectAnimationTweens(finalize = true){
+    if (!objectAnimationTweens.length) return;
+    objectAnimationTweens.forEach(entry => {
+      if (!entry) return;
+      if (entry.timeoutId) clearTimeout(entry.timeoutId);
+      if (entry.tween){
+        entry.tween.destroy();
+      }
+      if (finalize && typeof entry.applyFinal === 'function'){
+        try{
+          entry.applyFinal();
+        }catch(err){
+          // ignore nodes that are already gone
+        }
+      }
+    });
+    objectAnimationTweens = [];
+  }
+
+  function buildNodeAnimationStates(node, config){
+    const finalState = {
+      x: node.x(),
+      y: node.y(),
+      scaleX: node.scaleX(),
+      scaleY: node.scaleY(),
+      opacity: Number.isFinite(Number(node.opacity())) ? Number(node.opacity()) : 1
+    };
+    const startState = { ...finalState };
+
+    switch (config.type){
+      case 'fade':
+        startState.opacity = 0;
+        break;
+      case 'zoom':
+        startState.opacity = 0;
+        startState.scaleX = finalState.scaleX * 0.82;
+        startState.scaleY = finalState.scaleY * 0.82;
+        break;
+      case 'from-left':
+        startState.opacity = 0;
+        startState.x = finalState.x - NODE_ANIMATION_OFFSET;
+        break;
+      case 'from-right':
+        startState.opacity = 0;
+        startState.x = finalState.x + NODE_ANIMATION_OFFSET;
+        break;
+      case 'from-top':
+        startState.opacity = 0;
+        startState.y = finalState.y - NODE_ANIMATION_OFFSET;
+        break;
+      case 'from-bottom':
+        startState.opacity = 0;
+        startState.y = finalState.y + NODE_ANIMATION_OFFSET;
+        break;
+      default:
+        break;
+    }
+
+    return { startState, finalState };
+  }
+
+  function applyNodeAnimationState(node, state){
+    node.position({ x: state.x, y: state.y });
+    node.scale({ x: state.scaleX, y: state.scaleY });
+    node.opacity(state.opacity);
+  }
+
+  function runNodeEntryAnimation(node, options = {}){
+    const nodeLayer = node && node.getLayer ? node.getLayer() : currentLayer;
+    if (!node || !nodeLayer || !stage || !hasKonva()) return false;
+    const config = getNodeAnimationConfig(node);
+    if (config.type === 'none') return false;
+
+    const { startState, finalState } = buildNodeAnimationStates(node, config);
+    const applyFinal = () => {
+      applyNodeAnimationState(node, finalState);
+      if (nodeLayer){
+        nodeLayer.batchDraw();
+      }
+    };
+
+    applyNodeAnimationState(node, startState);
+    if (nodeLayer){
+      nodeLayer.batchDraw();
+    }
+
+    const easing = window.Konva && Konva.Easings
+      ? (Konva.Easings.EaseOutCubic || Konva.Easings.StrongEaseOut || Konva.Easings.EaseOut || Konva.Easings.Linear)
+      : undefined;
+
+    const tween = new Konva.Tween({
+      node,
+      duration: config.duration,
+      delay: options.ignoreDelay ? 0 : config.delay,
+      x: finalState.x,
+      y: finalState.y,
+      scaleX: finalState.scaleX,
+      scaleY: finalState.scaleY,
+      opacity: finalState.opacity,
+      easing
+    });
+
+    const record = {
+      node,
+      tween,
+      applyFinal,
+      timeoutId: null
+    };
+
+    record.timeoutId = setTimeout(() => {
+      applyFinal();
+      objectAnimationTweens = objectAnimationTweens.filter(entry => entry !== record);
+    }, Math.round(((options.ignoreDelay ? 0 : config.delay) + config.duration) * 1000) + 40);
+
+    objectAnimationTweens.push(record);
+    tween.play();
+    return true;
+  }
+
+  function playSelectedNodeAnimationPreview(){
+    if (!selectedNode || !currentLayer || isDocumentSlide()) return false;
+    clearObjectAnimationTweens(true);
+    return runNodeEntryAnimation(selectedNode, { ignoreDelay: true });
+  }
+
+  function playCurrentSlideAnimations(){
+    clearObjectAnimationTweens(true);
+    const slide = getCurrentSlide();
+    if (!isPresentationMode || !slide || slide.type !== 'canvas' || !currentLayer) return;
+    getContentNodes(currentLayer).forEach(node => {
+      runNodeEntryAnimation(node);
+    });
+  }
+
   function setPresentationMode(active){
     if (active === isPresentationMode) return;
     isPresentationMode = active;
@@ -1322,8 +1529,13 @@
     }
     resizeStage();
     if (active){
-      requestAnimationFrame(() => resizeStage());
+      requestAnimationFrame(() => {
+        resizeStage();
+        playCurrentSlideAnimations();
+      });
       setTimeout(() => resizeStage(), 120);
+    } else {
+      clearObjectAnimationTweens(true);
     }
   }
 
@@ -1522,6 +1734,7 @@
     if (!slides[index]) return;
     hideContextMenu();
     clearGuideLines();
+    clearObjectAnimationTweens(true);
     if (currentLayer){
       currentLayer.remove();
     }
@@ -1554,8 +1767,13 @@
     syncVideoAnimation();
     updateUiForCurrentSlide();
     resizeStage();
+    if (isPresentationMode){
+      playCurrentSlideAnimations();
+    }
     scheduleThumbUpdate();
-    schedulePersistentSave();
+    if (!isPresentationMode){
+      schedulePersistentSave();
+    }
   }
 
   function deleteSlideAt(index){
@@ -2106,6 +2324,54 @@
         scheduleThumbUpdate();
       });
     }
+
+    if (propAnimType){
+      propAnimType.addEventListener('change', () => {
+        if (!selectedNode) return;
+        setNodeAnimationConfig(selectedNode, {
+          type: propAnimType.value,
+          duration: propAnimDuration ? propAnimDuration.value : undefined,
+          delay: propAnimDelay ? propAnimDelay.value : undefined
+        });
+        updateInspector(selectedNode);
+        scheduleThumbUpdate();
+        schedulePersistentSave();
+      });
+    }
+
+    if (propAnimDuration){
+      propAnimDuration.addEventListener('change', () => {
+        if (!selectedNode) return;
+        setNodeAnimationConfig(selectedNode, {
+          type: propAnimType ? propAnimType.value : undefined,
+          duration: propAnimDuration.value,
+          delay: propAnimDelay ? propAnimDelay.value : undefined
+        });
+        updateInspector(selectedNode);
+        scheduleThumbUpdate();
+        schedulePersistentSave();
+      });
+    }
+
+    if (propAnimDelay){
+      propAnimDelay.addEventListener('change', () => {
+        if (!selectedNode) return;
+        setNodeAnimationConfig(selectedNode, {
+          type: propAnimType ? propAnimType.value : undefined,
+          duration: propAnimDuration ? propAnimDuration.value : undefined,
+          delay: propAnimDelay.value
+        });
+        updateInspector(selectedNode);
+        scheduleThumbUpdate();
+        schedulePersistentSave();
+      });
+    }
+
+    if (propAnimPreview){
+      propAnimPreview.addEventListener('click', () => {
+        playSelectedNodeAnimationPreview();
+      });
+    }
   }
 
   function setTool(tool){
@@ -2264,10 +2530,14 @@
       if (textPanel) textPanel.style.display = 'none';
       if (shapePanel) shapePanel.style.display = 'none';
       if (commonPanel) commonPanel.style.display = 'none';
+      if (propAnimPreview) propAnimPreview.disabled = true;
       return;
     }
 
-    selectionLabel.textContent = `${node.className}`;
+    const animationConfig = getNodeAnimationConfig(node);
+    selectionLabel.textContent = animationConfig.type === 'none'
+      ? `${node.className}`
+      : `${node.className} - ${getNodeAnimationLabel(animationConfig.type)}`;
     if (commonPanel) commonPanel.style.display = 'flex';
 
     const isText = node.className === 'Text';
@@ -2290,6 +2560,12 @@
     }
 
     if (propOpacity) propOpacity.value = String(node.opacity() ?? 1);
+    if (propAnimType) propAnimType.value = animationConfig.type;
+    if (propAnimDuration) propAnimDuration.value = String(animationConfig.duration);
+    if (propAnimDelay) propAnimDelay.value = String(animationConfig.delay);
+    if (propAnimPreview){
+      propAnimPreview.disabled = animationConfig.type === 'none';
+    }
   }
 
   function normalizeColor(value, fallback){

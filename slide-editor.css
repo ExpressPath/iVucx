@@ -421,6 +421,13 @@ body.slide-presenting .slide-canvas{
   height:26px;
 }
 
+.slide-preview-button{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
 #slideTextPanel,
 #slideShapePanel,
 #slideCommonPanel{
