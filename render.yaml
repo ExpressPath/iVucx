@@ -5,10 +5,12 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: starter
-    healthCheckPath: /
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
       - key: LEAN_WORKDIR
         value: /app/lean
       - key: LEAN_CMD

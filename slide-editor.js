@@ -13,6 +13,7 @@
   const videoInput = document.getElementById('slideVideoInput');
   const fileInput = document.getElementById('slideFileInput');
   const toolButtons = Array.from(document.querySelectorAll('[data-tool]'));
+  const lineToolButton = document.querySelector('[data-tool="line"]');
   const actionButtons = Array.from(document.querySelectorAll('[data-action]'));
   const zoomButtons = Array.from(document.querySelectorAll('[data-zoom]'));
   const textPanel = document.getElementById('slideTextPanel');
@@ -53,6 +54,12 @@
   });
   const NODE_ANIMATION_TYPES = new Set(['none', 'fade', 'zoom', 'from-left', 'from-right', 'from-top', 'from-bottom']);
   const NODE_ANIMATION_OFFSET = 84;
+  const LINE_KIND_LABELS = Object.freeze({
+    line: 'Line',
+    arrow: 'Arrow',
+    curve: 'Curve',
+    'curved-arrow': 'Curved Arrow'
+  });
   const EDITOR_DB_NAME = 'ivucxSlideEditorDB';
   const EDITOR_DB_VERSION = 1;
   const EDITOR_DB_STORE = 'editorStates';
@@ -73,6 +80,7 @@
   let currentLayer = null;
   let currentSlideIndex = 0;
   let currentTool = 'select';
+  let currentLineKind = 'line';
   let zoom = 1;
   let fitScale = 1;
   let selectedNode = null;
@@ -81,6 +89,7 @@
   let isEditorActive = false;
   let lineDraft = null;
   let lineStart = null;
+  let lineCurvePoints = [];
   let thumbTimer = null;
   let videoAnimation = null;
   let activeTextEditor = null;
@@ -104,6 +113,91 @@
 
   function hasKonva(){
     return typeof window.Konva !== 'undefined';
+  }
+
+  function normalizeLineKind(kind, fallback = 'line'){
+    return Object.prototype.hasOwnProperty.call(LINE_KIND_LABELS, kind) ? kind : fallback;
+  }
+
+  function getLineKindLabel(kind){
+    return LINE_KIND_LABELS[normalizeLineKind(kind)];
+  }
+
+  function isCurvedLineKind(kind){
+    const normalized = normalizeLineKind(kind);
+    return normalized === 'curve' || normalized === 'curved-arrow';
+  }
+
+  function isArrowLineKind(kind){
+    const normalized = normalizeLineKind(kind);
+    return normalized === 'arrow' || normalized === 'curved-arrow';
+  }
+
+  function isLineLikeNode(node){
+    return !!node && (node.className === 'Line' || node.className === 'Arrow');
+  }
+
+  function getNodeLineKind(node){
+    if (!isLineLikeNode(node)) return 'line';
+    const fallback = node.className === 'Arrow' ? 'arrow' : 'line';
+    return normalizeLineKind(node.getAttr ? node.getAttr('lineKind') : '', fallback);
+  }
+
+  function getNodeDisplayLabel(node){
+    if (!node) return '';
+    if (isLineLikeNode(node)){
+      return getLineKindLabel(getNodeLineKind(node));
+    }
+    return node.className || 'Object';
+  }
+
+  function updateLineToolButton(){
+    if (!lineToolButton) return;
+    lineToolButton.textContent = `${getLineKindLabel(currentLineKind)}...`;
+    lineToolButton.title = 'Choose line, arrow, curve, or curved arrow. For curves, click to add bends and double-click or press Enter to finish.';
+  }
+
+  function openLineToolMenu(){
+    if (!lineToolButton || lineToolButton.disabled) return;
+    const rect = lineToolButton.getBoundingClientRect();
+    showContextMenu([
+      {
+        label: `${currentLineKind === 'line' ? '* ' : ''}${getLineKindLabel('line')}`,
+        action: () => {
+          currentLineKind = 'line';
+          updateLineToolButton();
+          setTool('line');
+        }
+      },
+      {
+        label: `${currentLineKind === 'arrow' ? '* ' : ''}${getLineKindLabel('arrow')}`,
+        action: () => {
+          currentLineKind = 'arrow';
+          updateLineToolButton();
+          setTool('line');
+        }
+      },
+      {
+        label: `${currentLineKind === 'curve' ? '* ' : ''}${getLineKindLabel('curve')} (click bends)`,
+        action: () => {
+          currentLineKind = 'curve';
+          updateLineToolButton();
+          setTool('line');
+        }
+      },
+      {
+        label: `${currentLineKind === 'curved-arrow' ? '* ' : ''}${getLineKindLabel('curved-arrow')} (click bends)`,
+        action: () => {
+          currentLineKind = 'curved-arrow';
+          updateLineToolButton();
+          setTool('line');
+        }
+      }
+    ], rect.left, rect.bottom + 8);
+  }
+
+  function buildLinePointsForKind(kind, start, end){
+    return [start.x, start.y, end.x, end.y];
   }
 
   function openEditorPersistenceDb(){
@@ -422,12 +516,18 @@
       };
     }
 
-    if (node.className === 'Line'){
+    if (isLineLikeNode(node)){
       return {
         ...common,
+        lineKind: getNodeLineKind(node),
         points: (node.points ? node.points() : []).map(point => roundMetric(point)),
         stroke: node.stroke ? (node.stroke() || '') : '',
-        strokeWidth: roundMetric(node.strokeWidth ? node.strokeWidth() : 0)
+        strokeWidth: roundMetric(node.strokeWidth ? node.strokeWidth() : 0),
+        fill: node.fill ? (node.fill() || '') : '',
+        bezier: !!(node.bezier && node.bezier()),
+        tension: roundMetric(node.tension ? node.tension() : 0),
+        pointerLength: roundMetric(node.pointerLength ? node.pointerLength() : 0),
+        pointerWidth: roundMetric(node.pointerWidth ? node.pointerWidth() : 0)
       };
     }
 
@@ -518,18 +618,28 @@
   }
 
   function createLineNodeFromSnapshot(data){
-    return new Konva.Line({
-      x: Number(data.x) || 0,
-      y: Number(data.y) || 0,
-      points: Array.isArray(data.points) ? data.points.map(point => Number(point) || 0) : [0, 0, 120, 0],
-      stroke: data.stroke || '#111111',
-      strokeWidth: Number(data.strokeWidth) || 2,
-      opacity: Number.isFinite(Number(data.opacity)) ? Number(data.opacity) : 1,
-      rotation: Number(data.rotation) || 0,
-      lineCap: 'round',
-      lineJoin: 'round',
-      strokeScaleEnabled: false
-    });
+    const kind = normalizeLineKind(data.lineKind, data.className === 'Arrow' ? 'arrow' : 'line');
+    return createLineNode(
+      0,
+      0,
+      120,
+      0,
+      kind,
+      {
+        x: Number(data.x) || 0,
+        y: Number(data.y) || 0,
+        points: Array.isArray(data.points) ? data.points.map(point => Number(point) || 0) : undefined,
+        stroke: data.stroke || '#111111',
+        fill: data.fill || data.stroke || '#111111',
+        strokeWidth: Number(data.strokeWidth) || 2,
+        bezier: !!data.bezier,
+        tension: Number.isFinite(Number(data.tension)) ? Number(data.tension) : undefined,
+        pointerLength: Number(data.pointerLength) || 18,
+        pointerWidth: Number(data.pointerWidth) || 18,
+        opacity: Number.isFinite(Number(data.opacity)) ? Number(data.opacity) : 1,
+        rotation: Number(data.rotation) || 0
+      }
+    );
   }
 
   function createTextNodeFromSnapshot(data){
@@ -624,6 +734,7 @@
         node = createEllipseNodeFromSnapshot(data);
         break;
       case 'Line':
+      case 'Arrow':
         node = createLineNodeFromSnapshot(data);
         break;
       case 'Image':
@@ -1712,6 +1823,7 @@
     createSlide();
     showSlide(0);
 
+    updateLineToolButton();
     bindStageEvents();
     bindUiEvents();
     syncSeedTextFromInput();
@@ -1761,6 +1873,9 @@
   function showSlide(index, options = {}){
     const syncSeedFromInput = options.syncSeedFromInput !== false;
     if (!slides[index]) return;
+    if (lineDraft){
+      cancelLineDraft();
+    }
     hideContextMenu();
     clearGuideLines();
     clearObjectAnimationTweens(true);
@@ -1965,6 +2080,32 @@
     stage.on('mousedown touchstart', (e) => {
       if (!isEditorActive) return;
       hideContextMenu();
+      const pos = getStagePointer();
+
+      if (currentTool === 'line' && pos){
+        if (isCurvedLineKind(currentLineKind)){
+          if (!lineDraft){
+            lineCurvePoints = [pos.x, pos.y];
+            lineDraft = createLineNode(pos.x, pos.y, pos.x, pos.y, currentLineKind, {
+              points: [pos.x, pos.y, pos.x, pos.y],
+              bezier: false,
+              tension: 0.5
+            });
+            lineDraft.listening(false);
+            addNode(lineDraft, true);
+          } else if (isCurveDraftActive()){
+            lineCurvePoints.push(pos.x, pos.y);
+            previewCurveDraft(pos);
+          }
+          return;
+        }
+
+        lineStart = pos;
+        lineDraft = createLineNode(pos.x, pos.y, pos.x, pos.y, currentLineKind);
+        addNode(lineDraft, true);
+        return;
+      }
+
       const target = resolveSelectableNode(e.target);
       const isEmpty = !target;
 
@@ -1974,7 +2115,6 @@
       }
 
       if (currentTool === 'text'){
-        const pos = getStagePointer();
         if (!pos) return;
         const textNode = createTextNode(pos.x, pos.y);
         addNode(textNode);
@@ -1984,7 +2124,6 @@
       }
 
       if (currentTool === 'rect'){
-        const pos = getStagePointer();
         if (!pos) return;
         const rect = createRectNode(pos.x, pos.y);
         addNode(rect);
@@ -1993,20 +2132,10 @@
       }
 
       if (currentTool === 'ellipse'){
-        const pos = getStagePointer();
         if (!pos) return;
         const ellipse = createEllipseNode(pos.x, pos.y);
         addNode(ellipse);
         setTool('select');
-        return;
-      }
-
-      if (currentTool === 'line'){
-        const pos = getStagePointer();
-        if (!pos) return;
-        lineStart = pos;
-        lineDraft = createLineNode(pos.x, pos.y, pos.x, pos.y);
-        addNode(lineDraft, true);
         return;
       }
 
@@ -2015,21 +2144,33 @@
 
     stage.on('mousemove touchmove', () => {
       if (!isEditorActive) return;
-      if (!lineDraft || !lineStart) return;
       const pos = getStagePointer();
       if (!pos) return;
-      lineDraft.points([lineStart.x, lineStart.y, pos.x, pos.y]);
-      currentLayer.batchDraw();
+      if (lineDraft && lineStart){
+        updateLineDraftPoints(pos);
+        currentLayer.batchDraw();
+        return;
+      }
+      if (isCurveDraftActive()){
+        previewCurveDraft(pos);
+      }
     });
 
     stage.on('mouseup touchend', () => {
       if (!isEditorActive) return;
-      if (!lineDraft) return;
-      selectNode(lineDraft);
-      lineDraft = null;
-      lineStart = null;
+      if (!lineDraft || !lineStart) return;
+      const completedNode = lineDraft;
+      clearLineDraftState();
+      selectNode(completedNode);
       setTool('select');
       scheduleThumbUpdate();
+      schedulePersistentSave();
+    });
+
+    stage.on('dblclick dbltap', () => {
+      if (!isEditorActive) return;
+      if (!isCurveDraftActive()) return;
+      finalizeCurveDraft();
     });
 
     stage.on('contextmenu', (e) => {
@@ -2132,8 +2273,10 @@
   function bindUiEvents(){
     toolButtons.forEach(btn => {
       btn.addEventListener('click', () => {
+        if (btn.disabled) return;
         const tool = btn.getAttribute('data-tool');
         if (!tool) return;
+        hideContextMenu();
         if (tool === 'image'){
           if (imageInput) imageInput.click();
           return;
@@ -2144,6 +2287,10 @@
         }
         if (tool === 'file'){
           if (fileInput) fileInput.click();
+          return;
+        }
+        if (tool === 'line'){
+          openLineToolMenu();
           return;
         }
         setTool(tool);
@@ -2196,6 +2343,21 @@
       if (!isEditorActive) return;
       const tag = document.activeElement ? document.activeElement.tagName : '';
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || isEditingText()) return;
+
+      if (isCurveDraftActive()){
+        if (e.key === 'Enter'){
+          finalizeCurveDraft();
+          e.preventDefault();
+          return;
+        }
+        if (e.key === 'Escape'){
+          cancelLineDraft();
+          setTool('select');
+          e.preventDefault();
+          return;
+        }
+      }
+
       const isAccel = e.ctrlKey || e.metaKey;
 
       if (isAccel && e.key.toLowerCase() === 'c'){
@@ -2325,8 +2487,11 @@
     if (propStroke){
       propStroke.addEventListener('input', () => {
         if (!selectedNode) return;
-        if (selectedNode.className === 'Rect' || selectedNode.className === 'Ellipse' || selectedNode.className === 'Line'){
+        if (selectedNode.className === 'Rect' || selectedNode.className === 'Ellipse' || isLineLikeNode(selectedNode)){
           selectedNode.stroke(propStroke.value);
+          if (selectedNode.className === 'Arrow' && selectedNode.fill){
+            selectedNode.fill(propStroke.value);
+          }
           currentLayer.batchDraw();
           scheduleThumbUpdate();
         }
@@ -2336,10 +2501,15 @@
     if (propStrokeWidth){
       propStrokeWidth.addEventListener('change', () => {
         if (!selectedNode) return;
-        if (selectedNode.className === 'Rect' || selectedNode.className === 'Ellipse' || selectedNode.className === 'Line'){
+        if (selectedNode.className === 'Rect' || selectedNode.className === 'Ellipse' || isLineLikeNode(selectedNode)){
           const value = Number(propStrokeWidth.value);
           if (!Number.isFinite(value)) return;
           selectedNode.strokeWidth(Math.max(0, value));
+          if (selectedNode.className === 'Arrow'){
+            const pointerSize = Math.max(10, value * 6);
+            if (selectedNode.pointerLength) selectedNode.pointerLength(pointerSize);
+            if (selectedNode.pointerWidth) selectedNode.pointerWidth(pointerSize);
+          }
           currentLayer.batchDraw();
           scheduleThumbUpdate();
         }
@@ -2407,7 +2577,11 @@
   }
 
   function setTool(tool){
-    currentTool = tool || 'select';
+    const nextTool = tool || 'select';
+    if (lineDraft && nextTool !== 'line'){
+      cancelLineDraft();
+    }
+    currentTool = nextTool;
     toolButtons.forEach(btn => {
       btn.classList.toggle('is-active', btn.getAttribute('data-tool') === currentTool);
     });
@@ -2562,21 +2736,27 @@
       if (textPanel) textPanel.style.display = 'none';
       if (shapePanel) shapePanel.style.display = 'none';
       if (commonPanel) commonPanel.style.display = 'none';
+      if (propShapeFill) propShapeFill.disabled = false;
       if (propAnimPreview) propAnimPreview.disabled = true;
       return;
     }
 
     const animationConfig = getNodeAnimationConfig(node);
+    const displayLabel = getNodeDisplayLabel(node);
     selectionLabel.textContent = animationConfig.type === 'none'
-      ? `${node.className}`
-      : `${node.className} - ${getNodeAnimationLabel(animationConfig.type)}`;
+      ? displayLabel
+      : `${displayLabel} - ${getNodeAnimationLabel(animationConfig.type)}`;
     if (commonPanel) commonPanel.style.display = 'flex';
 
     const isText = node.className === 'Text';
-    const isShape = node.className === 'Rect' || node.className === 'Ellipse' || node.className === 'Line';
+    const isShape = node.className === 'Rect' || node.className === 'Ellipse' || isLineLikeNode(node);
+    const isLineLike = isLineLikeNode(node);
 
     if (textPanel) textPanel.style.display = isText ? 'flex' : 'none';
     if (shapePanel) shapePanel.style.display = isShape ? 'flex' : 'none';
+    if (propShapeFill && !isShape){
+      propShapeFill.disabled = false;
+    }
 
     if (isText){
       if (propFont) propFont.value = node.fontFamily() || 'Arial';
@@ -2589,6 +2769,9 @@
       if (propShapeFill && node.fill) propShapeFill.value = normalizeColor(node.fill(), '#ffffff');
       if (propStroke && node.stroke) propStroke.value = normalizeColor(node.stroke(), '#111111');
       if (propStrokeWidth && node.strokeWidth) propStrokeWidth.value = String(Math.round(node.strokeWidth()));
+      if (propShapeFill){
+        propShapeFill.disabled = isLineLike;
+      }
     }
 
     if (propOpacity) propOpacity.value = String(node.opacity() ?? 1);
@@ -2677,15 +2860,26 @@
       node.radius({ x: nextX, y: nextY });
       node.scaleX(1);
       node.scaleY(1);
-    } else if (node.className === 'Line'){
+    } else if (isLineLikeNode(node)){
+      const box = node.getClientRect({ relativeTo: currentLayer });
+      const localCenterX = box.x + box.width / 2 - node.x();
+      const localCenterY = box.y + box.height / 2 - node.y();
       const points = node.points();
       const newPoints = [];
       for (let i = 0; i < points.length; i += 2){
-        newPoints.push(points[i] * scaleX, points[i + 1] * scaleY);
+        newPoints.push(
+          localCenterX + (points[i] - localCenterX) * scaleX,
+          localCenterY + (points[i + 1] - localCenterY) * scaleY
+        );
       }
       node.points(newPoints);
       node.scaleX(1);
       node.scaleY(1);
+      const nextBox = node.getClientRect({ relativeTo: currentLayer });
+      node.position({
+        x: node.x() + ((box.x + box.width / 2) - (nextBox.x + nextBox.width / 2)),
+        y: node.y() + ((box.y + box.height / 2) - (nextBox.y + nextBox.height / 2))
+      });
     }
 
     currentLayer.batchDraw();
@@ -2714,15 +2908,19 @@
         x: Math.max(MIN_SIZE / 2, radius.x * factor),
         y: Math.max(MIN_SIZE / 2, radius.y * factor)
       });
-    } else if (node.className === 'Line'){
+    } else if (isLineLikeNode(node)){
       const points = node.points();
-      const lineCenterX = (points[0] + points[2]) / 2;
-      const lineCenterY = (points[1] + points[3]) / 2;
+      const localCenterX = centerX - node.x();
+      const localCenterY = centerY - node.y();
+      const nextPoints = [];
+      for (let i = 0; i < points.length; i += 2){
+        nextPoints.push(
+          localCenterX + (points[i] - localCenterX) * factor,
+          localCenterY + (points[i + 1] - localCenterY) * factor
+        );
+      }
       node.points([
-        lineCenterX + (points[0] - lineCenterX) * factor,
-        lineCenterY + (points[1] - lineCenterY) * factor,
-        lineCenterX + (points[2] - lineCenterX) * factor,
-        lineCenterY + (points[3] - lineCenterY) * factor
+        ...nextPoints
       ]);
       node.strokeWidth(Math.max(1, node.strokeWidth() * factor));
     }
@@ -2769,15 +2967,114 @@
     });
   }
 
-  function createLineNode(x1, y1, x2, y2){
-    return new Konva.Line({
-      points: [x1, y1, x2, y2],
-      stroke: '#111111',
-      strokeWidth: 2,
+  function createLineNode(x1, y1, x2, y2, kind = currentLineKind, overrides = {}){
+    const normalizedKind = normalizeLineKind(kind);
+    const points = Array.isArray(overrides.points)
+      ? overrides.points.map(point => Number(point) || 0)
+      : buildLinePointsForKind(normalizedKind, { x: x1, y: y1 }, { x: x2, y: y2 });
+    const common = {
+      x: Number(overrides.x) || 0,
+      y: Number(overrides.y) || 0,
+      points,
+      stroke: overrides.stroke || '#111111',
+      strokeWidth: Number(overrides.strokeWidth) || 2,
+      opacity: Number.isFinite(Number(overrides.opacity)) ? Number(overrides.opacity) : 1,
+      rotation: Number(overrides.rotation) || 0,
       lineCap: 'round',
       lineJoin: 'round',
-      strokeScaleEnabled: false
-    });
+      strokeScaleEnabled: false,
+      bezier: Object.prototype.hasOwnProperty.call(overrides, 'bezier')
+        ? !!overrides.bezier
+        : false,
+      tension: Number.isFinite(Number(overrides.tension))
+        ? Number(overrides.tension)
+        : (isCurvedLineKind(normalizedKind) ? 0.5 : 0)
+    };
+    const pointerSize = Math.max(10, common.strokeWidth * 6);
+    const node = isArrowLineKind(normalizedKind)
+      ? new Konva.Arrow({
+          ...common,
+          fill: overrides.fill || overrides.stroke || '#111111',
+          pointerLength: Number(overrides.pointerLength) || pointerSize,
+          pointerWidth: Number(overrides.pointerWidth) || pointerSize,
+          pointerAtBeginning: false,
+          pointerAtEnding: true
+        })
+      : new Konva.Line(common);
+    node.setAttr('lineKind', normalizedKind);
+    return node;
+  }
+
+  function updateLineDraftPoints(endPos){
+    if (!lineDraft || !lineStart || !endPos) return;
+    lineDraft.points(buildLinePointsForKind(getNodeLineKind(lineDraft), lineStart, endPos));
+    if (lineDraft.className === 'Arrow' && lineDraft.fill){
+      lineDraft.fill(lineDraft.stroke() || '#111111');
+    }
+  }
+
+  function isCurveDraftActive(){
+    return !!lineDraft && isCurvedLineKind(getNodeLineKind(lineDraft)) && lineCurvePoints.length >= 2;
+  }
+
+  function dedupeLinePoints(points){
+    const deduped = [];
+    for (let i = 0; i < points.length; i += 2){
+      const x = points[i];
+      const y = points[i + 1];
+      const prevX = deduped[deduped.length - 2];
+      const prevY = deduped[deduped.length - 1];
+      if (deduped.length && Math.abs(prevX - x) < 0.5 && Math.abs(prevY - y) < 0.5){
+        continue;
+      }
+      deduped.push(x, y);
+    }
+    return deduped;
+  }
+
+  function clearLineDraftState(){
+    lineDraft = null;
+    lineStart = null;
+    lineCurvePoints = [];
+  }
+
+  function cancelLineDraft(){
+    if (!lineDraft || !currentLayer) {
+      clearLineDraftState();
+      return;
+    }
+    const draft = lineDraft;
+    clearLineDraftState();
+    draft.destroy();
+    currentLayer.batchDraw();
+    refreshHasContent();
+    scheduleThumbUpdate();
+  }
+
+  function previewCurveDraft(pos){
+    if (!isCurveDraftActive() || !pos) return;
+    lineDraft.points([...lineCurvePoints, pos.x, pos.y]);
+    currentLayer.batchDraw();
+  }
+
+  function finalizeCurveDraft(){
+    if (!isCurveDraftActive()) return;
+    const nextPoints = dedupeLinePoints(lineCurvePoints);
+    if (nextPoints.length < 4){
+      cancelLineDraft();
+      setTool('select');
+      return;
+    }
+    lineDraft.points(nextPoints);
+    lineDraft.listening(true);
+    const completedNode = lineDraft;
+    clearLineDraftState();
+    currentLayer.batchDraw();
+    selectNode(completedNode);
+    setTool('select');
+    refreshHasContent();
+    scheduleThumbUpdate();
+    schedulePersistentSave();
   }
 
   function createTextNode(x, y){

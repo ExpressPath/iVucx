@@ -390,10 +390,30 @@ app.all('/api/suggest', wrap(suggest));
 
 app.use(express.static(__dirname, { dotfiles: 'ignore', extensions: ['html'] }));
 
+app.get('/healthz', (req, res) => {
+  res.status(200).type('text/plain').send('ok');
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[ivucx] server listening on :${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0';
+const server = app.listen(PORT, HOST, () => {
+  const address = server.address();
+  const host = address && typeof address === 'object' ? address.address : HOST;
+  const port = address && typeof address === 'object' ? address.port : PORT;
+  console.log(`[ivucx] server listening on ${host}:${port}`);
+});
+
+server.on('error', (err) => {
+  console.error('[ivucx] server failed to bind', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[ivucx] uncaught exception', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[ivucx] unhandled rejection', reason);
 });
