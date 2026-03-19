@@ -230,7 +230,7 @@
       backdrop-filter:blur(10px);
     }
 
-    body.scrolled .search-container.expanded.slide-css-editing{
+    body.scrolled .search-container.expanded.slide-css-editing .search-box{
       grid-template-columns:40px minmax(0,1fr) 320px;
     }
 
@@ -560,8 +560,20 @@
           "status actions";
       }
 
+      body.scrolled .search-container.expanded.slide-css-editing .search-box{
+        grid-template-columns:40px minmax(0,1fr) 300px;
+        grid-template-areas:
+          "toolbar toolbar toolbar"
+          "thumbs canvas inspector"
+          "status status actions";
+      }
+
       body.scrolled .search-container.expanded .slide-inspector{
         display:none;
+      }
+
+      body.scrolled .search-container.expanded.slide-css-editing .slide-inspector{
+        display:flex;
       }
     }
 

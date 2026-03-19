@@ -425,7 +425,24 @@
 
   function getVideoNodesForLayer(layer){
     if (!layer) return [];
-    return layer.find(node => node.getAttr && node.getAttr('assetType') === 'video').toArray();
+    const found = layer.find(node => node.getAttr && node.getAttr('assetType') === 'video');
+    if (!found) return [];
+    if (Array.isArray(found)) return found.slice();
+    if (typeof found.toArray === 'function') return found.toArray();
+    if (typeof found.each === 'function'){
+      const nodes = [];
+      found.each(node => nodes.push(node));
+      return nodes;
+    }
+    if (typeof found.forEach === 'function'){
+      const nodes = [];
+      found.forEach(node => nodes.push(node));
+      return nodes;
+    }
+    if (typeof found.length === 'number'){
+      return Array.prototype.slice.call(found);
+    }
+    return [];
   }
 
   function createDetachedVideoElement(src){
@@ -4294,6 +4311,7 @@
     }
     if (thumbsEl && wasStowed !== isCssEdit && isInitialized){
       renderThumbs();
+      requestAnimationFrame(() => resizeStage());
     }
     if (propAnimCssWrap){
       propAnimCssWrap.style.display = isCssEdit ? 'flex' : 'none';
