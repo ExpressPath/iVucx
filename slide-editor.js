@@ -1149,6 +1149,13 @@
 
     shell.append(header, docScrollEl);
     docViewer.appendChild(shell);
+    docViewer.addEventListener('contextmenu', (e) => {
+      const slide = getCurrentSlide();
+      if (!slide || slide.type !== 'document' || !slide.document) return;
+      if (!isEditorActive || isPresentationMode) return;
+      e.preventDefault();
+      showContextMenu(getDocumentContextMenuItems(currentSlideIndex), e.clientX, e.clientY);
+    });
     slideCanvas.appendChild(docViewer);
     return docViewer;
   }
@@ -1161,6 +1168,24 @@
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  }
+
+  function getDocumentContextMenuItems(index){
+    const slide = slides[index];
+    if (!slide || slide.type !== 'document' || !slide.document){
+      return [];
+    }
+    return [
+      {
+        label: 'Download file',
+        action: () => downloadDocumentFile(slide.document)
+      },
+      {
+        label: 'Delete slide',
+        action: () => deleteSlideAt(index),
+        danger: true
+      }
+    ];
   }
 
   function getFileExtension(name){
@@ -1577,13 +1602,17 @@
     }
 
     if (isDocumentSlide()){
-      if (e.key === 'ArrowRight' || e.key === 'PageDown' || isSpace){
+      if (e.key === 'PageDown' || isSpace){
         moveSlide(1);
         e.preventDefault();
         return true;
       }
-      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace'){
+      if (e.key === 'PageUp' || e.key === 'Backspace'){
         moveSlide(-1);
+        e.preventDefault();
+        return true;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
         e.preventDefault();
         return true;
       }
@@ -1849,13 +1878,16 @@
       thumb.addEventListener('contextmenu', (e) => {
         if (!isEditorActive) return;
         e.preventDefault();
-        showContextMenu([
-          {
-            label: 'Delete slide',
-            action: () => deleteSlideAt(index),
-            danger: true
-          }
-        ], e.clientX, e.clientY);
+        const items = slide.type === 'document'
+          ? getDocumentContextMenuItems(index)
+          : [
+              {
+                label: 'Delete slide',
+                action: () => deleteSlideAt(index),
+                danger: true
+              }
+            ];
+        showContextMenu(items, e.clientX, e.clientY);
       });
       thumbsEl.appendChild(thumb);
     });
