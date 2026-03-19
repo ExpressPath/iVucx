@@ -195,10 +195,11 @@
 
   function centerNodeOnSlide(node, layer = currentLayer){
     if (!node || !layer) return;
+    const frameRect = getSlideFrameRect(layer);
     const box = node.getClientRect({ relativeTo: layer });
     node.position({
-      x: node.x() + (SLIDE_WIDTH / 2 - (box.x + box.width / 2)),
-      y: node.y() + (SLIDE_HEIGHT / 2 - (box.y + box.height / 2))
+      x: node.x() + (frameRect.x + frameRect.width / 2 - (box.x + box.width / 2)),
+      y: node.y() + (frameRect.y + frameRect.height / 2 - (box.y + box.height / 2))
     });
   }
 
@@ -858,14 +859,19 @@
 
   function drawGuideLine(orientation, guide, box){
     if (!uiLayer) return;
+    const frameRect = getSlideFrameRect(currentLayer);
     const guideValue = typeof guide.value === 'number' ? guide.value : guide;
     const isCenterGuide = guide && guide.kind === 'slide-center';
+    const minBound = orientation === 'vertical' ? frameRect.y : frameRect.x;
+    const maxBound = orientation === 'vertical'
+      ? frameRect.y + frameRect.height
+      : frameRect.x + frameRect.width;
     const start = orientation === 'vertical'
-      ? (isCenterGuide ? 0 : Math.max(0, Math.min(guide.start ?? 0, box ? box.y : 0)))
-      : (isCenterGuide ? 0 : Math.max(0, Math.min(guide.start ?? 0, box ? box.x : 0)));
+      ? Math.max(minBound, Math.min(maxBound, guide.start ?? minBound))
+      : Math.max(minBound, Math.min(maxBound, guide.start ?? minBound));
     const end = orientation === 'vertical'
-      ? (isCenterGuide ? SLIDE_HEIGHT : Math.min(SLIDE_HEIGHT, Math.max(guide.end ?? SLIDE_HEIGHT, box ? (box.y + box.height) : SLIDE_HEIGHT)))
-      : (isCenterGuide ? SLIDE_WIDTH : Math.min(SLIDE_WIDTH, Math.max(guide.end ?? SLIDE_WIDTH, box ? (box.x + box.width) : SLIDE_WIDTH)));
+      ? Math.max(start, Math.min(maxBound, guide.end ?? maxBound))
+      : Math.max(start, Math.min(maxBound, guide.end ?? maxBound));
     const points = orientation === 'vertical'
       ? [guideValue, start, guideValue, end]
       : [start, guideValue, end, guideValue];
@@ -882,16 +888,44 @@
     transformer.moveToTop();
   }
 
+  function getSlideFrameRect(layer = currentLayer){
+    if (!layer) return {
+      x: 0,
+      y: 0,
+      width: SLIDE_WIDTH,
+      height: SLIDE_HEIGHT
+    };
+
+    const backgroundNode = layer.getChildren(node => node.getAttr && node.getAttr('isBackground'))[0];
+    if (!backgroundNode){
+      return {
+        x: 0,
+        y: 0,
+        width: SLIDE_WIDTH,
+        height: SLIDE_HEIGHT
+      };
+    }
+
+    const box = backgroundNode.getClientRect({ relativeTo: layer });
+    return {
+      x: box.x,
+      y: box.y,
+      width: box.width,
+      height: box.height
+    };
+  }
+
   function collectSnapGuides(node){
+    const frameRect = getSlideFrameRect(currentLayer);
     const vertical = [
-      { value: 0, start: 0, end: SLIDE_HEIGHT, kind: 'slide-edge', priority: 8 },
-      { value: SLIDE_WIDTH / 2, start: 0, end: SLIDE_HEIGHT, kind: 'slide-center', priority: 0 },
-      { value: SLIDE_WIDTH, start: 0, end: SLIDE_HEIGHT, kind: 'slide-edge', priority: 8 }
+      { value: frameRect.x, start: frameRect.y, end: frameRect.y + frameRect.height, kind: 'slide-edge', priority: 8 },
+      { value: frameRect.x + frameRect.width / 2, start: frameRect.y, end: frameRect.y + frameRect.height, kind: 'slide-center', priority: 0 },
+      { value: frameRect.x + frameRect.width, start: frameRect.y, end: frameRect.y + frameRect.height, kind: 'slide-edge', priority: 8 }
     ];
     const horizontal = [
-      { value: 0, start: 0, end: SLIDE_WIDTH, kind: 'slide-edge', priority: 8 },
-      { value: SLIDE_HEIGHT / 2, start: 0, end: SLIDE_WIDTH, kind: 'slide-center', priority: 0 },
-      { value: SLIDE_HEIGHT, start: 0, end: SLIDE_WIDTH, kind: 'slide-edge', priority: 8 }
+      { value: frameRect.y, start: frameRect.x, end: frameRect.x + frameRect.width, kind: 'slide-edge', priority: 8 },
+      { value: frameRect.y + frameRect.height / 2, start: frameRect.x, end: frameRect.x + frameRect.width, kind: 'slide-center', priority: 0 },
+      { value: frameRect.y + frameRect.height, start: frameRect.x, end: frameRect.x + frameRect.width, kind: 'slide-edge', priority: 8 }
     ];
 
     getContentNodes(currentLayer).forEach(otherNode => {
@@ -1974,6 +2008,10 @@
 
     const resizeObserver = new ResizeObserver(() => resizeStage());
     resizeObserver.observe(stageHost);
+    window.addEventListener('resize', resizeStage);
+    if (window.visualViewport){
+      window.visualViewport.addEventListener('resize', resizeStage);
+    }
 
     stageHost.addEventListener('contextmenu', (e) => {
       if (isEditorActive){
@@ -2125,10 +2163,39 @@
     schedulePersistentSave();
   }
 
+  function getPresentationViewportRect(){
+    const viewport = window.visualViewport;
+    return {
+      width: Math.max(
+        2,
+        Math.round(
+          (viewport && viewport.width)
+          || window.innerWidth
+          || (slideCanvas ? slideCanvas.clientWidth : 0)
+          || stageHost.clientWidth
+          || SLIDE_WIDTH
+        )
+      ),
+      height: Math.max(
+        2,
+        Math.round(
+          (viewport && viewport.height)
+          || window.innerHeight
+          || (slideCanvas ? slideCanvas.clientHeight : 0)
+          || stageHost.clientHeight
+          || SLIDE_HEIGHT
+        )
+      )
+    };
+  }
+
   function resizeStage(){
     if (!stage || !stageHost) return;
-    const hostWidth = isPresentationMode && slideCanvas ? slideCanvas.clientWidth : stageHost.clientWidth;
-    const hostHeight = isPresentationMode && slideCanvas ? slideCanvas.clientHeight : stageHost.clientHeight;
+    const hostRect = isPresentationMode
+      ? getPresentationViewportRect()
+      : stageHost.getBoundingClientRect();
+    const hostWidth = Math.round(hostRect.width || stageHost.clientWidth || SLIDE_WIDTH);
+    const hostHeight = Math.round(hostRect.height || stageHost.clientHeight || SLIDE_HEIGHT);
     if (isPresentationMode){
       stageHost.style.width = `${hostWidth}px`;
       stageHost.style.height = `${hostHeight}px`;
@@ -2139,6 +2206,7 @@
     const w = hostWidth;
     const h = hostHeight;
     if (w < 2 || h < 2) return;
+    stage.size({ width: w, height: h });
     fitScale = Math.min(w / SLIDE_WIDTH, h / SLIDE_HEIGHT);
     const effectiveZoom = isPresentationMode ? 1 : zoom;
     const scale = fitScale * effectiveZoom;
@@ -2423,14 +2491,15 @@
       const dataUrl = await readFileAsDataUrl(file);
       const img = new Image();
       img.onload = () => {
-        const maxW = SLIDE_WIDTH / 2;
-        const maxH = SLIDE_HEIGHT / 2;
+        const frameRect = getSlideFrameRect(currentLayer);
+        const maxW = frameRect.width / 2;
+        const maxH = frameRect.height / 2;
         const scale = Math.min(maxW / img.width, maxH / img.height, 1);
         const width = img.width * scale;
         const height = img.height * scale;
         const node = new Konva.Image({
-          x: SLIDE_WIDTH / 2 - width / 2,
-          y: SLIDE_HEIGHT / 2 - height / 2,
+          x: frameRect.x + frameRect.width / 2 - width / 2,
+          y: frameRect.y + frameRect.height / 2 - height / 2,
           image: img,
           width,
           height,
@@ -2459,16 +2528,17 @@
       video.loop = true;
       video.playsInline = true;
       video.addEventListener('loadeddata', () => {
+        const frameRect = getSlideFrameRect(currentLayer);
         const width = video.videoWidth || 640;
         const height = video.videoHeight || 360;
-        const maxW = SLIDE_WIDTH / 2;
-        const maxH = SLIDE_HEIGHT / 2;
+        const maxW = frameRect.width / 2;
+        const maxH = frameRect.height / 2;
         const scale = Math.min(maxW / width, maxH / height, 1);
         const fitW = width * scale;
         const fitH = height * scale;
         const node = new Konva.Image({
-          x: SLIDE_WIDTH / 2 - fitW / 2,
-          y: SLIDE_HEIGHT / 2 - fitH / 2,
+          x: frameRect.x + frameRect.width / 2 - fitW / 2,
+          y: frameRect.y + frameRect.height / 2 - fitH / 2,
           image: video,
           width: fitW,
           height: fitH,
@@ -2605,27 +2675,28 @@
 
   function alignSelected(action){
     if (!selectedNode) return;
+    const frameRect = getSlideFrameRect(currentLayer);
     const box = selectedNode.getClientRect({ relativeTo: currentLayer });
     const target = { x: selectedNode.x(), y: selectedNode.y() };
 
     switch(action){
       case 'align-left':
-        target.x = selectedNode.x() + (0 - box.x);
+        target.x = selectedNode.x() + (frameRect.x - box.x);
         break;
       case 'align-center':
-        target.x = selectedNode.x() + (SLIDE_WIDTH / 2 - (box.x + box.width / 2));
+        target.x = selectedNode.x() + (frameRect.x + frameRect.width / 2 - (box.x + box.width / 2));
         break;
       case 'align-right':
-        target.x = selectedNode.x() + (SLIDE_WIDTH - (box.x + box.width));
+        target.x = selectedNode.x() + (frameRect.x + frameRect.width - (box.x + box.width));
         break;
       case 'align-top':
-        target.y = selectedNode.y() + (0 - box.y);
+        target.y = selectedNode.y() + (frameRect.y - box.y);
         break;
       case 'align-middle':
-        target.y = selectedNode.y() + (SLIDE_HEIGHT / 2 - (box.y + box.height / 2));
+        target.y = selectedNode.y() + (frameRect.y + frameRect.height / 2 - (box.y + box.height / 2));
         break;
       case 'align-bottom':
-        target.y = selectedNode.y() + (SLIDE_HEIGHT - (box.y + box.height));
+        target.y = selectedNode.y() + (frameRect.y + frameRect.height - (box.y + box.height));
         break;
       default:
         return;
