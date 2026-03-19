@@ -230,6 +230,10 @@
       backdrop-filter:blur(10px);
     }
 
+    body.scrolled .search-container.expanded.slide-css-editing{
+      grid-template-columns:140px minmax(0,1fr) 320px;
+    }
+
     body.scrolled .search-container.expanded .slide-toolbar{
       grid-area:toolbar;
       display:flex;
@@ -1964,6 +1968,7 @@
               <option value="from-top">From Top</option>
               <option value="from-bottom">From Bottom</option>
               <option value="draw-arrow">Draw From Tail</option>
+              <option value="css-edit">CSS Edit</option>
             </select>
           </label>
           <label class="slide-control">
@@ -1978,6 +1983,11 @@
             <span>Order</span>
             <input type="number" id="propAnimOrder" min="1" max="99" step="1" value="1" />
           </label>
+          <label class="slide-control slide-control-stack" id="propAnimCssWrap">
+            <span>CSS</span>
+            <textarea id="propAnimCss" rows="8" spellcheck="false" placeholder="from { opacity: 0; transform: translateX(-120px) scale(.85); }&#10;to { opacity: 1; transform: translateX(0) scale(1); }"></textarea>
+          </label>
+          <div class="slide-panel-note" id="propAnimCssStatus">Use from/to blocks with opacity and transform.</div>
           <button class="slide-toolbar-button slide-preview-button" id="propAnimPreview" type="button">Preview Motion</button>
         </div>
         <div class="slide-panel" id="slideMediaPanel">

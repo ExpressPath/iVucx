@@ -33,6 +33,9 @@
   const propAnimDuration = document.getElementById('propAnimDuration');
   const propAnimDelay = document.getElementById('propAnimDelay');
   const propAnimOrder = document.getElementById('propAnimOrder');
+  const propAnimCssWrap = document.getElementById('propAnimCssWrap');
+  const propAnimCss = document.getElementById('propAnimCss');
+  const propAnimCssStatus = document.getElementById('propAnimCssStatus');
   const propAnimPreview = document.getElementById('propAnimPreview');
   const propVideoAction = document.getElementById('propVideoAction');
   const propVideoSound = document.getElementById('propVideoSound');
@@ -60,9 +63,10 @@
     order: 0,
     videoAction: 'none',
     videoSound: 'mute',
-    videoLoop: true
+    videoLoop: true,
+    cssText: ''
   });
-  const NODE_ANIMATION_TYPES = new Set(['none', 'fade', 'zoom', 'from-left', 'from-right', 'from-top', 'from-bottom', 'draw-arrow']);
+  const NODE_ANIMATION_TYPES = new Set(['none', 'fade', 'zoom', 'from-left', 'from-right', 'from-top', 'from-bottom', 'draw-arrow', 'css-edit']);
   const NODE_ANIMATION_OFFSET = 84;
   const SHAPE_KIND_LABELS = Object.freeze({
     rect: 'Shape',
@@ -76,6 +80,7 @@
   });
   const VIDEO_ANIMATION_ACTIONS = new Set(['none', 'play', 'pause', 'restart']);
   const VIDEO_SOUND_MODES = new Set(['mute', 'sound']);
+  const CSS_ANIMATION_MAX_LENGTH = 2400;
   const EQUATION_FONT_STACK = '"Cambria Math","STIX Two Math","Times New Roman",serif';
   const EQUATION_SHORTCUTS = Object.freeze({
     alpha: '\u03B1',
@@ -550,6 +555,195 @@
     positionEquationPopover();
   }
 
+  function parseCssUnit(value, unit, { min = -Infinity, max = Infinity } = {}){
+    const match = String(value || '').trim().match(new RegExp(`^(-?\\d+(?:\\.\\d+)?)${unit}$`, 'i'));
+    if (!match) return null;
+    const numeric = Number(match[1]);
+    if (!Number.isFinite(numeric)) return null;
+    return Math.min(max, Math.max(min, numeric));
+  }
+
+  function parseCssTransformValue(value){
+    const result = {
+      translateX: 0,
+      translateY: 0,
+      scaleX: 1,
+      scaleY: 1,
+      rotate: 0
+    };
+    const input = String(value || '').trim();
+    if (!input) return { ok: true, value: result };
+    const transformPattern = /([a-zA-Z]+)\(([^)]*)\)/g;
+    let match = null;
+    let consumed = '';
+    while ((match = transformPattern.exec(input))){
+      consumed += match[0];
+      const fn = match[1].toLowerCase();
+      const rawArgs = match[2].split(',').map(part => part.trim()).filter(Boolean);
+      switch (fn){
+        case 'translatex': {
+          const amount = parseCssUnit(rawArgs[0], 'px', { min: -4000, max: 4000 });
+          if (amount == null) return { ok: false, message: 'translateX expects px.' };
+          result.translateX += amount;
+          break;
+        }
+        case 'translatey': {
+          const amount = parseCssUnit(rawArgs[0], 'px', { min: -4000, max: 4000 });
+          if (amount == null) return { ok: false, message: 'translateY expects px.' };
+          result.translateY += amount;
+          break;
+        }
+        case 'translate': {
+          const xAmount = parseCssUnit(rawArgs[0], 'px', { min: -4000, max: 4000 });
+          const yAmount = rawArgs.length > 1 ? parseCssUnit(rawArgs[1], 'px', { min: -4000, max: 4000 }) : 0;
+          if (xAmount == null || yAmount == null) return { ok: false, message: 'translate expects px values.' };
+          result.translateX += xAmount;
+          result.translateY += yAmount;
+          break;
+        }
+        case 'scale': {
+          const xScale = Number(rawArgs[0]);
+          const yScale = rawArgs.length > 1 ? Number(rawArgs[1]) : xScale;
+          if (!Number.isFinite(xScale) || !Number.isFinite(yScale)) return { ok: false, message: 'scale expects numbers.' };
+          result.scaleX *= Math.max(0.01, Math.min(20, xScale));
+          result.scaleY *= Math.max(0.01, Math.min(20, yScale));
+          break;
+        }
+        case 'scalex': {
+          const xScale = Number(rawArgs[0]);
+          if (!Number.isFinite(xScale)) return { ok: false, message: 'scaleX expects a number.' };
+          result.scaleX *= Math.max(0.01, Math.min(20, xScale));
+          break;
+        }
+        case 'scaley': {
+          const yScale = Number(rawArgs[0]);
+          if (!Number.isFinite(yScale)) return { ok: false, message: 'scaleY expects a number.' };
+          result.scaleY *= Math.max(0.01, Math.min(20, yScale));
+          break;
+        }
+        case 'rotate': {
+          const angle = parseCssUnit(rawArgs[0], 'deg', { min: -3600, max: 3600 });
+          if (angle == null) return { ok: false, message: 'rotate expects deg.' };
+          result.rotate += angle;
+          break;
+        }
+        default:
+          return { ok: false, message: `Unsupported transform "${match[1]}"` };
+      }
+    }
+    const rest = input.replace(transformPattern, '').trim();
+    if (rest){
+      return { ok: false, message: 'Only translate, scale, and rotate are supported.' };
+    }
+    return { ok: true, value: result };
+  }
+
+  function parseCssAnimationDeclarations(source){
+    const declarationSource = String(source || '').trim();
+    const result = {};
+    if (!declarationSource) return { ok: true, value: result };
+    const declarations = declarationSource.split(';').map(part => part.trim()).filter(Boolean);
+    for (const declaration of declarations){
+      const colonIndex = declaration.indexOf(':');
+      if (colonIndex === -1){
+        return { ok: false, message: 'Each CSS line needs property: value.' };
+      }
+      const property = declaration.slice(0, colonIndex).trim().toLowerCase();
+      const value = declaration.slice(colonIndex + 1).trim();
+      if (property === 'opacity'){
+        const opacity = Number(value);
+        if (!Number.isFinite(opacity)){
+          return { ok: false, message: 'opacity expects a number.' };
+        }
+        result.opacity = Math.max(0, Math.min(1, opacity));
+        continue;
+      }
+      if (property === 'transform'){
+        const transform = parseCssTransformValue(value);
+        if (!transform.ok) return transform;
+        result.transform = transform.value;
+        continue;
+      }
+      return { ok: false, message: `Unsupported CSS property "${property}"` };
+    }
+    return { ok: true, value: result };
+  }
+
+  function parseCustomCssAnimationText(cssText){
+    const source = String(cssText || '').trim();
+    if (!source){
+      return { ok: false, message: 'Write from/to CSS before previewing.' };
+    }
+    if (source.length > CSS_ANIMATION_MAX_LENGTH){
+      return { ok: false, message: `CSS is limited to ${CSS_ANIMATION_MAX_LENGTH} characters.` };
+    }
+    const normalized = source.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const blockPattern = /(from|to|0%|100%)\s*\{([\s\S]*?)\}/gi;
+    const blocks = {};
+    let match = null;
+    while ((match = blockPattern.exec(normalized))){
+      const key = match[1].toLowerCase() === '0%' ? 'from' : (match[1].toLowerCase() === '100%' ? 'to' : match[1].toLowerCase());
+      const parsed = parseCssAnimationDeclarations(match[2]);
+      if (!parsed.ok){
+        return parsed;
+      }
+      blocks[key] = parsed.value;
+    }
+    if (!blocks.from && !blocks.to){
+      return { ok: false, message: 'Use from { ... } and/or to { ... } blocks.' };
+    }
+    const leftovers = normalized.replace(blockPattern, '').trim();
+    if (leftovers){
+      return { ok: false, message: 'Only from/to CSS blocks are supported.' };
+    }
+    return {
+      ok: true,
+      message: 'CSS animation is ready.',
+      value: {
+        from: blocks.from || {},
+        to: blocks.to || {}
+      }
+    };
+  }
+
+  function applyCustomCssStateToBaseline(baseline, definition = {}){
+    const transform = definition.transform || {};
+    return {
+      x: baseline.x + (transform.translateX || 0),
+      y: baseline.y + (transform.translateY || 0),
+      scaleX: baseline.scaleX * (transform.scaleX || 1),
+      scaleY: baseline.scaleY * (transform.scaleY || 1),
+      rotation: baseline.rotation + (transform.rotate || 0),
+      opacity: Object.prototype.hasOwnProperty.call(definition, 'opacity') ? definition.opacity : baseline.opacity
+    };
+  }
+
+  function resolveCustomCssAnimationStates(node, config){
+    const parsed = parseCustomCssAnimationText(config.cssText);
+    const baseline = {
+      x: node.x(),
+      y: node.y(),
+      scaleX: node.scaleX(),
+      scaleY: node.scaleY(),
+      rotation: node.rotation(),
+      opacity: Number.isFinite(Number(node.opacity())) ? Number(node.opacity()) : 1
+    };
+    if (!parsed.ok){
+      return {
+        ok: false,
+        message: parsed.message,
+        startState: { ...baseline },
+        finalState: { ...baseline }
+      };
+    }
+    return {
+      ok: true,
+      message: parsed.message,
+      startState: applyCustomCssStateToBaseline(baseline, parsed.value.from),
+      finalState: applyCustomCssStateToBaseline(baseline, parsed.value.to)
+    };
+  }
+
   function openEditorPersistenceDb(){
     if (!window.indexedDB) return Promise.resolve(null);
     if (persistDbPromise) return persistDbPromise;
@@ -781,6 +975,7 @@
       ? rawConfig.videoSound
       : (rawConfig && VIDEO_SOUND_MODES.has(rawConfig.animVideoSound) ? rawConfig.animVideoSound : 'mute');
     const videoLoopValue = rawConfig && (rawConfig.videoLoop ?? rawConfig.animVideoLoop);
+    const cssText = String(rawConfig && (rawConfig.cssText ?? rawConfig.animCssText) || '').trim();
     const needsOrder = type !== 'none' || videoAction !== 'none';
     return {
       type,
@@ -793,7 +988,8 @@
       videoSound,
       videoLoop: typeof videoLoopValue === 'boolean'
         ? videoLoopValue
-        : !(String(videoLoopValue).toLowerCase() === 'false' || String(videoLoopValue) === '0')
+        : !(String(videoLoopValue).toLowerCase() === 'false' || String(videoLoopValue) === '0'),
+      cssText: cssText.slice(0, CSS_ANIMATION_MAX_LENGTH)
     };
   }
 
@@ -806,7 +1002,8 @@
       order: node.getAttr('animOrder'),
       videoAction: node.getAttr('animVideoAction'),
       videoSound: node.getAttr('animVideoSound'),
-      videoLoop: node.getAttr('animVideoLoop')
+      videoLoop: node.getAttr('animVideoLoop'),
+      cssText: node.getAttr('animCssText')
     });
   }
 
@@ -820,6 +1017,7 @@
     node.setAttr('animVideoAction', normalized.videoAction);
     node.setAttr('animVideoSound', normalized.videoSound);
     node.setAttr('animVideoLoop', normalized.videoLoop);
+    node.setAttr('animCssText', normalized.cssText);
     return normalized;
   }
 
@@ -839,6 +1037,8 @@
         return 'From Bottom';
       case 'draw-arrow':
         return 'Draw From Tail';
+      case 'css-edit':
+        return 'CSS Edit';
       default:
         return 'None';
     }
@@ -936,11 +1136,13 @@
         if (slide.type === 'document'){
           return {
             type: 'document',
+            hidden: !!slide.hidden,
             document: serializeDocumentData(slide.document)
           };
         }
         return {
           type: 'canvas',
+          hidden: !!slide.hidden,
           nodes: getContentNodes(slide.layer).map(serializeNode)
         };
       })
@@ -1190,11 +1392,11 @@
       } else {
         for (const persistedSlide of persistedState.slides){
           if (persistedSlide && persistedSlide.type === 'document'){
-            createSlide('document', persistedSlide.document ? { ...persistedSlide.document } : null);
+            createSlide('document', persistedSlide.document ? { ...persistedSlide.document } : null, { hidden: !!persistedSlide.hidden });
             continue;
           }
 
-          createSlide();
+          createSlide('canvas', null, { hidden: !!persistedSlide.hidden });
           const layer = slides[slides.length - 1].layer;
           const nodes = Array.isArray(persistedSlide && persistedSlide.nodes) ? persistedSlide.nodes : [];
           for (const nodeData of nodes){
@@ -1739,6 +1941,46 @@
     return slides[currentSlideIndex] || null;
   }
 
+  function isSlideHidden(slide){
+    return !!(slide && slide.hidden);
+  }
+
+  function getPresentationVisibleIndexes(){
+    return slides
+      .map((slide, index) => (!isSlideHidden(slide) ? index : -1))
+      .filter(index => index >= 0);
+  }
+
+  function getVisibleSlideOrdinal(index){
+    const visibleIndexes = getPresentationVisibleIndexes();
+    const ordinal = visibleIndexes.indexOf(index);
+    return {
+      ordinal: ordinal >= 0 ? ordinal + 1 : 0,
+      total: visibleIndexes.length
+    };
+  }
+
+  function resolvePresentationIndex(index, preferredStep = 1){
+    if (!slides.length) return -1;
+    if (slides[index] && !isSlideHidden(slides[index])) return index;
+    const direction = preferredStep >= 0 ? 1 : -1;
+    for (let distance = 1; distance < slides.length + 1; distance += 1){
+      const forwardIndex = index + distance * direction;
+      if (slides[forwardIndex] && !isSlideHidden(slides[forwardIndex])) return forwardIndex;
+      const backwardIndex = index - distance * direction;
+      if (slides[backwardIndex] && !isSlideHidden(slides[backwardIndex])) return backwardIndex;
+    }
+    return -1;
+  }
+
+  function findAdjacentPresentationIndex(fromIndex, step){
+    const direction = step >= 0 ? 1 : -1;
+    for (let index = fromIndex + direction; index >= 0 && index < slides.length; index += direction){
+      if (!isSlideHidden(slides[index])) return index;
+    }
+    return -1;
+  }
+
   function isDocumentSlide(slide = getCurrentSlide()){
     return !!(slide && slide.type === 'document');
   }
@@ -1842,6 +2084,25 @@
     }
   }
 
+  function toggleSlideHidden(index){
+    const slide = slides[index];
+    if (!slide) return;
+    slide.hidden = !slide.hidden;
+    renderThumbs();
+    updateStatus();
+    schedulePersistentSave();
+
+    if (!isPresentationMode || index !== currentSlideIndex || !slide.hidden) return;
+    const fallbackIndex = resolvePresentationIndex(index, 1);
+    if (fallbackIndex >= 0){
+      showSlide(fallbackIndex);
+      return;
+    }
+    if (document.fullscreenElement && document.exitFullscreen){
+      Promise.resolve(document.exitFullscreen()).catch(() => {});
+    }
+  }
+
   function getDocumentContextMenuItems(index){
     const slide = slides[index];
     if (!slide || slide.type !== 'document' || !slide.document){
@@ -1851,6 +2112,10 @@
       {
         label: 'Download file',
         action: () => downloadDocumentFile(slide.document)
+      },
+      {
+        label: slide.hidden ? 'Show in presentation' : 'Hide in presentation',
+        action: () => toggleSlideHidden(index)
       },
       {
         label: 'Delete slide',
@@ -2003,9 +2268,12 @@
     const active = isPresentationMode && isDocumentSlide();
     docNavPopup.classList.toggle('is-active', active);
     if (!active) return;
-    docPrevSlideBtn.disabled = currentSlideIndex <= 0;
-    docNextSlideBtn.disabled = currentSlideIndex >= slides.length - 1;
-    docNavLabel.textContent = `Slide ${currentSlideIndex + 1} / ${slides.length}`;
+    docPrevSlideBtn.disabled = findAdjacentPresentationIndex(currentSlideIndex, -1) === -1;
+    docNextSlideBtn.disabled = findAdjacentPresentationIndex(currentSlideIndex, 1) === -1;
+    const visibleOrder = getVisibleSlideOrdinal(currentSlideIndex);
+    docNavLabel.textContent = visibleOrder.total
+      ? `Slide ${visibleOrder.ordinal} / ${visibleOrder.total}`
+      : 'No visible slides';
   }
 
   function renderDocumentSlide(slide){
@@ -2149,9 +2417,20 @@
       y: node.y(),
       scaleX: node.scaleX(),
       scaleY: node.scaleY(),
+      rotation: node.rotation(),
       opacity: Number.isFinite(Number(node.opacity())) ? Number(node.opacity()) : 1
     };
     const startState = { ...finalState };
+
+    if (config.type === 'css-edit'){
+      const customStates = resolveCustomCssAnimationStates(node, config);
+      return {
+        startState: customStates.startState,
+        finalState: customStates.finalState,
+        isValid: customStates.ok,
+        message: customStates.message
+      };
+    }
 
     switch (config.type){
       case 'fade':
@@ -2182,12 +2461,15 @@
         break;
     }
 
-    return { startState, finalState };
+    return { startState, finalState, isValid: true, message: '' };
   }
 
   function applyNodeAnimationState(node, state){
     node.position({ x: state.x, y: state.y });
     node.scale({ x: state.scaleX, y: state.scaleY });
+    if (typeof node.rotation === 'function'){
+      node.rotation(state.rotation || 0);
+    }
     node.opacity(state.opacity);
   }
 
@@ -2324,13 +2606,22 @@
     const hasVisualAnimation = config.type !== 'none';
     const hasMediaCue = hasQueuedMediaCue(node, config);
     if (!hasVisualAnimation && !hasMediaCue) return false;
+    const animationStates = hasVisualAnimation ? buildNodeAnimationStates(node, config) : null;
+    if (animationStates && animationStates.isValid === false){
+      if (selectionLabel && selectedNode === node){
+        selectionLabel.textContent = `CSS error - ${animationStates.message}`;
+      }
+      if (!hasMediaCue){
+        return false;
+      }
+    }
     const preparedStartState = node.getAttr('animPreparedStartState');
     const preparedFinalState = node.getAttr('animPreparedFinalState');
     const standardStates = hasVisualAnimation && config.type !== 'draw-arrow'
       ? (
           preparedStartState && preparedFinalState
             ? { startState: preparedStartState, finalState: preparedFinalState }
-            : buildNodeAnimationStates(node, config)
+            : animationStates
         )
       : null;
 
@@ -2432,6 +2723,7 @@
       y: standardStates.finalState.y,
       scaleX: standardStates.finalState.scaleX,
       scaleY: standardStates.finalState.scaleY,
+      rotation: standardStates.finalState.rotation,
       opacity: standardStates.finalState.opacity,
       easing
     });
@@ -2513,6 +2805,16 @@
 
   async function enterPresentationMode(){
     if (!slideCanvas.requestFullscreen) return;
+    const firstVisibleIndex = resolvePresentationIndex(currentSlideIndex, 1);
+    if (firstVisibleIndex === -1){
+      if (selectionLabel){
+        selectionLabel.textContent = 'There are no presentation-visible slides.';
+      }
+      return;
+    }
+    if (firstVisibleIndex !== currentSlideIndex){
+      showSlide(firstVisibleIndex);
+    }
     try{
       await slideCanvas.requestFullscreen();
       setPresentationMode(true);
@@ -2523,8 +2825,10 @@
 
   function moveSlide(step){
     if (!slides.length) return;
-    const nextIndex = Math.max(0, Math.min(slides.length - 1, currentSlideIndex + step));
-    if (nextIndex === currentSlideIndex) return;
+    const nextIndex = isPresentationMode
+      ? findAdjacentPresentationIndex(currentSlideIndex, step)
+      : Math.max(0, Math.min(slides.length - 1, currentSlideIndex + step));
+    if (nextIndex === -1 || nextIndex === currentSlideIndex) return;
     showSlide(nextIndex);
     if (isPresentationMode && typeof slideCanvas.focus === 'function'){
       slideCanvas.focus();
@@ -2670,14 +2974,16 @@
     });
   }
 
-  function createSlide(type = 'canvas', payload = null){
+  function createSlide(type = 'canvas', payload = null, options = {}){
+    const hidden = !!options.hidden;
     if (type === 'document'){
       slides.push({
         id: `slide-${Date.now()}-${slides.length}`,
         type: 'document',
         layer: null,
         thumbUrl: '',
-        document: payload
+        document: payload,
+        hidden
       });
       return;
     }
@@ -2699,13 +3005,20 @@
       type: 'canvas',
       layer,
       thumbUrl: '',
-      document: null
+      document: null,
+      hidden
     });
   }
 
   function showSlide(index, options = {}){
     const syncSeedFromInput = options.syncSeedFromInput !== false;
+    const allowHiddenInPresentation = options.allowHiddenInPresentation === true;
     if (!slides[index]) return;
+    if (isPresentationMode && !allowHiddenInPresentation && isSlideHidden(slides[index])){
+      const fallbackIndex = resolvePresentationIndex(index, 1);
+      if (fallbackIndex === -1) return;
+      index = fallbackIndex;
+    }
     if (lineDraft){
       cancelLineDraft();
     }
@@ -2791,7 +3104,15 @@
 
   function updateStatus(){
     if (statusLabel){
-      statusLabel.textContent = `Slide ${currentSlideIndex + 1} of ${slides.length}`;
+      if (isPresentationMode){
+        const visibleOrder = getVisibleSlideOrdinal(currentSlideIndex);
+        statusLabel.textContent = visibleOrder.total
+          ? `Slide ${visibleOrder.ordinal} of ${visibleOrder.total}`
+          : 'No visible slides';
+      } else {
+        const hiddenSuffix = isSlideHidden(getCurrentSlide()) ? ' - hidden in presentation' : '';
+        statusLabel.textContent = `Slide ${currentSlideIndex + 1} of ${slides.length}${hiddenSuffix}`;
+      }
     }
     updateDocumentNavPopup();
   }
@@ -2801,7 +3122,9 @@
 
     slides.forEach((slide, index) => {
       const thumb = document.createElement('div');
-      thumb.className = 'slide-thumb' + (index === currentSlideIndex ? ' is-active' : '');
+      thumb.className = 'slide-thumb'
+        + (index === currentSlideIndex ? ' is-active' : '')
+        + (slide.hidden ? ' is-hidden' : '');
 
       const label = document.createElement('div');
       label.className = 'slide-thumb-index';
@@ -2825,6 +3148,12 @@
       }
 
       thumb.append(label, canvas);
+      if (slide.hidden){
+        const flag = document.createElement('div');
+        flag.className = 'slide-thumb-flag';
+        flag.textContent = 'Hidden';
+        thumb.appendChild(flag);
+      }
       thumb.addEventListener('click', () => showSlide(index));
       thumb.addEventListener('contextmenu', (e) => {
         if (!isEditorActive) return;
@@ -3449,6 +3778,9 @@
         const currentConfig = getNodeAnimationConfig(selectedNode);
         const nextType = propAnimType.value;
         const needsOrder = nextType !== 'none' || currentConfig.videoAction !== 'none';
+        const nextCssText = nextType === 'css-edit' && !(propAnimCss && propAnimCss.value.trim())
+          ? 'from { opacity: 0; transform: translateX(-120px) scale(.88); }\nto { opacity: 1; transform: translateX(0px) scale(1); }'
+          : (propAnimCss ? propAnimCss.value : currentConfig.cssText);
         setNodeAnimationConfig(selectedNode, {
           type: nextType,
           duration: propAnimDuration ? propAnimDuration.value : undefined,
@@ -3458,7 +3790,8 @@
             : 0,
           videoAction: currentConfig.videoAction,
           videoSound: currentConfig.videoSound,
-          videoLoop: currentConfig.videoLoop
+          videoLoop: currentConfig.videoLoop,
+          cssText: nextCssText
         });
         updateInspector(selectedNode);
         scheduleThumbUpdate();
@@ -3476,7 +3809,8 @@
           order: propAnimOrder ? propAnimOrder.value : undefined,
           videoAction: propVideoAction ? propVideoAction.value : undefined,
           videoSound: propVideoSound ? propVideoSound.value : undefined,
-          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined
+          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined,
+          cssText: propAnimCss ? propAnimCss.value : undefined
         });
         updateInspector(selectedNode);
         scheduleThumbUpdate();
@@ -3494,7 +3828,8 @@
           order: propAnimOrder ? propAnimOrder.value : undefined,
           videoAction: propVideoAction ? propVideoAction.value : undefined,
           videoSound: propVideoSound ? propVideoSound.value : undefined,
-          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined
+          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined,
+          cssText: propAnimCss ? propAnimCss.value : undefined
         });
         updateInspector(selectedNode);
         scheduleThumbUpdate();
@@ -3512,7 +3847,8 @@
           order: propAnimOrder.value,
           videoAction: propVideoAction ? propVideoAction.value : undefined,
           videoSound: propVideoSound ? propVideoSound.value : undefined,
-          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined
+          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined,
+          cssText: propAnimCss ? propAnimCss.value : undefined
         });
         updateInspector(selectedNode);
         scheduleThumbUpdate();
@@ -3535,7 +3871,8 @@
             : 0,
           videoAction: nextAction,
           videoSound: propVideoSound ? propVideoSound.value : undefined,
-          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined
+          videoLoop: propVideoLoop ? propVideoLoop.checked : undefined,
+          cssText: propAnimCss ? propAnimCss.value : currentConfig.cssText
         });
         applyVideoNodeSettings(selectedNode);
         updateInspector(selectedNode);
@@ -3552,7 +3889,8 @@
           ...currentConfig,
           videoAction: propVideoAction ? propVideoAction.value : currentConfig.videoAction,
           videoSound: propVideoSound.value,
-          videoLoop: propVideoLoop ? propVideoLoop.checked : currentConfig.videoLoop
+          videoLoop: propVideoLoop ? propVideoLoop.checked : currentConfig.videoLoop,
+          cssText: propAnimCss ? propAnimCss.value : currentConfig.cssText
         });
         applyVideoNodeSettings(selectedNode);
         updateInspector(selectedNode);
@@ -3569,13 +3907,31 @@
           ...currentConfig,
           videoAction: propVideoAction ? propVideoAction.value : currentConfig.videoAction,
           videoSound: propVideoSound ? propVideoSound.value : currentConfig.videoSound,
-          videoLoop: propVideoLoop.checked
+          videoLoop: propVideoLoop.checked,
+          cssText: propAnimCss ? propAnimCss.value : currentConfig.cssText
         });
         applyVideoNodeSettings(selectedNode);
         updateInspector(selectedNode);
         scheduleThumbUpdate();
         schedulePersistentSave();
       });
+    }
+
+    if (propAnimCss){
+      const applyCssText = () => {
+        if (!selectedNode || hasMultipleSelection()) return;
+        const currentConfig = getNodeAnimationConfig(selectedNode);
+        setNodeAnimationConfig(selectedNode, {
+          ...currentConfig,
+          type: propAnimType ? propAnimType.value : currentConfig.type,
+          cssText: propAnimCss.value
+        });
+        updateInspector(selectedNode);
+        scheduleThumbUpdate();
+        schedulePersistentSave();
+      };
+      propAnimCss.addEventListener('input', applyCssText);
+      propAnimCss.addEventListener('change', applyCssText);
     }
 
     if (propAnimPreview){
@@ -3750,6 +4106,33 @@
     transformer.keepRatio(isMedia);
   }
 
+  function updateCssAnimationUi(node, animationConfig){
+    const isCssEdit = !!(node && animationConfig && animationConfig.type === 'css-edit');
+    if (commonPanel){
+      commonPanel.classList.toggle('is-css-edit', isCssEdit);
+    }
+    if (container){
+      container.classList.toggle('slide-css-editing', isCssEdit);
+    }
+    if (propAnimCssWrap){
+      propAnimCssWrap.style.display = isCssEdit ? 'flex' : 'none';
+    }
+    if (propAnimCss){
+      propAnimCss.value = isCssEdit ? (animationConfig.cssText || '') : '';
+      propAnimCss.disabled = !isCssEdit;
+    }
+    if (propAnimCssStatus){
+      if (!isCssEdit){
+        propAnimCssStatus.textContent = 'Use from/to blocks with opacity and transform.';
+        propAnimCssStatus.style.color = '#5b6878';
+        return;
+      }
+      const validation = resolveCustomCssAnimationStates(node, animationConfig);
+      propAnimCssStatus.textContent = validation.ok ? validation.message : `CSS check failed - ${validation.message}`;
+      propAnimCssStatus.style.color = validation.ok ? '#2e7d32' : '#c62828';
+    }
+  }
+
   function updateInspector(node){
     if (!selectionLabel) return;
     if (!node){
@@ -3762,6 +4145,7 @@
       if (propAnimOrder) propAnimOrder.disabled = true;
       if (propAnimPreview) propAnimPreview.disabled = true;
       if (propFont) propFont.disabled = false;
+      updateCssAnimationUi(null, null);
       return;
     }
 
@@ -3775,6 +4159,7 @@
       if (propAnimOrder) propAnimOrder.disabled = true;
       if (propAnimPreview) propAnimPreview.disabled = true;
       if (propFont) propFont.disabled = false;
+      updateCssAnimationUi(null, null);
       return;
     }
 
@@ -3840,9 +4225,11 @@
     if (propAnimDuration) propAnimDuration.value = String(animationConfig.duration);
     if (propAnimDelay) propAnimDelay.value = String(animationConfig.delay);
     if (propAnimOrder) propAnimOrder.value = String(animationConfig.order > 0 ? animationConfig.order : 1);
+    updateCssAnimationUi(node, animationConfig);
     if (propAnimOrder) propAnimOrder.disabled = animationConfig.type === 'none' && animationConfig.videoAction === 'none';
     if (propAnimPreview){
-      propAnimPreview.disabled = animationConfig.type === 'none' && animationConfig.videoAction === 'none';
+      const cssInvalid = animationConfig.type === 'css-edit' && !resolveCustomCssAnimationStates(node, animationConfig).ok;
+      propAnimPreview.disabled = (animationConfig.type === 'none' && animationConfig.videoAction === 'none') || cssInvalid;
     }
     if (isVideo){
       if (propVideoAction) propVideoAction.value = animationConfig.videoAction;
@@ -4380,13 +4767,13 @@
       const duplicateDocument = {
         ...slide.document
       };
-      createSlide('document', duplicateDocument);
+      createSlide('document', duplicateDocument, { hidden: !!slide.hidden });
       renderThumbs();
       showSlide(slides.length - 1);
       return;
     }
 
-    createSlide();
+    createSlide('canvas', null, { hidden: !!slide.hidden });
     const duplicateLayer = slides[slides.length - 1].layer;
 
     getContentNodes(currentLayer).forEach(node => {
