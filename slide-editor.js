@@ -162,36 +162,36 @@
       key: 'greek',
       label: 'Greek',
       symbols: [
-        { text: 'theta', insert: 'theta ' }, { text: 'pi', insert: 'pi ' }, { text: 'alpha', insert: 'alpha ' },
-        { text: 'beta', insert: 'beta ' }, { text: 'lambda', insert: 'lambda ' }, { text: 'phi', insert: 'phi ' },
-        { text: 'sigma', insert: 'sigma ' }, { text: 'infty', insert: 'infty ' }
+        { text: '\\theta', insert: '\\theta ' }, { text: '\\pi', insert: '\\pi ' }, { text: '\\alpha', insert: '\\alpha ' },
+        { text: '\\beta', insert: '\\beta ' }, { text: '\\lambda', insert: '\\lambda ' }, { text: '\\phi', insert: '\\phi ' },
+        { text: '\\sigma', insert: '\\sigma ' }, { text: '\\infty', insert: '\\infty ' }
       ]
     },
     {
       key: 'functions',
       label: 'Functions',
       symbols: [
-        { text: 'sqrt()', insert: 'sqrt(|)' }, { text: 'nthroot()', insert: 'nthroot(|, )' }, { text: 'abs()', insert: 'abs(|)' },
-        { text: 'sin()', insert: 'sin(|)' }, { text: 'cos()', insert: 'cos(|)' }, { text: 'tan()', insert: 'tan(|)' },
-        { text: 'arcsin()', insert: 'arcsin(|)' }, { text: 'ln()', insert: 'ln(|)' }
+        { text: '\\sqrt{}', insert: '\\sqrt{|}' }, { text: '\\frac{}{}', insert: '\\frac{|}{ }' }, { text: '\\left(\\right)', insert: '\\left(|\\right)' },
+        { text: '\\sin()', insert: '\\sin\\left(|\\right)' }, { text: '\\cos()', insert: '\\cos\\left(|\\right)' }, { text: '\\tan()', insert: '\\tan\\left(|\\right)' },
+        { text: '\\log()', insert: '\\log\\left(|\\right)' }, { text: '\\ln()', insert: '\\ln\\left(|\\right)' }
       ]
     },
     {
       key: 'relations',
       label: 'Relations',
       symbols: [
-        { text: '<=', insert: '<=' }, { text: '>=', insert: '>=' }, { text: '!=', insert: '!=' },
-        { text: '{x>0}', insert: '{x>0}' }, { text: 'sum', insert: 'sum ' }, { text: 'prod', insert: 'prod ' },
-        { text: 'int', insert: 'int ' }, { text: '... ', insert: '... ' }
+        { text: '\\le', insert: '\\le ' }, { text: '\\ge', insert: '\\ge ' }, { text: '\\ne', insert: '\\ne ' },
+        { text: '\\approx', insert: '\\approx ' }, { text: '\\sum', insert: '\\sum ' }, { text: '\\prod', insert: '\\prod ' },
+        { text: '\\int', insert: '\\int ' }, { text: '\\to', insert: '\\to ' }
       ]
     },
     {
       key: 'structures',
       label: 'Structures',
       symbols: [
-        { text: 'y=x^2+1', insert: 'y=x^2+1' }, { text: 'f(x)=', insert: 'f(x)=|' },
-        { text: '(1,3)', insert: '(1,3)' }, { text: '[1,3,4]', insert: '[1,3,4]' },
-        { text: '[1...10]', insert: '[1...10]' }, { text: '(a,a) for...', insert: '(a,a) for a=[1,2,3]' }
+        { text: 'x^{ }', insert: 'x^{|}' }, { text: 'x_{ }', insert: 'x_{|}' },
+        { text: 'f(x)=', insert: 'f\\left(x\\right)=|' }, { text: '\\left(a,b\\right)', insert: '\\left(|, \\right)' },
+        { text: '\\sum_{i=1}^{n}', insert: '\\sum_{i=1}^{n} |' }, { text: '\\pm', insert: '\\pm ' }
       ]
     }
   ]);
@@ -231,6 +231,7 @@
   let videoAnimation = null;
   let activeTextEditor = null;
   let activeTextNode = null;
+  let activeMathField = null;
   let activeEquationPopover = null;
   let activeEquationGroup = EQUATION_SYMBOL_GROUPS[0].key;
   let contextMenuEl = null;
@@ -575,7 +576,79 @@
 
   function getEquationSource(node){
     if (!node || !node.getAttr) return '';
-    return normalizeEquationSource(node.getAttr('equationSource') || node.text() || '');
+    return String(node.getAttr('equationSource') || node.text() || '');
+  }
+
+  function getMathQuillInterface(){
+    if (!window.MathQuill || typeof window.MathQuill.getInterface !== 'function') return null;
+    try{
+      return window.MathQuill.getInterface(2);
+    }catch(err){
+      return null;
+    }
+  }
+
+  function isMathQuillLatex(source){
+    return /\\[A-Za-z]+|\\frac|\\sqrt|\\left|\\right/.test(String(source || ''));
+  }
+
+  function convertPlainEquationSourceToMathQuillLatex(source){
+    let text = normalizeEquationSource(source);
+    const tokenReplacements = [
+      [/\btheta\b/g, '\\theta '], [/\bpi\b/g, '\\pi '], [/\balpha\b/g, '\\alpha '], [/\bbeta\b/g, '\\beta '],
+      [/\bgamma\b/g, '\\gamma '], [/\bdelta\b/g, '\\delta '], [/\blambda\b/g, '\\lambda '], [/\bphi\b/g, '\\phi '],
+      [/\bsigma\b/g, '\\sigma '], [/\bomega\b/g, '\\omega '], [/\bmu\b/g, '\\mu '], [/\binfty\b/g, '\\infty '],
+      [/\bapprox\b/g, '\\approx '], [/\bsum\b/g, '\\sum '], [/\bprod\b/g, '\\prod '], [/\bint\b/g, '\\int '],
+      [/\barcsin\b/g, '\\arcsin '], [/\barccos\b/g, '\\arccos '], [/\barctan\b/g, '\\arctan '],
+      [/\bsin\b/g, '\\sin '], [/\bcos\b/g, '\\cos '], [/\btan\b/g, '\\tan '], [/\bln\b/g, '\\ln '], [/\blog\b/g, '\\log ']
+    ];
+    tokenReplacements.forEach(([pattern, replacement]) => {
+      text = text.replace(pattern, replacement);
+    });
+    text = text.replace(/<=/g, '\\le ').replace(/>=/g, '\\ge ').replace(/!=/g, '\\ne ');
+    text = text.replace(/sqrt\(([^()]+)\)/g, '\\sqrt{$1}');
+    text = text.replace(/nthroot\(([^(),]+),\s*([^(),]+)\)/g, '\\sqrt[$2]{$1}');
+    text = text.replace(/abs\(([^()]+)\)/g, '\\left|$1\\right|');
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
+  function convertMathQuillLatexToDisplayText(source){
+    let text = String(source || '');
+    if (!text) return '';
+    text = text.replace(/\\left/g, '').replace(/\\right/g, '');
+    let previous = '';
+    while (previous !== text){
+      previous = text;
+      text = text.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '$1\u2044$2');
+      text = text.replace(/\\sqrt\[([^\[\]{}]+)\]\{([^{}]*)\}/g, 'nthroot($2,$1)');
+      text = text.replace(/\\sqrt\{([^{}]*)\}/g, 'sqrt($1)');
+      text = text.replace(/\\text\{([^{}]*)\}/g, '$1');
+      text = text.replace(/\^\{([^{}]+)\}/g, '^{$1}');
+      text = text.replace(/_\{([^{}]+)\}/g, '_{$1}');
+    }
+    const tokenReplacements = [
+      ['\\theta', 'theta'], ['\\pi', 'pi'], ['\\alpha', 'alpha'], ['\\beta', 'beta'],
+      ['\\gamma', 'gamma'], ['\\delta', 'delta'], ['\\lambda', 'lambda'], ['\\phi', 'phi'],
+      ['\\sigma', 'sigma'], ['\\omega', 'omega'], ['\\mu', 'mu'], ['\\infty', 'infty'],
+      ['\\approx', 'approx'], ['\\sum', 'sum'], ['\\prod', 'prod'], ['\\int', 'int'],
+      ['\\arcsin', 'arcsin'], ['\\arccos', 'arccos'], ['\\arctan', 'arctan'],
+      ['\\sin', 'sin'], ['\\cos', 'cos'], ['\\tan', 'tan'], ['\\ln', 'ln'], ['\\log', 'log'],
+      ['\\cdot', 'cdot'], ['\\times', 'times'], ['\\div', 'div'], ['\\le', 'leq'], ['\\ge', 'geq'], ['\\ne', 'neq'], ['\\pm', 'pm']
+    ];
+    tokenReplacements.forEach(([fromToken, toToken]) => {
+      text = text.split(fromToken).join(toToken);
+    });
+    text = text.replace(/\\,/g, ' ').replace(/\\ /g, ' ').replace(/\\to/g, '->');
+    text = text.replace(/\\/g, '');
+    return normalizeEquationSource(text).replace(/\s+/g, ' ').trim();
+  }
+
+  function getEquationEditorLatex(node){
+    const source = getEquationSource(node);
+    if (!source) return '';
+    return isMathQuillLatex(source)
+      ? source
+      : convertPlainEquationSourceToMathQuillLatex(source);
   }
 
   function mapEquationToken(token, mapping){
@@ -586,6 +659,10 @@
       output += mapped;
     }
     return output;
+  }
+
+  function escapeRegExp(text){
+    return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   function applyEquationScripts(text){
@@ -612,6 +689,46 @@
       result += marker;
     }
     return result;
+  }
+
+  function stylizeEquationDisplayText(source){
+    let text = String(source || '').replace(/\r\n?/g, '\n');
+    if (!text) return '';
+
+    let previous = '';
+    while (previous !== text){
+      previous = text;
+      text = text.replace(/nthroot\(([^(),]+),\s*([^(),]+)\)/g, (_, radicand, degree) => `${applyEquationScripts(String(degree).trim())}\u221A(${String(radicand).trim()})`);
+      text = text.replace(/sqrt\(([^()]+)\)/g, '\u221A($1)');
+      text = text.replace(/abs\(([^()]+)\)/g, '|$1|');
+    }
+
+    EQUATION_ASCII_REPLACEMENTS.forEach(([ascii, glyph]) => {
+      text = text.split(ascii).join(glyph);
+    });
+
+    const wordReplacements = [
+      ['alpha', '\u03B1'], ['beta', '\u03B2'], ['gamma', '\u03B3'], ['delta', '\u03B4'],
+      ['epsilon', '\u03B5'], ['theta', '\u03B8'], ['lambda', '\u03BB'], ['mu', '\u03BC'],
+      ['pi', '\u03C0'], ['sigma', '\u03C3'], ['phi', '\u03C6'], ['omega', '\u03C9'],
+      ['Gamma', '\u0393'], ['Delta', '\u0394'], ['Theta', '\u0398'], ['Lambda', '\u039B'],
+      ['Pi', '\u03A0'], ['Sigma', '\u03A3'], ['Phi', '\u03A6'], ['Omega', '\u03A9'],
+      ['neq', '\u2260'], ['leq', '\u2264'], ['geq', '\u2265'], ['approx', '\u2248'],
+      ['times', '\u00D7'], ['div', '\u00F7'], ['pm', '\u00B1'], ['mp', '\u2213'], ['cdot', '\u00B7'],
+      ['sum', '\u2211'], ['prod', '\u220F'], ['int', '\u222B'], ['infty', '\u221E'], ['partial', '\u2202'],
+      ['forall', '\u2200'], ['exists', '\u2203'], ['in', '\u2208'], ['notin', '\u2209'],
+      ['subseteq', '\u2286'], ['subset', '\u2282'], ['supseteq', '\u2287'], ['supset', '\u2283'],
+      ['cup', '\u222A'], ['cap', '\u2229'],
+      ['Rightarrow', '\u21D2'], ['Leftarrow', '\u21D0'], ['Leftrightarrow', '\u21D4'],
+      ['rightarrow', '\u2192'], ['leftarrow', '\u2190'], ['leftrightarrow', '\u2194']
+    ];
+    wordReplacements.forEach(([word, glyph]) => {
+      text = text.replace(new RegExp(`\\\\b${escapeRegExp(word)}\\\\b`, 'g'), glyph);
+    });
+
+    text = applyEquationScripts(text);
+    text = text.replace(/[{}]/g, '');
+    return text.replace(/\s+/g, ' ').trim();
   }
 
   function normalizeEquationSource(source){
@@ -668,7 +785,9 @@
   }
 
   function renderEquationSource(source){
-    return normalizeEquationSource(source);
+    return stylizeEquationDisplayText(isMathQuillLatex(source)
+      ? convertMathQuillLatexToDisplayText(source)
+      : normalizeEquationSource(source));
   }
 
   function insertIntoTextarea(textarea, snippet){
@@ -737,11 +856,11 @@
     popover.className = 'slide-equation-popover is-active';
     popover.innerHTML = `
       <div class="slide-equation-topbar">
-        <div class="slide-equation-title">Math Text</div>
+        <div class="slide-equation-title">Math Text Fallback</div>
       </div>
       <div class="slide-equation-group"></div>
       <div class="slide-equation-symbols"></div>
-      <div class="slide-equation-hint">Desmos-style text is supported here: try <code>y=x^2+1</code>, <code>sqrt(x)</code>, <code>nthroot(x,3)</code>, <code>(a,a) for a=[1,2,3]</code>, or <code>{x&gt;0}</code>.</div>
+      <div class="slide-equation-hint">MathQuill could not start, so this fallback accepts MathQuill-style snippets such as <code>\\frac{a}{b}</code>, <code>\\sqrt{x}</code>, <code>x^{2}</code>, and <code>\\theta + \\lambda</code>.</div>
     `;
     popover.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -759,6 +878,65 @@
     activeEquationPopover = popover;
     renderEquationPopoverSymbols(popover, textarea, activeEquationGroup);
     positionEquationPopover();
+  }
+
+  function createMathQuillEditor(textNode){
+    const MQ = getMathQuillInterface();
+    if (!MQ) return null;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'slide-mathquill-editor';
+    wrapper.tabIndex = -1;
+    wrapper.style.fontFamily = EQUATION_FONT_STACK;
+
+    const fieldEl = document.createElement('div');
+    fieldEl.className = 'slide-mathquill-field';
+    wrapper.appendChild(fieldEl);
+    document.body.appendChild(wrapper);
+
+    const mathField = MQ.MathField(fieldEl, {
+      spaceBehavesLikeTab: true,
+      restrictMismatchedBrackets: true,
+      sumStartsWithNEquals: true,
+      supSubsRequireOperand: true,
+      charsThatBreakOutOfSupSub: '+-=<>',
+      autoSubscriptNumerals: true,
+      autoCommands: 'pi theta alpha beta gamma delta lambda phi sigma omega mu sqrt sum int',
+      autoOperatorNames: 'sin cos tan sec csc cot arcsin arccos arctan sinh cosh tanh log ln lim max min',
+      handlers: {
+        edit: () => {
+          positionTextEditor();
+        }
+      }
+    });
+
+    mathField.latex(getEquationEditorLatex(textNode));
+    activeMathField = mathField;
+
+    wrapper.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape'){
+        e.preventDefault();
+        closeActiveTextEditor(false);
+      }
+    });
+
+    wrapper.addEventListener('focusout', () => {
+      setTimeout(() => {
+        if (activeTextEditor !== wrapper) return;
+        const focused = document.activeElement;
+        if (focused && wrapper.contains(focused)) return;
+        closeActiveTextEditor(true);
+      }, 0);
+    });
+
+    requestAnimationFrame(() => {
+      positionTextEditor();
+      if (typeof mathField.focus === 'function'){
+        mathField.focus();
+      }
+    });
+
+    return wrapper;
   }
 
   function parseCssUnit(value, unit, { min = -Infinity, max = Infinity } = {}){
@@ -1004,18 +1182,21 @@
 
   function closeActiveTextEditor(commit){
     if (!activeTextEditor || !activeTextNode) return;
-    const textarea = activeTextEditor;
+    const editorEl = activeTextEditor;
     const textNode = activeTextNode;
     if (commit){
       if (textNode.getAttr && textNode.getAttr('isEquation')){
-        textNode.setAttr('equationSource', textarea.value);
-        textNode.text(renderEquationSource(textarea.value));
+        const nextSource = activeMathField
+          ? activeMathField.latex()
+          : editorEl.value;
+        textNode.setAttr('equationSource', nextSource);
+        textNode.text(renderEquationSource(nextSource));
       } else {
-        textNode.text(textarea.value);
+        textNode.text(editorEl.value);
       }
     }
-    if (textarea.parentNode){
-      textarea.parentNode.removeChild(textarea);
+    if (editorEl.parentNode){
+      editorEl.parentNode.removeChild(editorEl);
     }
     destroyEquationPopover();
     textNode.show();
@@ -1024,6 +1205,7 @@
     currentLayer.draw();
     refreshHasContent();
     scheduleThumbUpdate();
+    activeMathField = null;
     activeTextEditor = null;
     activeTextNode = null;
   }
@@ -1047,6 +1229,14 @@
     activeTextEditor.style.fontSize = `${activeTextNode.fontSize() * absScale.y}px`;
     activeTextEditor.style.transform = rotation ? `rotate(${rotation}deg)` : '';
     const minHeight = baseHeight * absScale.y;
+    if (activeMathField){
+      activeTextEditor.style.height = 'auto';
+      if (typeof activeMathField.reflow === 'function'){
+        activeMathField.reflow();
+      }
+      activeTextEditor.style.height = `${Math.max(minHeight, activeTextEditor.scrollHeight || activeTextEditor.offsetHeight || minHeight)}px`;
+      return;
+    }
     activeTextEditor.style.height = 'auto';
     activeTextEditor.style.height = `${Math.max(minHeight, activeTextEditor.scrollHeight)}px`;
     positionEquationPopover();
@@ -1455,8 +1645,8 @@
       width: Math.max(MIN_SIZE, Number(data.width) || 420),
       fontSize: Math.max(MIN_TEXT_SIZE, Number(data.fontSize) || 32),
       fontFamily: data.fontFamily
-        ? (isEquation && data.fontFamily === EQUATION_FONT_STACK ? 'Times New Roman' : data.fontFamily)
-        : (isEquation ? 'Times New Roman' : 'Arial'),
+        ? (isEquation && data.fontFamily === 'Times New Roman' ? EQUATION_FONT_STACK : data.fontFamily)
+        : (isEquation ? EQUATION_FONT_STACK : 'Arial'),
       fill: data.fill || '#111111',
       align: data.align || 'left',
       lineHeight: Number(data.lineHeight) || 1.2,
@@ -4897,7 +5087,7 @@
       y,
       text: renderEquationSource(source),
       fontSize: 38,
-      fontFamily: 'Times New Roman',
+      fontFamily: EQUATION_FONT_STACK,
       fill: '#111111',
       width: 520,
       draggable: true,
@@ -5195,6 +5385,19 @@
       closeActiveTextEditor(true);
     }
     const isEquation = !!(textNode.getAttr && textNode.getAttr('isEquation'));
+
+    if (isEquation){
+      const mathEditor = createMathQuillEditor(textNode);
+      if (mathEditor){
+        textNode.hide();
+        transformer.hide();
+        uiLayer.draw();
+        activeTextEditor = mathEditor;
+        activeTextNode = textNode;
+        positionTextEditor();
+        return;
+      }
+    }
 
     const textarea = document.createElement('textarea');
     document.body.appendChild(textarea);
