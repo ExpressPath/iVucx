@@ -233,6 +233,9 @@
   let activeTextNode = null;
   let activeMathField = null;
   let activeEquationPopover = null;
+  let textEditorPositionFrame = 0;
+  let pendingTextEditorMathReflow = false;
+  let isApplyingMathFieldReflow = false;
   let activeEquationGroup = EQUATION_SYMBOL_GROUPS[0].key;
   let contextMenuEl = null;
   let clipboardNode = null;
@@ -905,7 +908,7 @@
       autoOperatorNames: 'sin cos tan sec csc cot arcsin arccos arctan sinh cosh tanh log ln lim max min',
       handlers: {
         edit: () => {
-          positionTextEditor();
+          scheduleTextEditorPosition(false);
         }
       }
     });
@@ -930,7 +933,7 @@
     });
 
     requestAnimationFrame(() => {
-      positionTextEditor();
+      scheduleTextEditorPosition(true);
       if (typeof mathField.focus === 'function'){
         mathField.focus();
       }
@@ -1206,11 +1209,29 @@
     refreshHasContent();
     scheduleThumbUpdate();
     activeMathField = null;
+    pendingTextEditorMathReflow = false;
+    if (textEditorPositionFrame){
+      cancelAnimationFrame(textEditorPositionFrame);
+      textEditorPositionFrame = 0;
+    }
     activeTextEditor = null;
     activeTextNode = null;
   }
 
-  function positionTextEditor(){
+  function scheduleTextEditorPosition(reflowMath = false){
+    if (reflowMath){
+      pendingTextEditorMathReflow = true;
+    }
+    if (textEditorPositionFrame) return;
+    textEditorPositionFrame = requestAnimationFrame(() => {
+      textEditorPositionFrame = 0;
+      const shouldReflowMath = pendingTextEditorMathReflow;
+      pendingTextEditorMathReflow = false;
+      positionTextEditor(shouldReflowMath);
+    });
+  }
+
+  function positionTextEditor(reflowMath = false){
     if (!activeTextEditor || !activeTextNode || !stage) return;
     const stageBox = stage.container().getBoundingClientRect();
     const absPos = activeTextNode.getAbsolutePosition();
@@ -1231,10 +1252,21 @@
     const minHeight = baseHeight * absScale.y;
     if (activeMathField){
       activeTextEditor.style.height = 'auto';
-      if (typeof activeMathField.reflow === 'function'){
-        activeMathField.reflow();
+      if (reflowMath && !isApplyingMathFieldReflow && typeof activeMathField.reflow === 'function'){
+        isApplyingMathFieldReflow = true;
+        try{
+          activeMathField.reflow();
+        }catch(err){
+          // If MathQuill reflow fails, keep the editor usable instead of hard-looping.
+        }finally{
+          isApplyingMathFieldReflow = false;
+        }
       }
-      activeTextEditor.style.height = `${Math.max(minHeight, activeTextEditor.scrollHeight || activeTextEditor.offsetHeight || minHeight)}px`;
+      const fieldEl = activeTextEditor.querySelector('.slide-mathquill-field');
+      const measuredHeight = fieldEl
+        ? Math.max(fieldEl.scrollHeight || 0, fieldEl.offsetHeight || 0)
+        : Math.max(activeTextEditor.scrollHeight || 0, activeTextEditor.offsetHeight || 0);
+      activeTextEditor.style.height = `${Math.max(minHeight, measuredHeight + 16)}px`;
       return;
     }
     activeTextEditor.style.height = 'auto';
@@ -4134,6 +4166,11 @@
     const resizeObserver = new ResizeObserver(() => resizeStage());
     resizeObserver.observe(stageHost);
     window.addEventListener('resize', resizeStage);
+    window.addEventListener('scroll', () => {
+      if (activeTextEditor){
+        scheduleTextEditorPosition(false);
+      }
+    }, true);
     if (window.visualViewport){
       window.visualViewport.addEventListener('resize', resizeStage);
     }
@@ -4526,7 +4563,7 @@
     const y = (h - SLIDE_HEIGHT * scale) / 2;
     stage.position({ x, y });
     stage.batchDraw();
-    positionTextEditor();
+    scheduleTextEditorPosition(true);
   }
 
   function getStagePointer(){
@@ -5394,7 +5431,7 @@
         uiLayer.draw();
         activeTextEditor = mathEditor;
         activeTextNode = textNode;
-        positionTextEditor();
+        scheduleTextEditorPosition(true);
         return;
       }
     }
@@ -5424,7 +5461,7 @@
     textarea.focus();
     activeTextEditor = textarea;
     activeTextNode = textNode;
-    positionTextEditor();
+    scheduleTextEditorPosition(false);
     if (isEquation){
       createEquationPopover(textarea);
       positionEquationPopover();
