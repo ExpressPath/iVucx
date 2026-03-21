@@ -922,6 +922,77 @@
       color:#536173;
     }
 
+    .cookie-consent{
+      position:fixed;
+      left:20px;
+      right:20px;
+      bottom:20px;
+      z-index:1350;
+      display:none;
+      justify-content:center;
+      pointer-events:none;
+    }
+
+    .cookie-consent.is-open{
+      display:flex;
+    }
+
+    .cookie-consent-card{
+      width:min(560px, 100%);
+      border-radius:18px;
+      border:1px solid rgba(15,23,42,0.12);
+      background:rgba(255,255,255,0.96);
+      box-shadow:0 24px 54px rgba(15,23,42,0.2);
+      padding:18px 18px 16px;
+      color:#111;
+      pointer-events:auto;
+    }
+
+    .cookie-consent-title{
+      margin:0 0 8px;
+      font-size:16px;
+      font-weight:700;
+      letter-spacing:.01em;
+    }
+
+    .cookie-consent-copy{
+      margin:0;
+      font-size:13px;
+      line-height:1.65;
+      color:#536173;
+    }
+
+    .cookie-consent-actions{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      gap:10px;
+      margin-top:16px;
+    }
+
+    .cookie-consent-btn{
+      appearance:none;
+      border:1px solid rgba(15,23,42,0.12);
+      border-radius:12px;
+      background:#fff;
+      color:#111;
+      font-size:13px;
+      font-weight:700;
+      padding:10px 14px;
+      cursor:pointer;
+      transition:transform .18s ease,background-color .18s ease,color .18s ease,border-color .18s ease;
+    }
+
+    .cookie-consent-btn:hover{
+      transform:translateY(-1px);
+    }
+
+    .cookie-consent-btn.accept{
+      background:#111827;
+      border-color:#111827;
+      color:#fff;
+    }
+
     .title-decision-actions{
       display:flex;
       justify-content:flex-end;
@@ -2084,6 +2155,17 @@
   </div>
 </div>
 
+<div class="cookie-consent" id="cookieConsent" hidden>
+  <div class="cookie-consent-card" role="dialog" aria-modal="false" aria-labelledby="cookieConsentTitle">
+    <h2 class="cookie-consent-title" id="cookieConsentTitle">Cookie を受け入れますか？</h2>
+    <p class="cookie-consent-copy">このデバイスで直近 6 件の編集チェックポイントを残すために、軽量な編集履歴 Cookie を使えます。許可すると現在のモードや入力内容の要約を保存します。スライド本体の最新状態は引き続き IndexedDB に保存します。</p>
+    <div class="cookie-consent-actions">
+      <button class="cookie-consent-btn" id="cookieConsentDecline" type="button">今はしない</button>
+      <button class="cookie-consent-btn accept" id="cookieConsentAccept" type="button">Cookie を受け入れる</button>
+    </div>
+  </div>
+</div>
+
 <section class="suggestion-pane" id="suggestionPane" aria-live="polite" aria-label="Suggestion results">
   <div class="suggestion-panel">
     <div id="suggestionBody" class="suggestion-thread"></div>
@@ -2180,6 +2262,9 @@
   const titleDecisionMenu = document.getElementById('titleDecisionMenu');
   const titleDecisionNo = document.getElementById('titleDecisionNo');
   const titleDecisionYes = document.getElementById('titleDecisionYes');
+  const cookieConsent = document.getElementById('cookieConsent');
+  const cookieConsentAccept = document.getElementById('cookieConsentAccept');
+  const cookieConsentDecline = document.getElementById('cookieConsentDecline');
   const suggestionPane = document.getElementById('suggestionPane');
   const suggestionBody = document.getElementById('suggestionBody');
   const suggestionPanel = suggestionPane ? suggestionPane.querySelector('.suggestion-panel') : null;
@@ -2259,8 +2344,18 @@
 
   setMode(false);
 
-  qBtn.addEventListener('click',e=>{e.preventDefault();setMode(true);});
-  aBtn.addEventListener('click',e=>{e.preventDefault();setMode(false);});
+  qBtn.addEventListener('click',e=>{
+    e.preventDefault();
+    setMode(true);
+    persistModeState();
+    scheduleCookieHistorySnapshot('qa-mode');
+  });
+  aBtn.addEventListener('click',e=>{
+    e.preventDefault();
+    setMode(false);
+    persistModeState();
+    scheduleCookieHistorySnapshot('qa-mode');
+  });
 
   function formatFileSize(bytes){
     if(bytes < 1024) return bytes + 'B';
@@ -2274,6 +2369,7 @@
 
     if(attachedFiles.length === 0){
       attachmentList.classList.remove('has-files');
+      persistModeState();
       requestAnimationFrame(adjustTextarea);
       return;
     }
@@ -2313,6 +2409,8 @@
     });
 
     attachmentList.classList.add('has-files');
+    persistModeState();
+    scheduleCookieHistorySnapshot('attachments');
     requestAnimationFrame(adjustTextarea);
   }
 
@@ -2650,6 +2748,38 @@
     });
   }
 
+  if(cookieConsent){
+    cookieConsent.addEventListener('click', e=>{
+      if(e.target === cookieConsent){
+        closeCookieConsentBanner();
+      }
+    });
+  }
+
+  if(cookieConsentAccept){
+    cookieConsentAccept.addEventListener('click', ()=>{
+      cookieHistoryConsent = 'accepted';
+      writeLocalValue(COOKIE_HISTORY_CONSENT_KEY, cookieHistoryConsent);
+      setCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`, cookieHistoryConsent, COOKIE_HISTORY_MAX_AGE_DAYS);
+      closeCookieConsentBanner();
+      if(pendingCookieHistorySnapshot){
+        appendCookieHistorySnapshot(pendingCookieHistorySnapshot);
+        pendingCookieHistorySnapshot = null;
+      }
+    });
+  }
+
+  if(cookieConsentDecline){
+    cookieConsentDecline.addEventListener('click', ()=>{
+      cookieHistoryConsent = 'declined';
+      writeLocalValue(COOKIE_HISTORY_CONSENT_KEY, cookieHistoryConsent);
+      pendingCookieHistorySnapshot = null;
+      removeCookieValue(COOKIE_HISTORY_COOKIE);
+      setCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`, cookieHistoryConsent, COOKIE_HISTORY_MAX_AGE_DAYS);
+      closeCookieConsentBanner();
+    });
+  }
+
   if(editorCloseKeep){
     editorCloseKeep.addEventListener('click', ()=>{
       resetSearchModeDraft();
@@ -2716,6 +2846,16 @@
   let skipNextGrayDraftSave = false;
   let blueModeLoggedIn = false;
   let blueModeRewards = [];
+  let isRestoringPersistedMode = false;
+  const MODE_PERSIST_KEY = 'ivucxModeSnapshotV1';
+  const COOKIE_HISTORY_CONSENT_KEY = 'ivucxCookieHistoryConsentV1';
+  const COOKIE_HISTORY_COOKIE = 'ivucxEditHistoryV1';
+  const COOKIE_HISTORY_LIMIT = 6;
+  const COOKIE_HISTORY_MAX_BYTES = 3500;
+  const COOKIE_HISTORY_MAX_AGE_DAYS = 30;
+  let cookieHistoryConsent = readLocalValue(COOKIE_HISTORY_CONSENT_KEY) || '';
+  let cookieHistoryTimer = null;
+  let pendingCookieHistorySnapshot = null;
   let blueModeCheckToken = 0;
   let loginPopupDismissed = false;
   let suggestionAbortController = null;
@@ -3773,9 +3913,251 @@
     compactGrayAcceptedValue = input.value;
     state = 1;
     adjustTextarea();
+    persistModeState();
   }
 
   restoreSummaryFromEditor();
+
+  function setCookieValue(name, value, maxAgeDays = COOKIE_HISTORY_MAX_AGE_DAYS){
+    try{
+      const maxAge = Math.max(1, Math.round(maxAgeDays * 86400));
+      document.cookie = `${name}=${encodeURIComponent(value)}; max-age=${maxAge}; path=/; SameSite=Lax`;
+      return true;
+    }catch(err){
+      return false;
+    }
+  }
+
+  function readCookieValue(name){
+    const prefix = `${name}=`;
+    const parts = document.cookie ? document.cookie.split('; ') : [];
+    for(const part of parts){
+      if(part.startsWith(prefix)){
+        try{
+          return decodeURIComponent(part.slice(prefix.length));
+        }catch(err){
+          return '';
+        }
+      }
+    }
+    return '';
+  }
+
+  function removeCookieValue(name){
+    try{
+      document.cookie = `${name}=; max-age=0; path=/; SameSite=Lax`;
+    }catch(err){
+      // ignore cookie write failure
+    }
+  }
+
+  function openCookieConsentBanner(){
+    if(!cookieConsent || cookieHistoryConsent) return false;
+    cookieConsent.hidden = false;
+    cookieConsent.classList.add('is-open');
+    if(cookieConsentAccept){
+      requestAnimationFrame(()=>cookieConsentAccept.focus());
+    }
+    return true;
+  }
+
+  function closeCookieConsentBanner(){
+    if(!cookieConsent) return;
+    cookieConsent.classList.remove('is-open');
+    cookieConsent.hidden = true;
+  }
+
+  function getSlideCookieSummary(){
+    if(window.slideEditorControls && typeof window.slideEditorControls.getSnapshotSummary === 'function'){
+      return window.slideEditorControls.getSnapshotSummary();
+    }
+    return {
+      slideCount: 0,
+      currentSlideIndex: 0,
+      hiddenSlideCount: 0,
+      documentSlideCount: 0,
+      canvasSlideCount: 0,
+      nodeCount: 0,
+      hasContent: !!(window.slideEditorState && window.slideEditorState.hasContent)
+    };
+  }
+
+  function trimSnapshotText(value, maxLength = 140){
+    if(typeof value !== 'string') return '';
+    return value.replace(/\s+/g, ' ').trim().slice(0, maxLength);
+  }
+
+  function buildCookieHistorySnapshot(reason = 'edit'){
+    const slideSummary = getSlideCookieSummary();
+    return {
+      savedAt: new Date().toISOString(),
+      reason,
+      state,
+      expanded: !!container.classList.contains('expanded'),
+      searchText: trimSnapshotText(modeDrafts[0] && modeDrafts[0].text, 120),
+      grayText: trimSnapshotText(modeDrafts[1] && modeDrafts[1].text, 120),
+      inputText: trimSnapshotText(input.value, 120),
+      compactTitle: trimSnapshotText(compactGrayAcceptedValue, 100),
+      slideCount: Number(slideSummary.slideCount) || 0,
+      currentSlideIndex: Number(slideSummary.currentSlideIndex) || 0,
+      hiddenSlideCount: Number(slideSummary.hiddenSlideCount) || 0,
+      nodeCount: Number(slideSummary.nodeCount) || 0,
+      hasEditorContent: !!slideSummary.hasContent
+    };
+  }
+
+  function readCookieHistory(){
+    const raw = readCookieValue(COOKIE_HISTORY_COOKIE);
+    if(!raw) return [];
+    try{
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    }catch(err){
+      return [];
+    }
+  }
+
+  function writeCookieHistory(entries){
+    let nextEntries = Array.isArray(entries) ? entries.slice(0, COOKIE_HISTORY_LIMIT) : [];
+    while(nextEntries.length){
+      const raw = JSON.stringify(nextEntries);
+      if(encodeURIComponent(raw).length <= COOKIE_HISTORY_MAX_BYTES){
+        return setCookieValue(COOKIE_HISTORY_COOKIE, raw, COOKIE_HISTORY_MAX_AGE_DAYS);
+      }
+      nextEntries.pop();
+    }
+    removeCookieValue(COOKIE_HISTORY_COOKIE);
+    return true;
+  }
+
+  function appendCookieHistorySnapshot(snapshot){
+    if(!snapshot || cookieHistoryConsent !== 'accepted') return false;
+    const history = readCookieHistory();
+    const normalizeComparable = entry => JSON.stringify({
+      reason: entry.reason || '',
+      state: Number(entry.state) || 0,
+      expanded: !!entry.expanded,
+      searchText: entry.searchText || '',
+      grayText: entry.grayText || '',
+      inputText: entry.inputText || '',
+      compactTitle: entry.compactTitle || '',
+      slideCount: Number(entry.slideCount) || 0,
+      currentSlideIndex: Number(entry.currentSlideIndex) || 0,
+      hiddenSlideCount: Number(entry.hiddenSlideCount) || 0,
+      nodeCount: Number(entry.nodeCount) || 0,
+      hasEditorContent: !!entry.hasEditorContent
+    });
+    if(history[0] && normalizeComparable(history[0]) === normalizeComparable(snapshot)){
+      return true;
+    }
+    return writeCookieHistory([snapshot, ...history].slice(0, COOKIE_HISTORY_LIMIT));
+  }
+
+  function scheduleCookieHistorySnapshot(reason = 'edit'){
+    if(cookieHistoryConsent === 'declined') return;
+    if(cookieHistoryTimer){
+      clearTimeout(cookieHistoryTimer);
+    }
+    cookieHistoryTimer = setTimeout(()=>{
+      cookieHistoryTimer = null;
+      const snapshot = buildCookieHistorySnapshot(reason);
+      if(cookieHistoryConsent === 'accepted'){
+        appendCookieHistorySnapshot(snapshot);
+        return;
+      }
+      pendingCookieHistorySnapshot = snapshot;
+      openCookieConsentBanner();
+    }, 520);
+  }
+
+  function persistModeState(){
+    writeLocalValue(MODE_PERSIST_KEY, JSON.stringify({
+      state,
+      qaMode: bodyEl.classList.contains('mode-q') ? 'q' : 'a',
+      expanded: !!container.classList.contains('expanded'),
+      forceExpandedEditor: !!forceExpandedEditor,
+      compactGrayAcceptedValue,
+      blueModeDraft,
+      searchDraft: {
+        text: modeDrafts[0] && typeof modeDrafts[0].text === 'string' ? modeDrafts[0].text : ''
+      },
+      grayDraft: {
+        text: modeDrafts[1] && typeof modeDrafts[1].text === 'string' ? modeDrafts[1].text : '',
+        ready: !!(modeDrafts[1] && modeDrafts[1].ready)
+      }
+    }));
+  }
+
+  function readPersistedModeState(){
+    const raw = readLocalValue(MODE_PERSIST_KEY);
+    if(!raw) return null;
+    try{
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    }catch(err){
+      return null;
+    }
+  }
+
+  function restorePersistedModeState(){
+    const snapshot = readPersistedModeState();
+    if(!snapshot) return false;
+
+    isRestoringPersistedMode = true;
+
+    modeDrafts[0] = {
+      text: snapshot.searchDraft && typeof snapshot.searchDraft.text === 'string' ? snapshot.searchDraft.text : '',
+      files: [],
+      ready: true
+    };
+    modeDrafts[1] = {
+      text: snapshot.grayDraft && typeof snapshot.grayDraft.text === 'string' ? snapshot.grayDraft.text : '',
+      files: [],
+      ready: !!(snapshot.grayDraft && snapshot.grayDraft.ready)
+    };
+
+    blueModeDraft = typeof snapshot.blueModeDraft === 'string' ? snapshot.blueModeDraft : '';
+    compactGrayAcceptedValue = typeof snapshot.compactGrayAcceptedValue === 'string'
+      ? snapshot.compactGrayAcceptedValue
+      : compactGrayAcceptedValue;
+    forceExpandedEditor = !!snapshot.forceExpandedEditor || !!snapshot.expanded;
+    setMode(snapshot.qaMode === 'q');
+
+    if(snapshot.state === 1){
+      if(state !== 1){
+        applyState(1);
+      }else{
+        bodyEl.classList.add('scrolled');
+        input.placeholder = 'Write - Problem name';
+        restoreModeDraft(1);
+        adjustTextarea();
+      }
+      requestAnimationFrame(adjustTextarea);
+      isRestoringPersistedMode = false;
+      return true;
+    }
+
+    if(snapshot.state === 2){
+      applyState(2);
+      isRestoringPersistedMode = false;
+      return true;
+    }
+
+    if(snapshot.state === 0){
+      if(state !== 0){
+        applyState(0);
+      }else{
+        restoreModeDraft(0);
+        input.placeholder = 'Search...';
+        adjustTextarea();
+      }
+      isRestoringPersistedMode = false;
+      return true;
+    }
+
+    isRestoringPersistedMode = false;
+    return false;
+  }
 
   function getRenderedLineCountFromContentHeight(contentHeight){
     const computed = window.getComputedStyle(input);
@@ -3912,6 +4294,7 @@
     bodyEl.classList.add('scrolled');
     setModeDraft(1, input.value, attachedFiles);
     adjustTextarea();
+    persistModeState();
     requestAnimationFrame(()=>input.focus());
   }
 
@@ -4048,6 +4431,8 @@
     }
     updateCompactGrayAcceptedValue();
     adjustTextarea();
+    persistModeState();
+    scheduleCookieHistorySnapshot('input');
   }
 
   ['input','keyup','change','cut','paste','compositionend'].forEach(evt=>{
@@ -4093,6 +4478,8 @@
       lastInputValue = '';
       setModeDraft(0, input.value, attachedFiles);
       adjustTextarea();
+      persistModeState();
+      scheduleCookieHistorySnapshot('search-submit');
       await requestSuggestions(queryText, attachedNames);
       adjustTextarea();
       return;
@@ -4106,6 +4493,8 @@
     attachedFiles = [];
     renderAttachments();
     adjustTextarea();
+    persistModeState();
+    scheduleCookieHistorySnapshot('selection-submit');
 
   });
 
@@ -4215,6 +4604,11 @@
 
     if(next !== 2){
       adjustTextarea();
+    }
+
+    persistModeState();
+    if(!isRestoringPersistedMode){
+      scheduleCookieHistorySnapshot('mode');
     }
 
     setTimeout(()=>{
@@ -4403,6 +4797,14 @@
     touchLastY = null;
     wheelAccum = 0;
   });
+
+  window.addEventListener('slide-editor:state-saved', ()=>{
+    persistModeState();
+    scheduleCookieHistorySnapshot('slide-editor');
+  });
+
+  restorePersistedModeState();
+  persistModeState();
 
 </script>
 <script src="https://unpkg.com/konva@9.3.14/konva.min.js"></script>

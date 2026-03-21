@@ -307,6 +307,9 @@
 
   function getNodeDisplayLabel(node){
     if (!node) return '';
+    if (node.className === 'Text' && node.getAttr && node.getAttr('isCssObject')){
+      return 'CSS Object';
+    }
     if (node.className === 'Text' && node.getAttr && node.getAttr('isEquation')){
       return 'Text';
     }
@@ -1510,6 +1513,7 @@
         fill: node.fill() || '',
         align: node.align ? (node.align() || 'left') : 'left',
         lineHeight: roundMetric(node.lineHeight ? node.lineHeight() : 1.2),
+        isCssObject: !!(node.getAttr && node.getAttr('isCssObject')),
         isEquation: !!(node.getAttr && node.getAttr('isEquation')),
         equationSource: node.getAttr ? (node.getAttr('equationSource') || '') : ''
       };
@@ -1590,9 +1594,30 @@
     };
   }
 
+  function buildEditorSnapshotSummary(){
+    return {
+      slideCount: slides.length,
+      currentSlideIndex,
+      hiddenSlideCount: slides.filter(slide => !!(slide && slide.hidden)).length,
+      documentSlideCount: slides.filter(slide => slide && slide.type === 'document').length,
+      canvasSlideCount: slides.filter(slide => slide && slide.type !== 'document').length,
+      nodeCount: slides.reduce((count, slide) => {
+        if (!slide || slide.type === 'document' || !slide.layer) return count;
+        return count + getContentNodes(slide.layer).length;
+      }, 0),
+      hasContent: !!(window.slideEditorState && window.slideEditorState.hasContent)
+    };
+  }
+
   async function persistEditorStateNow(){
     if (isApplyingPersistedState || !hasCompletedPersistenceBootstrap) return false;
-    return writePersistedEditorRecord(buildPersistedEditorRecord());
+    const saved = await writePersistedEditorRecord(buildPersistedEditorRecord());
+    if (saved && typeof window.dispatchEvent === 'function'){
+      window.dispatchEvent(new CustomEvent('slide-editor:state-saved', {
+        detail: buildEditorSnapshotSummary()
+      }));
+    }
+    return saved;
   }
 
   function schedulePersistentSave(){
@@ -1668,6 +1693,7 @@
   }
 
   function createTextNodeFromSnapshot(data){
+    const isCssObject = !!data.isCssObject;
     const isEquation = !!data.isEquation;
     const equationSource = typeof data.equationSource === 'string' ? data.equationSource : '';
     const node = new Konva.Text({
@@ -1688,6 +1714,9 @@
     });
     if (data.seedSource){
       node.setAttr('seedSource', true);
+    }
+    if (isCssObject){
+      node.setAttr('isCssObject', true);
     }
     if (isEquation){
       node.setAttr('isEquation', true);
@@ -1986,6 +2015,7 @@
   window.slideEditorControls = {
     preserveInBackground: preserveEditorStateInBackground,
     discardEditorState,
+    getSnapshotSummary: buildEditorSnapshotSummary,
     canCycleOutByScrollDirection(deltaY){
       if (!slides.length) return false;
       if (deltaY < 0){
@@ -3960,6 +3990,15 @@
           action: () => openBackgroundColorPicker()
         });
         items.push({
+          label: 'Add CSS object',
+          action: () => {
+            const cssNode = createCssObjectNode(point.x, point.y);
+            addNode(cssNode);
+            editText(cssNode);
+            setTool('select');
+          }
+        });
+        items.push({
           label: 'Add text here',
           action: () => {
             const textNode = createTextNode(point.x, point.y);
@@ -5116,6 +5155,30 @@
       draggable: true,
       lineHeight: 1.2
     });
+  }
+
+  function createCssObjectNode(x, y){
+    const node = new Konva.Text({
+      x,
+      y,
+      text: '.css-object {\n  opacity: 1;\n  transform: translateX(0px);\n}',
+      fontSize: 24,
+      fontFamily: '"Consolas","Courier New",monospace',
+      fill: '#0f172a',
+      width: 380,
+      draggable: true,
+      align: 'left',
+      lineHeight: 1.35
+    });
+    node.setAttr('isCssObject', true);
+    setNodeAnimationConfig(node, {
+      type: 'css-edit',
+      duration: 0.6,
+      delay: 0,
+      order: getNextAnimationOrder(currentLayer),
+      cssText: 'from { opacity: 0; transform: translateX(-120px) scale(.88); }\nto { opacity: 1; transform: translateX(0px) scale(1); }'
+    });
+    return node;
   }
 
   function createEquationNode(x, y, source = 'y=x^2+1'){
