@@ -4532,7 +4532,8 @@
     }
   }
 
-  const THRESHOLD = 40;
+  const THRESHOLD = 72;
+  const MIN_SCROLL_DELTA = 10;
 
   let wheelAccum = 0;
   let isAnimating = false;
@@ -4695,6 +4696,9 @@
   }
 
   function handleExpandedEditorScrollDelta(deltaY){
+    if(Math.abs(deltaY) < MIN_SCROLL_DELTA){
+      return false;
+    }
     if(!window.slideEditorControls || typeof window.slideEditorControls.canCycleOutByScrollDirection !== 'function'){
       wheelAccum = 0;
       return false;
@@ -4705,6 +4709,9 @@
       return false;
     }
 
+    if(wheelAccum !== 0 && Math.sign(wheelAccum) !== Math.sign(deltaY)){
+      wheelAccum = 0;
+    }
     wheelAccum += deltaY;
 
     if(deltaY > 0 && wheelAccum > THRESHOLD){
@@ -4725,10 +4732,14 @@
   function handleScrollDelta(deltaY){
     if(isAnimating) return false;
     if(hasSuggestionResults && state === 0) return false;
+    if(Math.abs(deltaY) < MIN_SCROLL_DELTA) return false;
     if(isExpandedEditorActive()){
       return handleExpandedEditorScrollDelta(deltaY);
     }
 
+    if(wheelAccum !== 0 && Math.sign(wheelAccum) !== Math.sign(deltaY)){
+      wheelAccum = 0;
+    }
     wheelAccum += deltaY;
 
     if(wheelAccum > THRESHOLD){

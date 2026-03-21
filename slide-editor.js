@@ -81,6 +81,22 @@
   const VIDEO_ANIMATION_ACTIONS = new Set(['none', 'play', 'pause', 'restart']);
   const VIDEO_SOUND_MODES = new Set(['mute', 'sound']);
   const CSS_ANIMATION_MAX_LENGTH = 2400;
+  const DEFAULT_CSS_OBJECT_SOURCE = [
+    'shape: rect;',
+    'width: 320;',
+    'height: 168;',
+    'background: #111827;',
+    'stroke: #38bdf8;',
+    'stroke-width: 2;',
+    'border-radius: 24;',
+    'opacity: 1;',
+    'padding: 24;',
+    'text: CSS Object;',
+    'color: #ffffff;',
+    'font-size: 28;',
+    'font-family: Arial;',
+    'align: center;'
+  ].join('\n');
   const EQUATION_FONT_STACK = '"Cambria Math","STIX Two Math","Times New Roman",serif';
   const EQUATION_SHORTCUTS = Object.freeze({
     alpha: '\u03B1',
@@ -305,9 +321,13 @@
     return normalizeLineKind(node.getAttr ? node.getAttr('lineKind') : '', fallback);
   }
 
+  function isCssObjectNode(node){
+    return !!(node && node.getAttr && node.getAttr('isCssObject'));
+  }
+
   function getNodeDisplayLabel(node){
     if (!node) return '';
-    if (node.className === 'Text' && node.getAttr && node.getAttr('isCssObject')){
+    if (isCssObjectNode(node)){
       return 'CSS Object';
     }
     if (node.className === 'Text' && node.getAttr && node.getAttr('isEquation')){
@@ -1191,7 +1211,12 @@
     const editorEl = activeTextEditor;
     const textNode = activeTextNode;
     if (commit){
-      if (textNode.getAttr && textNode.getAttr('isEquation')){
+      if (isCssObjectNode(textNode)){
+        const result = rebuildCssObjectNode(textNode, editorEl.value);
+        if (!result.ok && selectionLabel){
+          selectionLabel.textContent = `CSS object error - ${result.message}`;
+        }
+      } else if (textNode.getAttr && textNode.getAttr('isEquation')){
         const nextSource = activeMathField
           ? activeMathField.latex()
           : editorEl.value;
@@ -1211,6 +1236,7 @@
     currentLayer.draw();
     refreshHasContent();
     scheduleThumbUpdate();
+    schedulePersistentSave();
     activeMathField = null;
     pendingTextEditorMathReflow = false;
     if (textEditorPositionFrame){
@@ -1237,6 +1263,21 @@
   function positionTextEditor(reflowMath = false){
     if (!activeTextEditor || !activeTextNode || !stage) return;
     const stageBox = stage.container().getBoundingClientRect();
+    if (isCssObjectNode(activeTextNode)){
+      const nodeBox = activeTextNode.getClientRect({ relativeTo: currentLayer });
+      const stageScale = stage.scale ? stage.scale() : { x: 1, y: 1 };
+      const stagePosition = stage.position ? stage.position() : { x: 0, y: 0 };
+      const rotation = typeof activeTextNode.getAbsoluteRotation === 'function'
+        ? activeTextNode.getAbsoluteRotation()
+        : activeTextNode.rotation();
+      activeTextEditor.style.left = `${stageBox.left + stagePosition.x + nodeBox.x * stageScale.x}px`;
+      activeTextEditor.style.top = `${stageBox.top + stagePosition.y + nodeBox.y * stageScale.y}px`;
+      activeTextEditor.style.width = `${Math.max(220, nodeBox.width * stageScale.x)}px`;
+      activeTextEditor.style.height = `${Math.max(140, nodeBox.height * stageScale.y)}px`;
+      activeTextEditor.style.fontSize = `${Math.max(14, 15 * stageScale.y)}px`;
+      activeTextEditor.style.transform = rotation ? `rotate(${rotation}deg)` : '';
+      return;
+    }
     const absPos = activeTextNode.getAbsolutePosition();
     const absScale = activeTextNode.getAbsoluteScale();
     const rotation = typeof activeTextNode.getAbsoluteRotation === 'function'
@@ -1519,6 +1560,14 @@
       };
     }
 
+    if (node.className === 'Group' && isCssObjectNode(node)){
+      return {
+        ...common,
+        cssObjectSource: getCssObjectSource(node),
+        isCssObject: true
+      };
+    }
+
     if (node.className === 'Rect' || node.className === 'Image'){
       return {
         ...common,
@@ -1790,6 +1839,13 @@
       case 'Text':
         node = createTextNodeFromSnapshot(data);
         break;
+      case 'Group':
+        if (data.isCssObject){
+          node = createCssObjectNode(Number(data.x) || 0, Number(data.y) || 0, data.cssObjectSource || DEFAULT_CSS_OBJECT_SOURCE);
+          node.rotation(Number(data.rotation) || 0);
+          node.opacity(Number.isFinite(Number(data.opacity)) ? Number(data.opacity) : 1);
+        }
+        break;
       case 'Rect':
         node = createRectNodeFromSnapshot(data);
         break;
@@ -2034,6 +2090,13 @@
     if (!target || target === stage) return null;
     if (target === transformer || target.getParent && target.getParent() === transformer){
       return selectedNode;
+    }
+    let current = target;
+    while (current && current !== stage){
+      if (isCssObjectNode(current)){
+        return current;
+      }
+      current = typeof current.getParent === 'function' ? current.getParent() : null;
     }
     if (target.getAttr && target.getAttr('isBackground')){
       return null;
@@ -2990,6 +3053,11 @@
     return total;
   }
 
+  function easeOutCubicProgress(progress){
+    const clamped = Math.max(0, Math.min(1, Number(progress) || 0));
+    return 1 - Math.pow(1 - clamped, 3);
+  }
+
   function updateArrowPointerForReveal(node, points){
     if (!node || node.className !== 'Arrow') return;
     const finalPointerLength = Math.max(0, Number(node.getAttr('animFinalPointerLength')) || (typeof node.pointerLength === 'function' ? node.pointerLength() : 0));
@@ -3182,9 +3250,6 @@
 
     if (config.type === 'draw-arrow' && isLineLikeNode(node)){
       const finalPoints = (node.getAttr('animFinalPoints') || (node.points ? node.points() : [])).slice();
-      const easing = window.Konva && Konva.Easings
-        ? (Konva.Easings.EaseOutCubic || Konva.Easings.StrongEaseOut || Konva.Easings.EaseOut || Konva.Easings.Linear)
-        : (value => value);
       const durationMs = Math.max(120, Math.round(config.duration * 1000));
       const startAt = performance.now() + delayMs;
       const record = {
@@ -3203,7 +3268,7 @@
         }
         ensureCue();
         const progress = Math.min(1, (now - startAt) / durationMs);
-        const eased = typeof easing === 'function' ? easing(progress) : progress;
+        const eased = easeOutCubicProgress(progress);
         const visiblePoints = getLineRevealPoints(finalPoints, eased);
         node.points(visiblePoints);
         updateArrowPointerForReveal(node, visiblePoints);
@@ -3945,7 +4010,12 @@
       const items = [];
 
       if (target){
-        if (target.className === 'Text'){
+        if (isCssObjectNode(target)){
+          items.push({
+            label: 'Edit CSS object',
+            action: () => editCssObject(target)
+          });
+        } else if (target.className === 'Text'){
           items.push({
             label: 'Edit text',
             action: () => editText(target)
@@ -3994,7 +4064,7 @@
           action: () => {
             const cssNode = createCssObjectNode(point.x, point.y);
             addNode(cssNode);
-            editText(cssNode);
+            editCssObject(cssNode);
             setTool('select');
           }
         });
@@ -4880,7 +4950,9 @@
       scheduleThumbUpdate();
     });
 
-    if (node.className === 'Text'){
+    if (isCssObjectNode(node)){
+      node.on('dblclick dbltap', () => editCssObject(node));
+    } else if (node.className === 'Text'){
       node.on('dblclick dbltap', () => editText(node));
     }
   }
@@ -4924,6 +4996,22 @@
       const nextX = Math.max(MIN_SIZE / 2, radius.x * scaleX);
       const nextY = Math.max(MIN_SIZE / 2, radius.y * scaleY);
       node.radius({ x: nextX, y: nextY });
+      node.scaleX(1);
+      node.scaleY(1);
+    } else if (isCssObjectNode(node)){
+      const parsed = parseCssObjectSource(getCssObjectSource(node));
+      if (parsed.ok){
+        const config = parsed.value;
+        const factor = Math.max(0.1, (Math.abs(scaleX) + Math.abs(scaleY)) / 2);
+        const nextSource = buildCssObjectSource({
+          ...config,
+          width: Math.max(80, config.width * Math.abs(scaleX)),
+          height: Math.max(56, config.height * Math.abs(scaleY)),
+          fontSize: Math.max(MIN_TEXT_SIZE, config.fontSize * factor),
+          padding: Math.max(8, config.padding * factor)
+        });
+        rebuildCssObjectNode(node, nextSource);
+      }
       node.scaleX(1);
       node.scaleY(1);
     } else if (isLineLikeNode(node)){
@@ -4974,6 +5062,18 @@
         x: Math.max(MIN_SIZE / 2, radius.x * factor),
         y: Math.max(MIN_SIZE / 2, radius.y * factor)
       });
+    } else if (isCssObjectNode(node)){
+      const parsed = parseCssObjectSource(getCssObjectSource(node));
+      if (parsed.ok){
+        const config = parsed.value;
+        rebuildCssObjectNode(node, buildCssObjectSource({
+          ...config,
+          width: Math.max(80, config.width * factor),
+          height: Math.max(56, config.height * factor),
+          fontSize: Math.max(MIN_TEXT_SIZE, config.fontSize * factor),
+          padding: Math.max(8, config.padding * factor)
+        }));
+      }
     } else if (isLineLikeNode(node)){
       const points = node.points();
       const localCenterX = centerX - node.x();
@@ -5157,20 +5257,197 @@
     });
   }
 
-  function createCssObjectNode(x, y){
-    const node = new Konva.Text({
+  function buildCssObjectSource(config = {}){
+    return [
+      `shape: ${config.shape || 'rect'};`,
+      `width: ${Math.round(Number(config.width) || 320)};`,
+      `height: ${Math.round(Number(config.height) || 168)};`,
+      `background: ${config.background || '#111827'};`,
+      `stroke: ${config.stroke || '#38bdf8'};`,
+      `stroke-width: ${Math.max(0, Math.round(Number(config.strokeWidth) || 0))};`,
+      `border-radius: ${Math.max(0, Math.round(Number(config.borderRadius) || 0))};`,
+      `opacity: ${Math.max(0, Math.min(1, Number(config.opacity) || 1))};`,
+      `padding: ${Math.max(0, Math.round(Number(config.padding) || 0))};`,
+      `text: ${String(config.text || '').replace(/\r\n?/g, '\\n')};`,
+      `color: ${config.color || '#ffffff'};`,
+      `font-size: ${Math.max(MIN_TEXT_SIZE, Math.round(Number(config.fontSize) || 28))};`,
+      `font-family: ${config.fontFamily || 'Arial'};`,
+      `align: ${config.align || 'center'};`
+    ].join('\n');
+  }
+
+  function parseCssObjectSource(source){
+    const text = String(source || DEFAULT_CSS_OBJECT_SOURCE).replace(/\r\n?/g, '\n').trim() || DEFAULT_CSS_OBJECT_SOURCE;
+    const config = {
+      shape: 'rect',
+      width: 320,
+      height: 168,
+      background: '#111827',
+      stroke: '#38bdf8',
+      strokeWidth: 2,
+      borderRadius: 24,
+      opacity: 1,
+      padding: 24,
+      text: 'CSS Object',
+      color: '#ffffff',
+      fontSize: 28,
+      fontFamily: 'Arial',
+      align: 'center'
+    };
+    const declarations = text.split(/[\n;]+/).map(line => line.trim()).filter(Boolean);
+    for (const declaration of declarations){
+      if (declaration.startsWith('//')) continue;
+      const colonIndex = declaration.indexOf(':');
+      if (colonIndex === -1){
+        return { ok: false, message: 'Use property: value; in CSS object code.' };
+      }
+      const property = declaration.slice(0, colonIndex).trim().toLowerCase();
+      const rawValue = declaration.slice(colonIndex + 1).trim();
+      if (!rawValue){
+        return { ok: false, message: `Missing value for "${property}".` };
+      }
+      switch (property){
+        case 'shape':
+          if (rawValue !== 'rect' && rawValue !== 'ellipse'){
+            return { ok: false, message: 'shape must be rect or ellipse.' };
+          }
+          config.shape = rawValue;
+          break;
+        case 'width':
+          config.width = Math.max(80, Number(rawValue) || config.width);
+          break;
+        case 'height':
+          config.height = Math.max(56, Number(rawValue) || config.height);
+          break;
+        case 'background':
+        case 'fill':
+          config.background = rawValue;
+          break;
+        case 'stroke':
+          config.stroke = rawValue;
+          break;
+        case 'stroke-width':
+        case 'border-width':
+          config.strokeWidth = Math.max(0, Number(rawValue) || 0);
+          break;
+        case 'border-radius':
+        case 'radius':
+          config.borderRadius = Math.max(0, Number(rawValue) || 0);
+          break;
+        case 'opacity':
+          config.opacity = Math.max(0, Math.min(1, Number(rawValue) || config.opacity));
+          break;
+        case 'padding':
+          config.padding = Math.max(0, Number(rawValue) || 0);
+          break;
+        case 'text':
+        case 'content':
+          config.text = rawValue.replace(/\\n/g, '\n');
+          break;
+        case 'color':
+          config.color = rawValue;
+          break;
+        case 'font-size':
+          config.fontSize = Math.max(MIN_TEXT_SIZE, Number(rawValue) || config.fontSize);
+          break;
+        case 'font-family':
+          config.fontFamily = rawValue;
+          break;
+        case 'align':
+          if (!['left', 'center', 'right'].includes(rawValue)){
+            return { ok: false, message: 'align must be left, center, or right.' };
+          }
+          config.align = rawValue;
+          break;
+        default:
+          return { ok: false, message: `Unsupported CSS object property "${property}".` };
+      }
+    }
+    return {
+      ok: true,
+      value: config,
+      normalizedSource: buildCssObjectSource(config)
+    };
+  }
+
+  function getCssObjectSource(node){
+    if (!isCssObjectNode(node) || !node.getAttr) return DEFAULT_CSS_OBJECT_SOURCE;
+    return String(node.getAttr('cssObjectSource') || DEFAULT_CSS_OBJECT_SOURCE);
+  }
+
+  function rebuildCssObjectNode(node, source){
+    if (!node) return { ok: false, message: 'CSS object is missing.' };
+    const parsed = parseCssObjectSource(source);
+    if (!parsed.ok){
+      return parsed;
+    }
+    const config = parsed.value;
+    node.destroyChildren();
+
+    const background = config.shape === 'ellipse'
+      ? new Konva.Ellipse({
+          x: config.width / 2,
+          y: config.height / 2,
+          radius: {
+            x: config.width / 2,
+            y: config.height / 2
+          },
+          fill: config.background,
+          stroke: config.stroke,
+          strokeWidth: config.strokeWidth,
+          listening: false
+        })
+      : new Konva.Rect({
+          x: 0,
+          y: 0,
+          width: config.width,
+          height: config.height,
+          fill: config.background,
+          stroke: config.stroke,
+          strokeWidth: config.strokeWidth,
+          cornerRadius: config.borderRadius,
+          listening: false
+        });
+    node.add(background);
+
+    const textWidth = Math.max(24, config.width - config.padding * 2);
+    const label = new Konva.Text({
+      x: config.padding,
+      y: config.padding,
+      text: config.text,
+      width: textWidth,
+      fontSize: config.fontSize,
+      fontFamily: config.fontFamily,
+      fill: config.color,
+      align: config.align,
+      lineHeight: 1.15,
+      listening: false
+    });
+    label.y(Math.max(config.padding, (config.height - label.height()) / 2));
+    node.add(label);
+
+    node.opacity(config.opacity);
+    node.setAttr('isCssObject', true);
+    node.setAttr('cssObjectSource', parsed.normalizedSource);
+    node.setAttr('cssObjectShape', config.shape);
+    return {
+      ok: true,
+      value: config,
+      normalizedSource: parsed.normalizedSource
+    };
+  }
+
+  function createCssObjectNode(x, y, source = DEFAULT_CSS_OBJECT_SOURCE){
+    const node = new Konva.Group({
       x,
       y,
-      text: '.css-object {\n  opacity: 1;\n  transform: translateX(0px);\n}',
-      fontSize: 24,
-      fontFamily: '"Consolas","Courier New",monospace',
-      fill: '#0f172a',
-      width: 380,
-      draggable: true,
-      align: 'left',
-      lineHeight: 1.35
+      draggable: true
     });
     node.setAttr('isCssObject', true);
+    const parsed = rebuildCssObjectNode(node, source);
+    if (!parsed.ok){
+      rebuildCssObjectNode(node, DEFAULT_CSS_OBJECT_SOURCE);
+    }
     setNodeAnimationConfig(node, {
       type: 'css-edit',
       duration: 0.6,
@@ -5477,6 +5754,48 @@
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  }
+
+  function editCssObject(node){
+    if (!stage || !isCssObjectNode(node)) return;
+    if (isEditingText()){
+      closeActiveTextEditor(true);
+    }
+    const textarea = document.createElement('textarea');
+    document.body.appendChild(textarea);
+    textarea.value = getCssObjectSource(node);
+    textarea.style.position = 'absolute';
+    textarea.style.boxSizing = 'border-box';
+    textarea.style.padding = '14px';
+    textarea.style.fontFamily = '"Consolas","Courier New",monospace';
+    textarea.style.lineHeight = '1.45';
+    textarea.style.color = '#0f172a';
+    textarea.style.margin = '0';
+    textarea.style.border = '1px solid #1a73e8';
+    textarea.style.borderRadius = '14px';
+    textarea.style.background = '#ffffff';
+    textarea.style.resize = 'none';
+    textarea.style.overflow = 'auto';
+    textarea.style.transformOrigin = 'left top';
+    textarea.style.zIndex = 1000;
+    textarea.spellcheck = false;
+
+    node.hide();
+    transformer.hide();
+    uiLayer.draw();
+    textarea.focus();
+    activeTextEditor = textarea;
+    activeTextNode = node;
+    scheduleTextEditorPosition(false);
+
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape'){
+        e.preventDefault();
+        closeActiveTextEditor(false);
+      }
+    });
+
+    textarea.addEventListener('blur', () => closeActiveTextEditor(true));
   }
 
   function editText(textNode){
