@@ -326,6 +326,16 @@
     return !!(node && node.getAttr && node.getAttr('isCssObject'));
   }
 
+  function pointIntersectsNode(node, point, layer = currentLayer){
+    if (!node || !point || !layer || typeof node.getClientRect !== 'function') return false;
+    const box = node.getClientRect({ relativeTo: layer });
+    if (!box) return false;
+    return point.x >= box.x
+      && point.x <= box.x + box.width
+      && point.y >= box.y
+      && point.y <= box.y + box.height;
+  }
+
   function getNodeDisplayLabel(node){
     if (!node) return '';
     if (isCssObjectNode(node)){
@@ -664,7 +674,9 @@
     let previous = '';
     while (previous !== text){
       previous = text;
-      text = text.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '$1\u2044$2');
+      text = text.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, (_, numerator, denominator) => {
+        return formatEquationFractionDisplay(numerator, denominator);
+      });
       text = text.replace(/\\sqrt\[([^\[\]{}]+)\]\{([^{}]*)\}/g, 'nthroot($2,$1)');
       text = text.replace(/\\sqrt\{([^{}]*)\}/g, 'sqrt($1)');
       text = text.replace(/\\text\{([^{}]*)\}/g, '$1');
@@ -734,6 +746,19 @@
       result += marker;
     }
     return result;
+  }
+
+  function formatEquationFractionDisplay(numerator, denominator){
+    const topSource = normalizeEquationSource(numerator).trim();
+    const bottomSource = normalizeEquationSource(denominator).trim();
+    const scriptedTop = applyEquationScripts(`^{${topSource}}`);
+    const scriptedBottom = applyEquationScripts(`_{${bottomSource}}`);
+    const topOk = scriptedTop !== `^{${topSource}}`;
+    const bottomOk = scriptedBottom !== `_{${bottomSource}}`;
+    if (topOk && bottomOk){
+      return `${scriptedTop}\u2044${scriptedBottom}`;
+    }
+    return `${topSource}\u2044${bottomSource}`;
   }
 
   function stylizeEquationDisplayText(source){
@@ -1263,6 +1288,14 @@
         const nextSource = activeMathField
           ? activeMathField.latex()
           : editorEl.value;
+        const preservedFontFamily = textNode.fontFamily() || EQUATION_FONT_STACK;
+        const preservedFontSize = textNode.fontSize() || 38;
+        const preservedLineHeight = textNode.lineHeight() || 1.25;
+        const preservedAlign = textNode.align() || 'left';
+        textNode.fontFamily(preservedFontFamily === 'Times New Roman' ? EQUATION_FONT_STACK : preservedFontFamily);
+        textNode.fontSize(preservedFontSize);
+        textNode.lineHeight(preservedLineHeight);
+        textNode.align(preservedAlign);
         textNode.setAttr('equationSource', nextSource);
         textNode.text(renderEquationSource(nextSource));
       } else {
@@ -2147,6 +2180,15 @@
       return null;
     }
     return target;
+  }
+
+  function resolveContextMenuTarget(target, point){
+    const resolved = resolveSelectableNode(target);
+    if (resolved) return resolved;
+    if (isCssObjectNode(selectedNode) && pointIntersectsNode(selectedNode, point)){
+      return selectedNode;
+    }
+    return null;
   }
 
   function getSelectedNodes(){
@@ -4161,8 +4203,8 @@
       if (!isEditorActive) return;
       e.evt.preventDefault();
 
-      const target = resolveSelectableNode(e.target);
       const point = getStagePointer();
+      const target = resolveContextMenuTarget(e.target, point);
 
       if (target){
         if (!isNodeSelected(target)){
@@ -5572,7 +5614,7 @@
           fill: config.background,
           stroke: config.stroke,
           strokeWidth: config.strokeWidth,
-          listening: false
+          listening: true
         })
       : new Konva.Rect({
           x: 0,
@@ -5583,7 +5625,7 @@
           stroke: config.stroke,
           strokeWidth: config.strokeWidth,
           cornerRadius: config.borderRadius,
-          listening: false
+          listening: true
         });
     node.add(background);
 
@@ -5598,7 +5640,7 @@
       fill: config.color,
       align: config.align,
       lineHeight: 1.15,
-      listening: false
+      listening: true
     });
     label.y(Math.max(config.padding, (config.height - label.height()) / 2));
     node.add(label);

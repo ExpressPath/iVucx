@@ -4563,10 +4563,37 @@
 
   const THRESHOLD = 72;
   const MIN_SCROLL_DELTA = 10;
+  const MODE_SCROLL_UNLOCK_MS = 360;
 
   let wheelAccum = 0;
   let isAnimating = false;
   let touchLastY = null;
+  let modeScrollGestureLocked = false;
+  let modeScrollUnlockTimer = null;
+
+  function releaseModeScrollGestureLock(){
+    modeScrollGestureLocked = false;
+    if(modeScrollUnlockTimer){
+      clearTimeout(modeScrollUnlockTimer);
+      modeScrollUnlockTimer = null;
+    }
+  }
+
+  function queueModeScrollGestureUnlock(){
+    if(modeScrollUnlockTimer){
+      clearTimeout(modeScrollUnlockTimer);
+    }
+    modeScrollUnlockTimer = setTimeout(()=>{
+      releaseModeScrollGestureLock();
+    }, MODE_SCROLL_UNLOCK_MS);
+  }
+
+  function lockModeScrollGesture(source = 'wheel'){
+    modeScrollGestureLocked = true;
+    if(source === 'wheel'){
+      queueModeScrollGestureUnlock();
+    }
+  }
 
   function applyState(next){
 
@@ -4728,8 +4755,12 @@
     return false;
   }
 
-  function handleExpandedEditorScrollDelta(deltaY){
+  function handleExpandedEditorScrollDelta(deltaY, options = {}){
     if(Math.abs(deltaY) < MIN_SCROLL_DELTA){
+      return false;
+    }
+    if(options.source !== 'wheel' || !options.shiftKey){
+      wheelAccum = 0;
       return false;
     }
     if(!window.slideEditorControls || typeof window.slideEditorControls.canCycleOutByScrollDirection !== 'function'){
@@ -4749,12 +4780,14 @@
 
     if(deltaY > 0 && wheelAccum > THRESHOLD){
       wheelAccum = 0;
+      lockModeScrollGesture(options.source);
       performAutoSavedEditorTransition(2);
       return true;
     }
 
     if(deltaY < 0 && wheelAccum < -THRESHOLD){
       wheelAccum = 0;
+      lockModeScrollGesture(options.source);
       performAutoSavedEditorTransition(0);
       return true;
     }
@@ -4762,12 +4795,12 @@
     return false;
   }
 
-  function handleScrollDelta(deltaY){
-    if(isAnimating) return false;
+  function handleScrollDelta(deltaY, options = {}){
+    if(isAnimating || modeScrollGestureLocked) return false;
     if(hasSuggestionResults && state === 0) return false;
     if(Math.abs(deltaY) < MIN_SCROLL_DELTA) return false;
     if(isExpandedEditorActive()){
-      return handleExpandedEditorScrollDelta(deltaY);
+      return handleExpandedEditorScrollDelta(deltaY, options);
     }
 
     if(wheelAccum !== 0 && Math.sign(wheelAccum) !== Math.sign(deltaY)){
@@ -4777,12 +4810,14 @@
 
     if(wheelAccum > THRESHOLD){
       wheelAccum = 0;
+      lockModeScrollGesture(options.source);
       applyForwardCycle();
       return true;
     }
 
     if(wheelAccum < -THRESHOLD){
       wheelAccum = 0;
+      lockModeScrollGesture(options.source);
       applyBackwardCycle();
       return true;
     }
@@ -4796,13 +4831,21 @@
       return;
     }
 
+    if(modeScrollGestureLocked){
+      queueModeScrollGestureUnlock();
+    }
+    const shouldTrapLockedScroll = modeScrollGestureLocked && (!isExpandedEditorActive() || e.shiftKey);
+
     if(shouldSkipScrollDetection(e.target, e.deltaY)){
       wheelAccum = 0;
       return;
     }
 
-    const changed = handleScrollDelta(e.deltaY);
-    if(changed || !isExpandedEditorActive()){
+    const changed = handleScrollDelta(e.deltaY, {
+      source: 'wheel',
+      shiftKey: !!e.shiftKey
+    });
+    if(changed || shouldTrapLockedScroll || !isExpandedEditorActive()){
       e.preventDefault();
     }
 
@@ -4826,8 +4869,11 @@
       return;
     }
 
-    const changed = handleScrollDelta(deltaY);
-    if(changed){
+    const changed = handleScrollDelta(deltaY, {
+      source: 'touch',
+      shiftKey: false
+    });
+    if(changed || modeScrollGestureLocked){
       e.preventDefault();
     }
   },{passive:false});
@@ -4835,11 +4881,13 @@
   window.addEventListener('touchend', ()=>{
     touchLastY = null;
     wheelAccum = 0;
+    releaseModeScrollGestureLock();
   });
 
   window.addEventListener('touchcancel', ()=>{
     touchLastY = null;
     wheelAccum = 0;
+    releaseModeScrollGestureLock();
   });
 
   window.addEventListener('slide-editor:state-saved', ()=>{
