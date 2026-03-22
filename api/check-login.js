@@ -73,7 +73,7 @@ export default async function handler(req, res) {
 
   const { data: account, error: accountError } = await supabase
     .from('blue_accounts')
-    .select('account_id, rewards, status')
+    .select('account_id, rewards, status, cookie_history_consent, cookie_history_consent_updated_at')
     .eq('account_id', sessionRow.account_id)
     .maybeSingle();
 
@@ -82,8 +82,8 @@ export default async function handler(req, res) {
       loggedIn: false,
       rewards: [],
       error:
-        accountError.code === '42P01'
-          ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
+        accountError.code === '42P01' || accountError.code === '42703'
+          ? 'Auth tables or cookie consent columns are missing. Run supabase/blue_mode_auth.sql first.'
           : 'Could not read account',
       detail: accountError.message || null
     });
@@ -116,6 +116,11 @@ export default async function handler(req, res) {
     loggedIn: true,
     accountId: account.account_id,
     rewards: normalizeRewards(account.rewards),
+    cookieConsent:
+      typeof account.cookie_history_consent === 'string'
+        ? account.cookie_history_consent
+        : 'unknown',
+    cookieConsentUpdatedAt: account.cookie_history_consent_updated_at || null,
     reason: 'ok'
   });
 }

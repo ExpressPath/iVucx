@@ -800,7 +800,25 @@
     return equationRenderHost;
   }
 
-  function cloneNodeWithInlineStyles(node){
+  function shouldSkipEquationRenderNode(node, computed){
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
+    const className = typeof node.className === 'string'
+      ? node.className
+      : (node.getAttribute ? String(node.getAttribute('class') || '') : '');
+    if (/\bmq-(cursor|selection|textarea)\b/.test(className)){
+      return true;
+    }
+    if (computed.display === 'none' || computed.visibility === 'hidden'){
+      return true;
+    }
+    const opacity = Number.parseFloat(computed.opacity);
+    if (Number.isFinite(opacity) && opacity <= 0){
+      return true;
+    }
+    return false;
+  }
+
+  function cloneNodeWithInlineStyles(node, options = {}){
     if (!node) return null;
     if (node.nodeType === Node.TEXT_NODE){
       return document.createTextNode(node.textContent || '');
@@ -808,17 +826,45 @@
     if (node.nodeType !== Node.ELEMENT_NODE){
       return document.createDocumentFragment();
     }
-    const clone = document.createElement(node.tagName.toLowerCase());
     const computed = window.getComputedStyle(node);
+    if (options.isEquation && shouldSkipEquationRenderNode(node, computed)){
+      return null;
+    }
+    const clone = document.createElement(node.tagName.toLowerCase());
     let styleText = '';
     for (let index = 0; index < computed.length; index += 1){
       const property = computed[index];
+      if (options.isEquation && (
+        property === 'background' ||
+        property === 'background-color' ||
+        property === 'background-image' ||
+        property === 'caret-color' ||
+        property === 'outline-color' ||
+        property === 'outline-style' ||
+        property === 'outline-width' ||
+        property === 'text-shadow'
+      )){
+        continue;
+      }
       styleText += `${property}:${computed.getPropertyValue(property)};`;
     }
     clone.setAttribute('style', styleText);
     clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+    if (options.isEquation){
+      const computedColor = String(computed.color || '').trim();
+      const fallbackColor = options.equationColor || '#111111';
+      const nextColor = computedColor && computedColor !== 'rgba(0, 0, 0, 0)'
+        ? computedColor
+        : fallbackColor;
+      clone.style.background = 'transparent';
+      clone.style.backgroundColor = 'transparent';
+      clone.style.caretColor = 'transparent';
+      clone.style.textShadow = 'none';
+      clone.style.color = nextColor;
+      clone.style.setProperty('-webkit-text-fill-color', nextColor);
+    }
     Array.from(node.childNodes || []).forEach(child => {
-      const clonedChild = cloneNodeWithInlineStyles(child);
+      const clonedChild = cloneNodeWithInlineStyles(child, options);
       if (clonedChild){
         clone.appendChild(clonedChild);
       }
@@ -842,10 +888,12 @@
     wrapper.style.fontFamily = getEquationNodeFontFamily(node);
     wrapper.style.lineHeight = String(getEquationNodeLineHeight(node));
     wrapper.style.textAlign = getEquationNodeAlign(node);
+    wrapper.style.overflow = 'visible';
 
     if (MQ){
       const fieldEl = document.createElement('span');
       fieldEl.style.display = 'inline-block';
+      fieldEl.style.background = 'transparent';
       wrapper.appendChild(fieldEl);
       host.appendChild(wrapper);
       try{
@@ -867,7 +915,10 @@
     wrapper.style.width = `${naturalWidth}px`;
     wrapper.style.height = `${naturalHeight}px`;
 
-    const cloned = cloneNodeWithInlineStyles(wrapper);
+    const cloned = cloneNodeWithInlineStyles(wrapper, {
+      isEquation: true,
+      equationColor: getEquationNodeFill(node)
+    });
     const markup = new XMLSerializer().serializeToString(cloned);
     const svg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="${naturalWidth}" height="${naturalHeight}" viewBox="0 0 ${naturalWidth} ${naturalHeight}">

@@ -809,7 +809,7 @@
       }
 
       async function handleBackNavigation(){
-        const currentCode = getEditorCode();
+        const currentCode = getSafeEditorDraftForPersistence();
         if(currentCode.length >= 30){
           const shouldReturn = window.confirm('The editor has 30+ lines. Return to the proof assistant selection?');
           if(!shouldReturn) return;
@@ -1191,6 +1191,13 @@
         return theoremDraftStore.patch(partial).catch(()=>null);
       }
 
+      function getSafeEditorDraftForPersistence(){
+        if(useFallbackEditor || editorInstance){
+          return getEditorCode();
+        }
+        return typeof initialDraft === 'string' ? initialDraft : '';
+      }
+
       function buildProofDraftSnapshot(reason = 'proof-editor'){
         return {
           title: {
@@ -1200,7 +1207,7 @@
           proof: {
             language: selectedLanguage,
             fileName: selectedConfig ? selectedConfig.fileName : '',
-            code: getEditorCode(),
+            code: getSafeEditorDraftForPersistence(),
             goalsText: leanGoalsInput ? leanGoalsInput.value : '',
             updatedAt: new Date().toISOString(),
             reason

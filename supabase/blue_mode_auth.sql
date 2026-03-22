@@ -14,6 +14,13 @@ create table if not exists public.blue_accounts (
   updated_at timestamptz not null default now()
 );
 
+alter table public.blue_accounts
+  add column if not exists cookie_history_consent text not null default 'unknown'
+    check (cookie_history_consent in ('unknown', 'accepted', 'declined'));
+
+alter table public.blue_accounts
+  add column if not exists cookie_history_consent_updated_at timestamptz;
+
 create table if not exists public.blue_sessions (
   session_token_hash text primary key,
   account_id text not null references public.blue_accounts(account_id) on delete cascade,

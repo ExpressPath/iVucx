@@ -2595,6 +2595,7 @@
         renderRewards();
         loginPopupDismissed = true;
         closeLoginPopup(true);
+        hydrateCookieConsentFromServer();
       }catch(err){
         if(err && err.status === 409){
           setPopupStatus('Account already exists. Please login with your ID.');
@@ -2653,6 +2654,7 @@
         loginPopupDismissed = true;
         clearGeneratedCredentials();
         closeLoginPopup(true);
+        hydrateCookieConsentFromServer();
       }catch(err){
         const message = err && typeof err.message === 'string'
           ? err.message
@@ -2769,25 +2771,15 @@
 
   if(cookieConsentAccept){
     cookieConsentAccept.addEventListener('click', ()=>{
-      cookieHistoryConsent = 'accepted';
-      writeLocalValue(COOKIE_HISTORY_CONSENT_KEY, cookieHistoryConsent);
-      setCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`, cookieHistoryConsent, COOKIE_HISTORY_MAX_AGE_DAYS);
-      closeCookieConsentBanner();
-      if(pendingCookieHistorySnapshot){
-        appendCookieHistorySnapshot(pendingCookieHistorySnapshot);
-        pendingCookieHistorySnapshot = null;
-      }
+      applyCookieConsentState('accepted');
+      persistCookieConsentPreference('accepted');
     });
   }
 
   if(cookieConsentDecline){
     cookieConsentDecline.addEventListener('click', ()=>{
-      cookieHistoryConsent = 'declined';
-      writeLocalValue(COOKIE_HISTORY_CONSENT_KEY, cookieHistoryConsent);
-      pendingCookieHistorySnapshot = null;
-      removeCookieValue(COOKIE_HISTORY_COOKIE);
-      setCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`, cookieHistoryConsent, COOKIE_HISTORY_MAX_AGE_DAYS);
-      closeCookieConsentBanner();
+      applyCookieConsentState('declined');
+      persistCookieConsentPreference('declined');
     });
   }
 
@@ -2866,9 +2858,14 @@
   const COOKIE_HISTORY_LIMIT = 6;
   const COOKIE_HISTORY_MAX_BYTES = 3500;
   const COOKIE_HISTORY_MAX_AGE_DAYS = 30;
-  let cookieHistoryConsent = readLocalValue(COOKIE_HISTORY_CONSENT_KEY) || '';
+  const COOKIE_CONSENT_SYNC_TIMEOUT_MS = 2600;
+  let blueModeAccountId = '';
+  let cookieConsentOwnerId = '';
+  let cookieHistoryConsent = '';
   let cookieHistoryTimer = null;
   let pendingCookieHistorySnapshot = null;
+  let cookieConsentSyncPending = false;
+  let cookieConsentHydrated = false;
   let skipNextModeStatePersist = false;
   let theoremDraftSaveTimer = null;
   let blueModeCheckToken = 0;
@@ -2888,6 +2885,7 @@
   const LEGACY_AUTH_KEY = 'ivucxBlueModeAuthV1';
   let popupAuthView = AUTH_VIEW_LOGIN;
   let generatedCredentials = null;
+  blueModeAccountId = readBlueAccountHint();
 
   function setModeDraft(modeId, text = input.value, files = attachedFiles){
     if(modeId !== 0 && modeId !== 1) return;
@@ -3007,6 +3005,59 @@
     }catch(err){
       // ignore storage failure
     }
+  }
+
+  function normalizeCookieConsentStatus(value){
+    const normalized = String(value || '').trim().toLowerCase();
+    if(normalized === 'accepted' || normalized === 'declined'){
+      return normalized;
+    }
+    return '';
+  }
+
+  function readStoredCookieConsentState(){
+    const raw = readLocalValue(COOKIE_HISTORY_CONSENT_KEY);
+    if(!raw){
+      return {
+        status: '',
+        accountId: ''
+      };
+    }
+    try{
+      const parsed = JSON.parse(raw);
+      if(parsed && typeof parsed === 'object'){
+        return {
+          status: normalizeCookieConsentStatus(parsed.status),
+          accountId: typeof parsed.accountId === 'string' ? parsed.accountId.trim() : ''
+        };
+      }
+    }catch(err){
+      // legacy plain-string fallback below
+    }
+    return {
+      status: normalizeCookieConsentStatus(raw),
+      accountId: ''
+    };
+  }
+
+  function writeStoredCookieConsentState(status, accountId = ''){
+    const normalized = normalizeCookieConsentStatus(status);
+    if(!normalized){
+      removeLocalValue(COOKIE_HISTORY_CONSENT_KEY);
+      return false;
+    }
+    return writeLocalValue(COOKIE_HISTORY_CONSENT_KEY, JSON.stringify({
+      status: normalized,
+      accountId: typeof accountId === 'string' ? accountId.trim() : '',
+      updatedAt: new Date().toISOString()
+    }));
+  }
+
+  {
+    const storedConsentState = readStoredCookieConsentState();
+    cookieHistoryConsent = storedConsentState.status;
+    cookieConsentOwnerId = storedConsentState.accountId;
+    cookieConsentHydrated = !!storedConsentState.status;
   }
 
   function patchTheoremDraftRecord(partial){
@@ -3148,7 +3199,13 @@
     if(typeof accountId !== 'string' || accountId.trim().length === 0){
       return false;
     }
-    return writeLocalValue(BLUE_ACCOUNT_HINT_KEY, accountId.trim());
+    blueModeAccountId = accountId.trim();
+    return writeLocalValue(BLUE_ACCOUNT_HINT_KEY, blueModeAccountId);
+  }
+
+  function clearBlueAccountHint(){
+    blueModeAccountId = '';
+    removeLocalValue(BLUE_ACCOUNT_HINT_KEY);
   }
 
   function readLegacyAuth(){
@@ -3294,6 +3351,102 @@
     return requestAuthJson('/api/blue-auth-logout', 'POST');
   }
 
+  async function requestCookieConsentPreference(method = 'GET', payload = null, signal = null){
+    return requestAuthJson('/api/cookie-consent', method, payload, signal);
+  }
+
+  function applyCookieConsentState(status, options = {}){
+    const normalized = normalizeCookieConsentStatus(status);
+    const accountId = typeof options.accountId === 'string' && options.accountId.trim()
+      ? options.accountId.trim()
+      : (blueModeAccountId || cookieConsentOwnerId || '');
+
+    cookieHistoryConsent = normalized;
+    cookieConsentOwnerId = normalized ? accountId : '';
+    cookieConsentHydrated = true;
+
+    if(normalized){
+      writeStoredCookieConsentState(normalized, cookieConsentOwnerId);
+      setCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`, normalized, COOKIE_HISTORY_MAX_AGE_DAYS);
+    }else{
+      removeLocalValue(COOKIE_HISTORY_CONSENT_KEY);
+      removeCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`);
+    }
+
+    if(normalized === 'accepted'){
+      if(pendingCookieHistorySnapshot){
+        appendCookieHistorySnapshot(pendingCookieHistorySnapshot);
+        pendingCookieHistorySnapshot = null;
+      }
+    }else{
+      pendingCookieHistorySnapshot = null;
+      removeCookieValue(COOKIE_HISTORY_COOKIE);
+    }
+
+    if(options.closeBanner !== false){
+      closeCookieConsentBanner();
+    }
+  }
+
+  async function persistCookieConsentPreference(status){
+    const normalized = normalizeCookieConsentStatus(status);
+    if(!normalized) return false;
+    try{
+      await requestCookieConsentPreference('POST', {
+        consent: normalized
+      });
+      return true;
+    }catch(err){
+      return false;
+    }
+  }
+
+  async function clearRemoteCookieConsentPreference(){
+    try{
+      await requestCookieConsentPreference('DELETE');
+      return true;
+    }catch(err){
+      return false;
+    }
+  }
+
+  async function hydrateCookieConsentFromServer(){
+    if(cookieConsentSyncPending) return false;
+    cookieConsentSyncPending = true;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(()=>controller.abort(), COOKIE_CONSENT_SYNC_TIMEOUT_MS);
+    try{
+      const payload = await requestCookieConsentPreference('GET', null, controller.signal);
+      const remoteStatus = normalizeCookieConsentStatus(payload && payload.consent);
+      const accountId = payload && typeof payload.accountId === 'string'
+        ? payload.accountId.trim()
+        : '';
+      if(accountId){
+        saveBlueAccountHint(accountId);
+      }
+      if(remoteStatus){
+        applyCookieConsentState(remoteStatus, {
+          accountId,
+          closeBanner: true
+        });
+      }else{
+        cookieConsentHydrated = true;
+      }
+      return !!remoteStatus;
+    }catch(err){
+      if(!cookieHistoryConsent){
+        cookieConsentHydrated = true;
+      }
+      return false;
+    }finally{
+      clearTimeout(timeoutId);
+      cookieConsentSyncPending = false;
+      if(!cookieHistoryConsent && pendingCookieHistorySnapshot){
+        openCookieConsentBanner();
+      }
+    }
+  }
+
   async function writeToClipboard(text){
     if(!text) return false;
     if(navigator.clipboard && typeof navigator.clipboard.writeText === 'function'){
@@ -3413,6 +3566,7 @@
       renderRewards();
       loginPopupDismissed = true;
       closeLoginPopup(true);
+      hydrateCookieConsentFromServer();
     }catch(err){
       const message = err && typeof err.message === 'string'
         ? err.message
@@ -3933,7 +4087,13 @@
         // ignore logout error and still clear local state
       }
       blueModeLoggedIn = false;
+      clearBlueAccountHint();
       blueModeRewards = [];
+      cookieHistoryConsent = '';
+      cookieConsentOwnerId = '';
+      cookieConsentHydrated = false;
+      removeLocalValue(COOKIE_HISTORY_CONSENT_KEY);
+      removeCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`);
       loginPopupDismissed = false;
       renderRewards();
       showAuthPopup('Logged out.');
@@ -4014,6 +4174,7 @@
     renderRewards();
 
     if(blueModeLoggedIn){
+      hydrateCookieConsentFromServer();
       closeLoginPopup(true);
       return;
     }
@@ -4113,23 +4274,35 @@
     }
     pendingCookieHistorySnapshot = null;
     cookieHistoryConsent = '';
+    cookieConsentOwnerId = '';
+    cookieConsentHydrated = true;
+    cookieConsentSyncPending = false;
     removeLocalValue(MODE_PERSIST_KEY);
     removeLocalValue(COOKIE_HISTORY_CONSENT_KEY);
     removeCookieValue(COOKIE_HISTORY_COOKIE);
     removeCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`);
+    closeCookieConsentBanner();
     try{
       sessionStorage.removeItem('ivucxEditorInit');
       sessionStorage.removeItem(EDITOR_RETURN_KEY);
     }catch(err){
       // ignore storage failure
     }
-    if(theoremDraftStore && typeof theoremDraftStore.clear === 'function'){
-      theoremDraftStore.clear();
+    if(window.slideEditorControls && typeof window.slideEditorControls.clearPersistedState === 'function'){
+      window.slideEditorControls.clearPersistedState();
     }
+    if(theoremDraftStore && typeof theoremDraftStore.clear === 'function'){
+      if(typeof theoremDraftStore.destroy === 'function'){
+        theoremDraftStore.destroy();
+      }else{
+        theoremDraftStore.clear();
+      }
+    }
+    clearRemoteCookieConsentPreference();
   }
 
   function openCookieConsentBanner(){
-    if(!cookieConsent || cookieHistoryConsent) return false;
+    if(!cookieConsent || cookieHistoryConsent || cookieConsentSyncPending) return false;
     cookieConsent.hidden = false;
     cookieConsent.classList.add('is-open');
     if(cookieConsentAccept){
@@ -4243,6 +4416,10 @@
         return;
       }
       pendingCookieHistorySnapshot = snapshot;
+      if(!cookieConsentHydrated){
+        hydrateCookieConsentFromServer();
+        return;
+      }
       openCookieConsentBanner();
     }, 520);
   }
@@ -5081,6 +5258,7 @@
     restorePersistedModeState();
     await restoreTheoremDraftTitle();
     persistModeState();
+    hydrateCookieConsentFromServer();
   })();
 
   window.addEventListener('pagehide', ()=>{

@@ -128,11 +128,36 @@
     return patchQueue;
   }
 
+  async function destroy(){
+    patchQueue = patchQueue.then(async () => {
+      const db = await openDb();
+      if (db && typeof db.close === 'function'){
+        try{
+          db.close();
+        }catch(err){
+          // ignore close failures
+        }
+      }
+      dbPromise = null;
+      if (!window.indexedDB) return false;
+
+      return new Promise(resolve => {
+        const request = window.indexedDB.deleteDatabase(DB_NAME);
+        request.onsuccess = () => resolve(true);
+        request.onerror = () => resolve(false);
+        request.onblocked = () => resolve(false);
+      });
+    }).catch(() => false);
+
+    return patchQueue;
+  }
+
   window.ivucxTheoremDraftStore = {
     read,
     write,
     patch,
     clear,
+    destroy,
     dbName: DB_NAME,
     storeName: STORE_NAME,
     activeKey: ACTIVE_KEY
