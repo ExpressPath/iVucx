@@ -737,7 +737,6 @@
     if (!node) return '#111111';
     return String(
       (node.getAttr && node.getAttr('equationFill'))
-      || (typeof node.fill === 'function' ? node.fill() : '')
       || '#111111'
     );
   }
@@ -779,9 +778,13 @@
 
     if (typeof node.fontFamily === 'function') node.fontFamily(node.getAttr('equationFontFamily'));
     if (typeof node.fontSize === 'function') node.fontSize(fontSize);
-    if (typeof node.fill === 'function') node.fill(fill);
     if (typeof node.align === 'function') node.align(align);
     if (typeof node.lineHeight === 'function') node.lineHeight(lineHeight);
+    if (typeof node.fill === 'function') node.fill('rgba(0,0,0,0)');
+    if (typeof node.fillEnabled === 'function') node.fillEnabled(false);
+    if (typeof node.stroke === 'function') node.stroke('');
+    if (typeof node.strokeEnabled === 'function') node.strokeEnabled(false);
+    if (typeof node.shadowEnabled === 'function') node.shadowEnabled(false);
   }
 
   let equationRenderHost = null;
@@ -1686,6 +1689,15 @@
     node.position({
       x: node.x() + (frameRect.x + frameRect.width / 2 - (box.x + box.width / 2)),
       y: node.y() + (frameRect.y + frameRect.height / 2 - (box.y + box.height / 2))
+    });
+  }
+
+  function normalizeEquationNodesInLayer(layer = currentLayer){
+    if (!layer) return;
+    getContentNodes(layer).forEach(node => {
+      if (!isEquationNode(node)) return;
+      applyEquationNodeTextStyle(node);
+      updateEquationNodeRender(node, { preserveScale: true });
     });
   }
 
@@ -4061,6 +4073,7 @@
       stageHost.style.display = '';
       stage.add(currentLayer);
       normalizeLayerOrdering(currentLayer);
+      normalizeEquationNodesInLayer(currentLayer);
       if (uiLayer && uiLayer.getParent()){
         uiLayer.moveToTop();
       }
@@ -6080,6 +6093,9 @@
     });
     node.setAttr('isEquation', true);
     node.setAttr('equationSource', source);
+    if (typeof node.fill === 'function') node.fill('rgba(0,0,0,0)');
+    if (typeof node.fillEnabled === 'function') node.fillEnabled(false);
+    if (typeof node.strokeEnabled === 'function') node.strokeEnabled(false);
     applyEquationNodeTextStyle(node, {
       fontFamily: EQUATION_FONT_STACK,
       fontSize: 38,
