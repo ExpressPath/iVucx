@@ -4759,10 +4759,40 @@
     if(Math.abs(deltaY) < MIN_SCROLL_DELTA){
       return false;
     }
-    if(options.source !== 'wheel' || !options.shiftKey){
+    if(options.source !== 'wheel'){
       wheelAccum = 0;
       return false;
     }
+    if(!options.shiftKey){
+      if(!window.slideEditorControls || typeof window.slideEditorControls.canNavigateSlidesByDirection !== 'function' || typeof window.slideEditorControls.navigateSlidesByDirection !== 'function'){
+        wheelAccum = 0;
+        return false;
+      }
+      if(!window.slideEditorControls.canNavigateSlidesByDirection(deltaY)){
+        wheelAccum = 0;
+        return false;
+      }
+
+      if(wheelAccum !== 0 && Math.sign(wheelAccum) !== Math.sign(deltaY)){
+        wheelAccum = 0;
+      }
+      wheelAccum += deltaY;
+
+      if(deltaY > 0 && wheelAccum > THRESHOLD){
+        wheelAccum = 0;
+        lockModeScrollGesture(options.source);
+        return !!window.slideEditorControls.navigateSlidesByDirection(deltaY);
+      }
+
+      if(deltaY < 0 && wheelAccum < -THRESHOLD){
+        wheelAccum = 0;
+        lockModeScrollGesture(options.source);
+        return !!window.slideEditorControls.navigateSlidesByDirection(deltaY);
+      }
+
+      return false;
+    }
+
     if(!window.slideEditorControls || typeof window.slideEditorControls.canCycleOutByScrollDirection !== 'function'){
       wheelAccum = 0;
       return false;

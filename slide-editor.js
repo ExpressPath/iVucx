@@ -326,6 +326,10 @@
     return !!(node && node.getAttr && node.getAttr('isCssObject'));
   }
 
+  function isEquationNode(node){
+    return !!(node && node.getAttr && node.getAttr('isEquation'));
+  }
+
   function pointIntersectsNode(node, point, layer = currentLayer){
     if (!node || !point || !layer || typeof node.getClientRect !== 'function') return false;
     const box = node.getClientRect({ relativeTo: layer });
@@ -341,7 +345,7 @@
     if (isCssObjectNode(node)){
       return 'CSS Object';
     }
-    if (node.className === 'Text' && node.getAttr && node.getAttr('isEquation')){
+    if (isEquationNode(node)){
       return 'Text';
     }
     if (isVideoNode(node)){
@@ -631,7 +635,8 @@
 
   function getEquationSource(node){
     if (!node || !node.getAttr) return '';
-    return String(node.getAttr('equationSource') || node.text() || '');
+    const fallbackText = typeof node.text === 'function' ? node.text() : '';
+    return String(node.getAttr('equationSource') || fallbackText || '');
   }
 
   function getMathQuillInterface(){
@@ -706,6 +711,210 @@
     return isMathQuillLatex(source)
       ? source
       : convertPlainEquationSourceToMathQuillLatex(source);
+  }
+
+  function getEquationNodeFontFamily(node){
+    if (!node) return EQUATION_FONT_STACK;
+    return String(
+      (node.getAttr && node.getAttr('equationFontFamily'))
+      || (typeof node.fontFamily === 'function' ? node.fontFamily() : '')
+      || EQUATION_FONT_STACK
+    );
+  }
+
+  function getEquationNodeFontSize(node){
+    if (!node) return 38;
+    const raw = Number(
+      (node.getAttr && node.getAttr('equationFontSize'))
+      || (typeof node.fontSize === 'function' ? node.fontSize() : 0)
+      || 38
+    );
+    return Math.max(MIN_TEXT_SIZE, raw || 38);
+  }
+
+  function getEquationNodeFill(node){
+    if (!node) return '#111111';
+    return String(
+      (node.getAttr && node.getAttr('equationFill'))
+      || (typeof node.fill === 'function' ? node.fill() : '')
+      || '#111111'
+    );
+  }
+
+  function getEquationNodeAlign(node){
+    if (!node) return 'left';
+    return String(
+      (node.getAttr && node.getAttr('equationAlign'))
+      || (typeof node.align === 'function' ? node.align() : '')
+      || 'left'
+    );
+  }
+
+  function getEquationNodeLineHeight(node){
+    if (!node) return 1.25;
+    const raw = Number(
+      (node.getAttr && node.getAttr('equationLineHeight'))
+      || (typeof node.lineHeight === 'function' ? node.lineHeight() : 0)
+      || 1.25
+    );
+    return Math.max(1, raw || 1.25);
+  }
+
+  function applyEquationNodeTextStyle(node, overrides = {}){
+    if (!isEquationNode(node)) return;
+    const fontFamily = String(overrides.fontFamily || getEquationNodeFontFamily(node) || EQUATION_FONT_STACK);
+    const fontSize = Math.max(MIN_TEXT_SIZE, Number(overrides.fontSize) || getEquationNodeFontSize(node));
+    const fill = String(overrides.fill || getEquationNodeFill(node) || '#111111');
+    const align = ['left', 'center', 'right'].includes(overrides.align)
+      ? overrides.align
+      : getEquationNodeAlign(node);
+    const lineHeight = Math.max(1, Number(overrides.lineHeight) || getEquationNodeLineHeight(node));
+
+    node.setAttr('equationFontFamily', fontFamily === 'Times New Roman' ? EQUATION_FONT_STACK : fontFamily);
+    node.setAttr('equationFontSize', fontSize);
+    node.setAttr('equationFill', fill);
+    node.setAttr('equationAlign', align);
+    node.setAttr('equationLineHeight', lineHeight);
+
+    if (typeof node.fontFamily === 'function') node.fontFamily(node.getAttr('equationFontFamily'));
+    if (typeof node.fontSize === 'function') node.fontSize(fontSize);
+    if (typeof node.fill === 'function') node.fill(fill);
+    if (typeof node.align === 'function') node.align(align);
+    if (typeof node.lineHeight === 'function') node.lineHeight(lineHeight);
+  }
+
+  let equationRenderHost = null;
+
+  function ensureEquationRenderHost(){
+    if (equationRenderHost && equationRenderHost.parentNode) return equationRenderHost;
+    equationRenderHost = document.createElement('div');
+    equationRenderHost.style.position = 'fixed';
+    equationRenderHost.style.left = '-10000px';
+    equationRenderHost.style.top = '-10000px';
+    equationRenderHost.style.pointerEvents = 'none';
+    equationRenderHost.style.opacity = '0';
+    equationRenderHost.style.whiteSpace = 'nowrap';
+    equationRenderHost.style.zIndex = '-1';
+    document.body.appendChild(equationRenderHost);
+    return equationRenderHost;
+  }
+
+  function cloneNodeWithInlineStyles(node){
+    if (!node) return null;
+    if (node.nodeType === Node.TEXT_NODE){
+      return document.createTextNode(node.textContent || '');
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE){
+      return document.createDocumentFragment();
+    }
+    const clone = document.createElement(node.tagName.toLowerCase());
+    const computed = window.getComputedStyle(node);
+    let styleText = '';
+    for (let index = 0; index < computed.length; index += 1){
+      const property = computed[index];
+      styleText += `${property}:${computed.getPropertyValue(property)};`;
+    }
+    clone.setAttribute('style', styleText);
+    clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+    Array.from(node.childNodes || []).forEach(child => {
+      const clonedChild = cloneNodeWithInlineStyles(child);
+      if (clonedChild){
+        clone.appendChild(clonedChild);
+      }
+    });
+    return clone;
+  }
+
+  function buildEquationStaticRender(source, node){
+    const MQ = getMathQuillInterface();
+    const host = ensureEquationRenderHost();
+    host.innerHTML = '';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.display = 'inline-block';
+    wrapper.style.padding = '0';
+    wrapper.style.margin = '0';
+    wrapper.style.background = 'transparent';
+    wrapper.style.whiteSpace = 'nowrap';
+    wrapper.style.color = getEquationNodeFill(node);
+    wrapper.style.fontSize = `${getEquationNodeFontSize(node)}px`;
+    wrapper.style.fontFamily = getEquationNodeFontFamily(node);
+    wrapper.style.lineHeight = String(getEquationNodeLineHeight(node));
+    wrapper.style.textAlign = getEquationNodeAlign(node);
+
+    if (MQ){
+      const fieldEl = document.createElement('span');
+      fieldEl.style.display = 'inline-block';
+      wrapper.appendChild(fieldEl);
+      host.appendChild(wrapper);
+      try{
+        const staticMath = MQ.StaticMath(fieldEl);
+        if (staticMath && typeof staticMath.latex === 'function'){
+          staticMath.latex(source || '');
+        }
+      }catch(err){
+        fieldEl.textContent = renderEquationSource(source);
+      }
+    } else {
+      wrapper.textContent = renderEquationSource(source);
+      host.appendChild(wrapper);
+    }
+
+    const rect = wrapper.getBoundingClientRect();
+    const naturalWidth = Math.max(MIN_SIZE, Math.ceil(rect.width || 0), source ? 0 : 160);
+    const naturalHeight = Math.max(40, Math.ceil(rect.height || 0), Math.ceil(getEquationNodeFontSize(node) * getEquationNodeLineHeight(node)));
+    wrapper.style.width = `${naturalWidth}px`;
+    wrapper.style.height = `${naturalHeight}px`;
+
+    const cloned = cloneNodeWithInlineStyles(wrapper);
+    const markup = new XMLSerializer().serializeToString(cloned);
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${naturalWidth}" height="${naturalHeight}" viewBox="0 0 ${naturalWidth} ${naturalHeight}">
+        <foreignObject width="100%" height="100%">${markup}</foreignObject>
+      </svg>
+    `.trim();
+
+    return {
+      dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+      width: naturalWidth,
+      height: naturalHeight
+    };
+  }
+
+  function updateEquationNodeRender(node, { preserveScale = true } = {}){
+    if (!isEquationNode(node)) return;
+    applyEquationNodeTextStyle(node);
+    const render = buildEquationStaticRender(getEquationEditorLatex(node), node);
+    const currentWidth = typeof node.width === 'function' ? Number(node.width()) || 0 : 0;
+    const currentHeight = typeof node.height === 'function' ? Number(node.height()) || 0 : 0;
+    const previousNaturalWidth = Number(node.getAttr('equationNaturalWidth')) || render.width || 1;
+    const previousNaturalHeight = Number(node.getAttr('equationNaturalHeight')) || render.height || 1;
+    const scaleX = preserveScale && previousNaturalWidth > 0 && currentWidth > 0 ? currentWidth / previousNaturalWidth : 1;
+    const scaleY = preserveScale && previousNaturalHeight > 0 && currentHeight > 0 ? currentHeight / previousNaturalHeight : 1;
+    const image = new Image();
+    image.onload = () => {
+      if (!node || (typeof node.isDestroyed === 'function' && node.isDestroyed())) return;
+      if (typeof node.image === 'function'){
+        node.image(image);
+      }
+      node.setAttr('equationNaturalWidth', render.width);
+      node.setAttr('equationNaturalHeight', render.height);
+      if (typeof node.width === 'function'){
+        node.width(Math.max(MIN_SIZE, render.width * scaleX));
+      }
+      if (typeof node.height === 'function'){
+        node.height(Math.max(40, render.height * scaleY));
+      }
+      const layer = node.getLayer ? node.getLayer() : null;
+      if (layer){
+        layer.batchDraw();
+      }
+      if (selectedNode === node){
+        updateInspector(node);
+      }
+      scheduleThumbUpdate();
+    };
+    image.src = render.dataUrl;
   }
 
   function mapEquationToken(token, mapping){
@@ -1288,16 +1497,9 @@
         const nextSource = activeMathField
           ? activeMathField.latex()
           : editorEl.value;
-        const preservedFontFamily = textNode.fontFamily() || EQUATION_FONT_STACK;
-        const preservedFontSize = textNode.fontSize() || 38;
-        const preservedLineHeight = textNode.lineHeight() || 1.25;
-        const preservedAlign = textNode.align() || 'left';
-        textNode.fontFamily(preservedFontFamily === 'Times New Roman' ? EQUATION_FONT_STACK : preservedFontFamily);
-        textNode.fontSize(preservedFontSize);
-        textNode.lineHeight(preservedLineHeight);
-        textNode.align(preservedAlign);
         textNode.setAttr('equationSource', nextSource);
-        textNode.text(renderEquationSource(nextSource));
+        applyEquationNodeTextStyle(textNode);
+        updateEquationNodeRender(textNode, { preserveScale: true });
       } else {
         textNode.text(editorEl.value);
       }
@@ -1359,15 +1561,21 @@
     const rotation = typeof activeTextNode.getAbsoluteRotation === 'function'
       ? activeTextNode.getAbsoluteRotation()
       : activeTextNode.rotation();
+    const nodeFontSize = isEquationNode(activeTextNode)
+      ? getEquationNodeFontSize(activeTextNode)
+      : activeTextNode.fontSize();
+    const nodeLineHeight = isEquationNode(activeTextNode)
+      ? getEquationNodeLineHeight(activeTextNode)
+      : activeTextNode.lineHeight();
     const baseHeight = Math.max(
       activeTextNode.height(),
-      activeTextNode.fontSize() * activeTextNode.lineHeight()
+      nodeFontSize * nodeLineHeight
     );
 
     activeTextEditor.style.left = `${stageBox.left + absPos.x}px`;
     activeTextEditor.style.top = `${stageBox.top + absPos.y}px`;
     activeTextEditor.style.width = `${activeTextNode.width() * absScale.x}px`;
-    activeTextEditor.style.fontSize = `${activeTextNode.fontSize() * absScale.y}px`;
+    activeTextEditor.style.fontSize = `${nodeFontSize * absScale.y}px`;
     activeTextEditor.style.transform = rotation ? `rotate(${rotation}deg)` : '';
     const minHeight = baseHeight * absScale.y;
     if (activeMathField){
@@ -1620,6 +1828,22 @@
       animation: getNodeAnimationConfig(node)
     };
 
+    if (isEquationNode(node)){
+      return {
+        ...common,
+        className: 'Equation',
+        width: roundMetric(typeof node.width === 'function' ? node.width() : MIN_SIZE),
+        height: roundMetric(typeof node.height === 'function' ? node.height() : 40),
+        fontSize: roundMetric(getEquationNodeFontSize(node)),
+        fontFamily: getEquationNodeFontFamily(node),
+        fill: getEquationNodeFill(node),
+        align: getEquationNodeAlign(node),
+        lineHeight: roundMetric(getEquationNodeLineHeight(node)),
+        isEquation: true,
+        equationSource: node.getAttr ? (node.getAttr('equationSource') || '') : ''
+      };
+    }
+
     if (node.className === 'Text'){
       return {
         ...common,
@@ -1821,15 +2045,43 @@
     const isCssObject = !!data.isCssObject;
     const isEquation = !!data.isEquation;
     const equationSource = typeof data.equationSource === 'string' ? data.equationSource : '';
+    if (isEquation){
+      const node = createEquationNode(
+        Number(data.x) || 0,
+        Number(data.y) || 0,
+        equationSource || data.text || '',
+        { render: false }
+      );
+      if (typeof node.width === 'function'){
+        node.width(Math.max(MIN_SIZE, Number(data.width) || node.width()));
+      }
+      if (typeof node.height === 'function'){
+        node.height(Math.max(40, Number(data.height) || node.height()));
+      }
+      node.opacity(Number.isFinite(Number(data.opacity)) ? Number(data.opacity) : 1);
+      node.rotation(Number(data.rotation) || 0);
+      applyEquationNodeTextStyle(node, {
+        fontFamily: data.fontFamily,
+        fontSize: Number(data.fontSize) || undefined,
+        fill: data.fill,
+        align: data.align,
+        lineHeight: Number(data.lineHeight) || undefined
+      });
+      updateEquationNodeRender(node, { preserveScale: true });
+      if (data.seedSource){
+        node.setAttr('seedSource', true);
+      }
+      return node;
+    }
     const node = new Konva.Text({
       x: Number(data.x) || 0,
       y: Number(data.y) || 0,
-      text: isEquation ? renderEquationSource(equationSource) : (typeof data.text === 'string' ? data.text : ''),
+      text: typeof data.text === 'string' ? data.text : '',
       width: Math.max(MIN_SIZE, Number(data.width) || 420),
       fontSize: Math.max(MIN_TEXT_SIZE, Number(data.fontSize) || 32),
       fontFamily: data.fontFamily
-        ? (isEquation && data.fontFamily === 'Times New Roman' ? EQUATION_FONT_STACK : data.fontFamily)
-        : (isEquation ? EQUATION_FONT_STACK : 'Arial'),
+        ? data.fontFamily
+        : 'Arial',
       fill: data.fill || '#111111',
       align: data.align || 'left',
       lineHeight: Number(data.lineHeight) || 1.2,
@@ -1842,10 +2094,6 @@
     }
     if (isCssObject){
       node.setAttr('isCssObject', true);
-    }
-    if (isEquation){
-      node.setAttr('isEquation', true);
-      node.setAttr('equationSource', equationSource || data.text || '');
     }
     return node;
   }
@@ -1912,6 +2160,7 @@
     if (!data || typeof data !== 'object') return null;
     let node = null;
     switch (data.className){
+      case 'Equation':
       case 'Text':
         node = createTextNodeFromSnapshot(data);
         break;
@@ -2145,6 +2394,19 @@
     return false;
   }
 
+  function canNavigateSlidesByDirection(deltaY){
+    if (!slides.length || deltaY === 0) return false;
+    const step = deltaY > 0 ? 1 : -1;
+    const nextIndex = Math.max(0, Math.min(slides.length - 1, currentSlideIndex + step));
+    return nextIndex !== currentSlideIndex;
+  }
+
+  function navigateSlidesByDirection(deltaY){
+    if (!canNavigateSlidesByDirection(deltaY)) return false;
+    moveSlide(deltaY > 0 ? 1 : -1);
+    return true;
+  }
+
   window.slideEditorControls = {
     preserveInBackground: preserveEditorStateInBackground,
     discardEditorState,
@@ -2160,6 +2422,8 @@
       }
       return false;
     },
+    canNavigateSlidesByDirection,
+    navigateSlidesByDirection,
     requestClose: requestCloseEditor,
     hasPendingChanges: hasPendingEditorChanges
   };
@@ -4019,6 +4283,9 @@
     if (!currentLayer) return;
     const nodes = currentLayer.getChildren(node => !node.getAttr('isBackground'));
     window.slideEditorState.hasContent = nodes.some(node => {
+      if (isEquationNode(node)){
+        return getEquationSource(node).trim().length > 0;
+      }
       if (node.className === 'Text'){
         return node.text().trim().length > 0;
       }
@@ -4219,8 +4486,17 @@
       if (target){
         if (isCssObjectNode(target)){
           items.push({
+            label: 'Edit object shape',
+            action: () => editCssObject(target, { focusProperty: 'shape' })
+          });
+          items.push({
             label: 'Edit CSS object code',
             action: () => editCssObject(target)
+          });
+        } else if (isEquationNode(target)){
+          items.push({
+            label: 'Edit math text',
+            action: () => editText(target)
           });
         } else if (target.className === 'Text'){
           items.push({
@@ -4508,8 +4784,13 @@
   function bindInspector(){
     if (propFont){
       propFont.addEventListener('change', () => {
-        if (!selectedNode || selectedNode.className !== 'Text') return;
-        selectedNode.fontFamily(propFont.value);
+        if (!selectedNode || (selectedNode.className !== 'Text' && !isEquationNode(selectedNode))) return;
+        if (isEquationNode(selectedNode)){
+          applyEquationNodeTextStyle(selectedNode, { fontFamily: propFont.value });
+          updateEquationNodeRender(selectedNode, { preserveScale: true });
+        } else {
+          selectedNode.fontFamily(propFont.value);
+        }
         currentLayer.batchDraw();
         scheduleThumbUpdate();
       });
@@ -4517,10 +4798,15 @@
 
     if (propFontSize){
       propFontSize.addEventListener('change', () => {
-        if (!selectedNode || selectedNode.className !== 'Text') return;
+        if (!selectedNode || (selectedNode.className !== 'Text' && !isEquationNode(selectedNode))) return;
         const value = Number(propFontSize.value);
         if (!Number.isFinite(value)) return;
-        selectedNode.fontSize(Math.max(8, value));
+        if (isEquationNode(selectedNode)){
+          applyEquationNodeTextStyle(selectedNode, { fontSize: Math.max(8, value) });
+          updateEquationNodeRender(selectedNode, { preserveScale: true });
+        } else {
+          selectedNode.fontSize(Math.max(8, value));
+        }
         currentLayer.batchDraw();
         scheduleThumbUpdate();
       });
@@ -4528,8 +4814,13 @@
 
     if (propFill){
       propFill.addEventListener('input', () => {
-        if (!selectedNode || selectedNode.className !== 'Text') return;
-        selectedNode.fill(propFill.value);
+        if (!selectedNode || (selectedNode.className !== 'Text' && !isEquationNode(selectedNode))) return;
+        if (isEquationNode(selectedNode)){
+          applyEquationNodeTextStyle(selectedNode, { fill: propFill.value });
+          updateEquationNodeRender(selectedNode, { preserveScale: true });
+        } else {
+          selectedNode.fill(propFill.value);
+        }
         currentLayer.batchDraw();
         scheduleThumbUpdate();
       });
@@ -4537,8 +4828,13 @@
 
     if (propAlign){
       propAlign.addEventListener('change', () => {
-        if (!selectedNode || selectedNode.className !== 'Text') return;
-        selectedNode.align(propAlign.value);
+        if (!selectedNode || (selectedNode.className !== 'Text' && !isEquationNode(selectedNode))) return;
+        if (isEquationNode(selectedNode)){
+          applyEquationNodeTextStyle(selectedNode, { align: propAlign.value });
+          updateEquationNodeRender(selectedNode, { preserveScale: true });
+        } else {
+          selectedNode.align(propAlign.value);
+        }
         currentLayer.batchDraw();
         scheduleThumbUpdate();
       });
@@ -4921,7 +5217,7 @@
       transformer.keepRatio(false);
       return;
     }
-    const isText = node.className === 'Text';
+    const isText = node.className === 'Text' || isEquationNode(node);
     const isMedia = node.getAttr('assetType') === 'image' || node.getAttr('assetType') === 'video';
     if (isText){
       transformer.enabledAnchors(['middle-left', 'middle-right']);
@@ -5030,10 +5326,10 @@
     }
     if (commonPanel) commonPanel.style.display = 'flex';
 
-    const isText = node.className === 'Text';
+    const isText = node.className === 'Text' || isEquationNode(node);
     const isShape = node.className === 'Rect' || node.className === 'Ellipse' || isLineLikeNode(node);
     const isLineLike = isLineLikeNode(node);
-    const isEquation = !!(node.getAttr && node.getAttr('isEquation'));
+    const isEquation = isEquationNode(node);
     const isVideo = isVideoNode(node);
 
     if (textPanel) textPanel.style.display = isText ? 'flex' : 'none';
@@ -5045,15 +5341,15 @@
 
     if (isText){
       if (propFont){
-        const currentFontFamily = node.fontFamily() || '';
+        const currentFontFamily = isEquation ? getEquationNodeFontFamily(node) : (node.fontFamily() || '');
         propFont.value = isEquation && currentFontFamily === EQUATION_FONT_STACK
           ? 'Times New Roman'
           : (currentFontFamily || (isEquation ? 'Times New Roman' : 'Arial'));
         propFont.disabled = false;
       }
-      if (propFontSize) propFontSize.value = String(Math.round(node.fontSize()));
-      if (propFill) propFill.value = normalizeColor(node.fill(), '#111111');
-      if (propAlign) propAlign.value = node.align() || 'left';
+      if (propFontSize) propFontSize.value = String(Math.round(isEquation ? getEquationNodeFontSize(node) : node.fontSize()));
+      if (propFill) propFill.value = normalizeColor(isEquation ? getEquationNodeFill(node) : node.fill(), '#111111');
+      if (propAlign) propAlign.value = isEquation ? getEquationNodeAlign(node) : (node.align() || 'left');
     } else if (propFont){
       propFont.disabled = false;
     }
@@ -5171,6 +5467,8 @@
       });
     } else if (isCssObjectNode(node)){
       node.on('dblclick dbltap', () => editCssObject(node));
+    } else if (isEquationNode(node)){
+      node.on('dblclick dbltap', () => editText(node));
     } else if (node.className === 'Text'){
       node.on('dblclick dbltap', () => editText(node));
     }
@@ -5677,21 +5975,27 @@
     return node;
   }
 
-  function createEquationNode(x, y, source = ''){
-    const node = new Konva.Text({
+  function createEquationNode(x, y, source = '', options = {}){
+    const node = new Konva.Image({
       x,
       y,
-      text: renderEquationSource(source),
-      fontSize: 38,
-      fontFamily: EQUATION_FONT_STACK,
-      fill: '#111111',
-      width: 520,
+      width: 220,
+      height: 56,
       draggable: true,
-      align: 'left',
-      lineHeight: 1.25
+      listening: true
     });
     node.setAttr('isEquation', true);
     node.setAttr('equationSource', source);
+    applyEquationNodeTextStyle(node, {
+      fontFamily: EQUATION_FONT_STACK,
+      fontSize: 38,
+      fill: '#111111',
+      align: 'left',
+      lineHeight: 1.25
+    });
+    if (options.render !== false){
+      updateEquationNodeRender(node, { preserveScale: false });
+    }
     return node;
   }
 
@@ -5975,7 +6279,24 @@
     document.body.removeChild(link);
   }
 
-  function editCssObject(node){
+  function focusCssObjectEditorProperty(textarea, property){
+    if (!textarea || !property) return;
+    const lines = String(textarea.value || '').split('\n');
+    let cursor = 0;
+    for (let index = 0; index < lines.length; index += 1){
+      const line = lines[index];
+      if (line.trim().toLowerCase().startsWith(`${String(property).toLowerCase()}:`)){
+        const start = cursor;
+        const end = cursor + line.length;
+        textarea.setSelectionRange(start, end);
+        textarea.focus();
+        return;
+      }
+      cursor += line.length + 1;
+    }
+  }
+
+  function editCssObject(node, options = {}){
     if (!stage || !isCssObjectNode(node)) return;
     if (isEditingText()){
       closeActiveTextEditor(true);
@@ -6003,6 +6324,9 @@
     transformer.hide();
     uiLayer.draw();
     textarea.focus();
+    if (options.focusProperty){
+      requestAnimationFrame(() => focusCssObjectEditorProperty(textarea, options.focusProperty));
+    }
     activeTextEditor = textarea;
     activeTextNode = node;
     scheduleTextEditorPosition(false);
@@ -6043,13 +6367,13 @@
     textarea.style.position = 'absolute';
     textarea.style.boxSizing = 'border-box';
     textarea.style.padding = '0';
-    textarea.style.fontFamily = textNode.fontFamily();
-    textarea.style.lineHeight = textNode.lineHeight();
-    textarea.style.color = textNode.fill();
+    textarea.style.fontFamily = isEquation ? getEquationNodeFontFamily(textNode) : textNode.fontFamily();
+    textarea.style.lineHeight = String(isEquation ? getEquationNodeLineHeight(textNode) : textNode.lineHeight());
+    textarea.style.color = isEquation ? getEquationNodeFill(textNode) : textNode.fill();
     textarea.style.margin = '0';
     textarea.style.border = '1px solid #1a73e8';
     textarea.style.background = '#ffffff';
-    textarea.style.textAlign = textNode.align();
+    textarea.style.textAlign = isEquation ? getEquationNodeAlign(textNode) : textNode.align();
     textarea.style.resize = 'none';
     textarea.style.overflow = 'hidden';
     textarea.style.transformOrigin = 'left top';
