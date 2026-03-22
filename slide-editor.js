@@ -569,6 +569,24 @@
     });
   }
 
+  function toggleVideoNodePlayback(node){
+    const video = applyVideoNodeSettings(node);
+    if (!video) return false;
+    try{
+      if (video.paused || video.ended){
+        if (video.ended){
+          video.currentTime = 0;
+        }
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+      return true;
+    }catch(err){
+      return false;
+    }
+  }
+
   function clearNodeAnimationArtifacts(nodes){
     const removedNodes = new Set((nodes || []).filter(Boolean));
     if (!removedNodes.size) return;
@@ -1200,6 +1218,30 @@
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => resolve(false);
       tx.onabort = () => resolve(false);
+    });
+  }
+
+  async function clearPersistedEditorState(){
+    if (persistTimer){
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    const db = await openEditorPersistenceDb();
+    if (db && typeof db.close === 'function'){
+      try{
+        db.close();
+      }catch(err){
+        // ignore close failures
+      }
+    }
+    persistDbPromise = null;
+    if (!window.indexedDB) return false;
+
+    return new Promise(resolve => {
+      const request = window.indexedDB.deleteDatabase(EDITOR_DB_NAME);
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => resolve(false);
+      request.onblocked = () => resolve(false);
     });
   }
 
@@ -2044,6 +2086,7 @@
   function discardEditorState(){
     if (!isInitialized || !stage){
       clearEditorSession();
+      clearPersistedEditorState();
       return true;
     }
     if (searchInput){
@@ -2052,7 +2095,7 @@
     }
     resetSlidesToSeedState('', { updateInput: false });
     clearEditorSession();
-    persistEditorStateNow();
+    clearPersistedEditorState();
     return true;
   }
 
@@ -2072,6 +2115,7 @@
   window.slideEditorControls = {
     preserveInBackground: preserveEditorStateInBackground,
     discardEditorState,
+    clearPersistedState: clearPersistedEditorState,
     getSnapshotSummary: buildEditorSnapshotSummary,
     canCycleOutByScrollDirection(deltaY){
       if (!slides.length) return false;
@@ -4377,6 +4421,13 @@
 
       if (!selectedNode) return;
 
+      if ((e.key === ' ' || e.code === 'Space') && isVideoNode(selectedNode)){
+        if (toggleVideoNodePlayback(selectedNode)){
+          e.preventDefault();
+        }
+        return;
+      }
+
       const step = e.shiftKey ? NUDGE_FINE_STEP : NUDGE_STEP;
       if (e.key === 'ArrowLeft'){
         nudgeSelected(-step, 0);
@@ -5071,7 +5122,12 @@
       scheduleThumbUpdate();
     });
 
-    if (isCssObjectNode(node)){
+    if (isVideoNode(node)){
+      node.on('dblclick dbltap', () => {
+        if (!isNodeSelected(node)) return;
+        toggleVideoNodePlayback(node);
+      });
+    } else if (isCssObjectNode(node)){
       node.on('dblclick dbltap', () => editCssObject(node));
     } else if (node.className === 'Text'){
       node.on('dblclick dbltap', () => editText(node));

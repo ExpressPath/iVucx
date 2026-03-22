@@ -2798,11 +2798,13 @@
       resetSearchModeDraft();
       clearSuggestionPane();
       resetGrayModeDraft();
+      skipNextModeStatePersist = true;
       if(window.slideEditorControls && typeof window.slideEditorControls.discardEditorState === 'function'){
         window.slideEditorControls.discardEditorState();
       }
       closeEditorCloseMenu();
       applyState(0);
+      clearEditorSessionPersistence();
     });
   }
 
@@ -2856,6 +2858,7 @@
   let cookieHistoryConsent = readLocalValue(COOKIE_HISTORY_CONSENT_KEY) || '';
   let cookieHistoryTimer = null;
   let pendingCookieHistorySnapshot = null;
+  let skipNextModeStatePersist = false;
   let blueModeCheckToken = 0;
   let loginPopupDismissed = false;
   let suggestionAbortController = null;
@@ -3895,9 +3898,8 @@
     if(!editorReturnContext) return;
 
     const summary = typeof editorReturnContext.summary === 'string' ? editorReturnContext.summary : '';
+    const returnToSelection = !!editorReturnContext.returnToSelection;
 
-    selectionMode = false;
-    selectionModeEl.style.display = 'none';
     input.value = summary;
     rememberedContent = summary;
     rememberedFiles = [];
@@ -3906,12 +3908,20 @@
     lastInputValue = input.value;
     renderAttachments();
     clearSuggestionPane();
-    fixedWrapper.style.removeProperty('display');
     bodyEl.classList.remove('login-check');
     bodyEl.classList.add('scrolled');
     input.placeholder = 'Write - Problem name';
     compactGrayAcceptedValue = input.value;
     state = 1;
+    if(returnToSelection){
+      selectionMode = true;
+      fixedWrapper.style.display = 'none';
+      selectionModeEl.style.display = 'flex';
+    }else{
+      selectionMode = false;
+      selectionModeEl.style.display = 'none';
+      fixedWrapper.style.removeProperty('display');
+    }
     adjustTextarea();
     persistModeState();
   }
@@ -3948,6 +3958,25 @@
       document.cookie = `${name}=; max-age=0; path=/; SameSite=Lax`;
     }catch(err){
       // ignore cookie write failure
+    }
+  }
+
+  function clearEditorSessionPersistence(){
+    if(cookieHistoryTimer){
+      clearTimeout(cookieHistoryTimer);
+      cookieHistoryTimer = null;
+    }
+    pendingCookieHistorySnapshot = null;
+    cookieHistoryConsent = '';
+    removeLocalValue(MODE_PERSIST_KEY);
+    removeLocalValue(COOKIE_HISTORY_CONSENT_KEY);
+    removeCookieValue(COOKIE_HISTORY_COOKIE);
+    removeCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`);
+    try{
+      sessionStorage.removeItem('ivucxEditorInit');
+      sessionStorage.removeItem(EDITOR_RETURN_KEY);
+    }catch(err){
+      // ignore storage failure
     }
   }
 
@@ -4607,9 +4636,13 @@
       adjustTextarea();
     }
 
-    persistModeState();
-    if(!isRestoringPersistedMode){
-      scheduleCookieHistorySnapshot('mode');
+    const shouldSkipPersist = skipNextModeStatePersist;
+    skipNextModeStatePersist = false;
+    if(!shouldSkipPersist){
+      persistModeState();
+      if(!isRestoringPersistedMode){
+        scheduleCookieHistorySnapshot('mode');
+      }
     }
 
     setTimeout(()=>{

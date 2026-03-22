@@ -806,13 +806,14 @@
       function handleBackNavigation(){
         const currentCode = getEditorCode();
         if(currentCode.length >= 30){
-          const shouldReturn = window.confirm('The editor has 30+ lines. Return to the summary?');
+          const shouldReturn = window.confirm('The editor has 30+ lines. Return to the proof assistant selection?');
           if(!shouldReturn) return;
         }
 
         const returnPayload = {
           summary: summaryText,
           proofAssistant: selectedLanguage,
+          returnToSelection: true,
           returnedAt: new Date().toISOString()
         };
 
