@@ -35,6 +35,40 @@ function buildMissingSchemaMessage(error) {
   return null;
 }
 
+async function readAccountWithConsentFallback(supabase, accountId) {
+  const preferred = await supabase
+    .from('blue_accounts')
+    .select('account_id, status, cookie_history_consent, cookie_history_consent_updated_at')
+    .eq('account_id', accountId)
+    .maybeSingle();
+
+  if (!preferred.error || preferred.error.code !== '42703') {
+    return {
+      data: preferred.data,
+      error: preferred.error,
+      schemaMissing: false
+    };
+  }
+
+  const fallback = await supabase
+    .from('blue_accounts')
+    .select('account_id, status')
+    .eq('account_id', accountId)
+    .maybeSingle();
+
+  return {
+    data: fallback.data
+      ? {
+          ...fallback.data,
+          cookie_history_consent: 'unknown',
+          cookie_history_consent_updated_at: null
+        }
+      : null,
+    error: fallback.error,
+    schemaMissing: true
+  };
+}
+
 async function readActiveAccount(supabase, req, res) {
   const rawSession = readSessionFromRequest(req);
   if (!rawSession) {
@@ -93,11 +127,11 @@ async function readActiveAccount(supabase, req, res) {
     };
   }
 
-  const { data: account, error: accountError } = await supabase
-    .from('blue_accounts')
-    .select('account_id, status, cookie_history_consent, cookie_history_consent_updated_at')
-    .eq('account_id', sessionRow.account_id)
-    .maybeSingle();
+  const {
+    data: account,
+    error: accountError,
+    schemaMissing
+  } = await readAccountWithConsentFallback(supabase, sessionRow.account_id);
 
   if (accountError) {
     return {
@@ -144,7 +178,8 @@ async function readActiveAccount(supabase, req, res) {
   return {
     ok: true,
     account,
-    nowIso
+    nowIso,
+    schemaMissing
   };
 }
 
@@ -171,14 +206,27 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { account, nowIso } = active;
+  const { account, nowIso, schemaMissing } = active;
 
   if (req.method === 'GET') {
     res.status(200).json({
       loggedIn: true,
       accountId: account.account_id,
       consent: normalizeConsent(account.cookie_history_consent),
-      updatedAt: account.cookie_history_consent_updated_at || null
+      updatedAt: account.cookie_history_consent_updated_at || null,
+      schemaMissing: !!schemaMissing
+    });
+    return;
+  }
+
+  if (schemaMissing) {
+    res.status(200).json({
+      loggedIn: true,
+      accountId: account.account_id,
+      consent: 'unknown',
+      updatedAt: null,
+      schemaMissing: true,
+      persisted: false
     });
     return;
   }

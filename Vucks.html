@@ -2866,6 +2866,7 @@
   let pendingCookieHistorySnapshot = null;
   let cookieConsentSyncPending = false;
   let cookieConsentHydrated = false;
+  let cookieConsentApiUnavailable = false;
   let skipNextModeStatePersist = false;
   let theoremDraftSaveTimer = null;
   let blueModeCheckToken = 0;
@@ -3352,6 +3353,14 @@
   }
 
   async function requestCookieConsentPreference(method = 'GET', payload = null, signal = null){
+    if(cookieConsentApiUnavailable){
+      return {
+        loggedIn: false,
+        consent: 'unknown',
+        reason: 'unavailable',
+        persisted: false
+      };
+    }
     return requestAuthJson('/api/cookie-consent', method, payload, signal);
   }
 
@@ -3397,6 +3406,9 @@
       });
       return true;
     }catch(err){
+      if(err && err.status === 404){
+        cookieConsentApiUnavailable = true;
+      }
       return false;
     }
   }
@@ -3406,6 +3418,9 @@
       await requestCookieConsentPreference('DELETE');
       return true;
     }catch(err){
+      if(err && err.status === 404){
+        cookieConsentApiUnavailable = true;
+      }
       return false;
     }
   }
@@ -3434,6 +3449,9 @@
       }
       return !!remoteStatus;
     }catch(err){
+      if(err && err.status === 404){
+        cookieConsentApiUnavailable = true;
+      }
       if(!cookieHistoryConsent){
         cookieConsentHydrated = true;
       }

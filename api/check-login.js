@@ -6,6 +6,40 @@ import {
   readSessionFromRequest
 } from '../lib/blue-auth.js';
 
+async function readAccountWithConsentFallback(supabase, accountId) {
+  const preferred = await supabase
+    .from('blue_accounts')
+    .select('account_id, rewards, status, cookie_history_consent, cookie_history_consent_updated_at')
+    .eq('account_id', accountId)
+    .maybeSingle();
+
+  if (!preferred.error || preferred.error.code !== '42703') {
+    return {
+      data: preferred.data,
+      error: preferred.error,
+      schemaMissing: false
+    };
+  }
+
+  const fallback = await supabase
+    .from('blue_accounts')
+    .select('account_id, rewards, status')
+    .eq('account_id', accountId)
+    .maybeSingle();
+
+  return {
+    data: fallback.data
+      ? {
+          ...fallback.data,
+          cookie_history_consent: 'unknown',
+          cookie_history_consent_updated_at: null
+        }
+      : null,
+    error: fallback.error,
+    schemaMissing: true
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') {
@@ -71,19 +105,19 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { data: account, error: accountError } = await supabase
-    .from('blue_accounts')
-    .select('account_id, rewards, status, cookie_history_consent, cookie_history_consent_updated_at')
-    .eq('account_id', sessionRow.account_id)
-    .maybeSingle();
+  const {
+    data: account,
+    error: accountError,
+    schemaMissing: cookieConsentSchemaMissing
+  } = await readAccountWithConsentFallback(supabase, sessionRow.account_id);
 
   if (accountError) {
     res.status(500).json({
       loggedIn: false,
       rewards: [],
       error:
-        accountError.code === '42P01' || accountError.code === '42703'
-          ? 'Auth tables or cookie consent columns are missing. Run supabase/blue_mode_auth.sql first.'
+        accountError.code === '42P01'
+          ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
           : 'Could not read account',
       detail: accountError.message || null
     });
@@ -121,6 +155,7 @@ export default async function handler(req, res) {
         ? account.cookie_history_consent
         : 'unknown',
     cookieConsentUpdatedAt: account.cookie_history_consent_updated_at || null,
+    cookieConsentSchemaMissing: !!cookieConsentSchemaMissing,
     reason: 'ok'
   });
 }

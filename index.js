@@ -10,6 +10,7 @@ import blueAuthLogin from './api/blue-auth-login.js';
 import blueAuthLogout from './api/blue-auth-logout.js';
 import blueAuthSignup from './api/blue-auth-signup.js';
 import checkLogin from './api/check-login.js';
+import cookieConsent from './api/cookie-consent.js';
 import jscoqProxy from './api/jscoq-proxy.js';
 import suggest from './api/suggest.js';
 
@@ -386,6 +387,7 @@ app.all('/api/blue-auth-signup', wrap(blueAuthSignup));
 app.all('/api/blue-auth-login', wrap(blueAuthLogin));
 app.all('/api/blue-auth-logout', wrap(blueAuthLogout));
 app.all('/api/check-login', wrap(checkLogin));
+app.all('/api/cookie-consent', wrap(cookieConsent));
 app.all('/api/suggest', wrap(suggest));
 
 app.use(express.static(__dirname, { dotfiles: 'ignore', extensions: ['html'] }));
