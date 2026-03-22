@@ -872,57 +872,68 @@
     return clone;
   }
 
+  function escapeSvgText(value){
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
   function buildEquationStaticRender(source, node){
-    const MQ = getMathQuillInterface();
     const host = ensureEquationRenderHost();
     host.innerHTML = '';
+    const displayText = renderEquationSource(source);
+    const fontSize = getEquationNodeFontSize(node);
+    const lineHeight = getEquationNodeLineHeight(node);
+    const fill = getEquationNodeFill(node);
+    const fontFamily = getEquationNodeFontFamily(node);
+    const align = getEquationNodeAlign(node);
+    const paddingX = 4;
+    const paddingY = 3;
 
     const wrapper = document.createElement('div');
     wrapper.style.display = 'inline-block';
-    wrapper.style.padding = '0';
+    wrapper.style.padding = `${paddingY}px ${paddingX}px`;
     wrapper.style.margin = '0';
     wrapper.style.background = 'transparent';
-    wrapper.style.whiteSpace = 'nowrap';
-    wrapper.style.color = getEquationNodeFill(node);
-    wrapper.style.fontSize = `${getEquationNodeFontSize(node)}px`;
-    wrapper.style.fontFamily = getEquationNodeFontFamily(node);
-    wrapper.style.lineHeight = String(getEquationNodeLineHeight(node));
-    wrapper.style.textAlign = getEquationNodeAlign(node);
+    wrapper.style.whiteSpace = 'pre';
+    wrapper.style.color = fill;
+    wrapper.style.fontSize = `${fontSize}px`;
+    wrapper.style.fontFamily = fontFamily;
+    wrapper.style.lineHeight = String(lineHeight);
+    wrapper.style.textAlign = align;
     wrapper.style.overflow = 'visible';
-
-    if (MQ){
-      const fieldEl = document.createElement('span');
-      fieldEl.style.display = 'inline-block';
-      fieldEl.style.background = 'transparent';
-      wrapper.appendChild(fieldEl);
-      host.appendChild(wrapper);
-      try{
-        const staticMath = MQ.StaticMath(fieldEl);
-        if (staticMath && typeof staticMath.latex === 'function'){
-          staticMath.latex(source || '');
-        }
-      }catch(err){
-        fieldEl.textContent = renderEquationSource(source);
-      }
-    } else {
-      wrapper.textContent = renderEquationSource(source);
-      host.appendChild(wrapper);
-    }
+    wrapper.textContent = displayText || ' ';
+    host.appendChild(wrapper);
 
     const rect = wrapper.getBoundingClientRect();
     const naturalWidth = Math.max(MIN_SIZE, Math.ceil(rect.width || 0), source ? 0 : 160);
-    const naturalHeight = Math.max(40, Math.ceil(rect.height || 0), Math.ceil(getEquationNodeFontSize(node) * getEquationNodeLineHeight(node)));
-    wrapper.style.width = `${naturalWidth}px`;
-    wrapper.style.height = `${naturalHeight}px`;
-
-    const cloned = cloneNodeWithInlineStyles(wrapper, {
-      isEquation: true,
-      equationColor: getEquationNodeFill(node)
-    });
-    const markup = new XMLSerializer().serializeToString(cloned);
+    const naturalHeight = Math.max(40, Math.ceil(rect.height || 0), Math.ceil(fontSize * lineHeight) + (paddingY * 2));
+    const lines = String(displayText || '').split(/\r?\n/);
+    const safeLines = lines.length ? lines : [''];
+    const textAnchor = align === 'center' ? 'middle' : (align === 'right' ? 'end' : 'start');
+    const textX = align === 'center'
+      ? naturalWidth / 2
+      : (align === 'right' ? naturalWidth - paddingX : paddingX);
+    const firstBaseline = paddingY + fontSize;
+    const lineStep = Math.max(fontSize, fontSize * lineHeight);
+    const tspans = safeLines.map((line, index) => {
+      const dy = index === 0 ? 0 : lineStep;
+      return `<tspan x="${textX}" dy="${dy}">${escapeSvgText(line || ' ')}</tspan>`;
+    }).join('');
     const svg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="${naturalWidth}" height="${naturalHeight}" viewBox="0 0 ${naturalWidth} ${naturalHeight}">
-        <foreignObject width="100%" height="100%">${markup}</foreignObject>
+        <text
+          x="${textX}"
+          y="${firstBaseline}"
+          fill="${escapeSvgText(fill)}"
+          font-family="${escapeSvgText(fontFamily)}"
+          font-size="${fontSize}"
+          text-anchor="${textAnchor}"
+          xml:space="preserve"
+        >${tspans}</text>
       </svg>
     `.trim();
 
