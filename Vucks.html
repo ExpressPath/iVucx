@@ -2245,6 +2245,7 @@
   </div>
 </div>
 
+<script src="theorem-draft-store.js"></script>
 <script>
   const bodyEl = document.body;
   const qBtn = document.getElementById('qBtn');
@@ -2288,6 +2289,7 @@
   let selectionMode = false;
   let rememberedContent = '';
   let rememberedFiles = [];
+  let selectionReturnScreen = 'gray-compact';
   const selectionModeEl = document.getElementById('selectionMode');
   const selectionCancel = document.getElementById('selectionCancel');
   const blueModePanel = document.getElementById('blueModePanel');
@@ -2316,6 +2318,7 @@
   const withdrawBtn = document.getElementById('withdrawBtn');
   const depositBtn = document.getElementById('depositBtn');
   const editorReturnContext = readEditorReturnContext();
+  const theoremDraftStore = window.ivucxTheoremDraftStore || null;
 
   function readEditorReturnContext(){
     try{
@@ -2450,11 +2453,13 @@
       window.slideEditorControls.preserveInBackground();
     }
     setModeDraft(1, input.value || compactGrayAcceptedValue, attachedFiles);
+    selectionReturnScreen = isExpandedEditorActive() ? 'gray-editor' : 'gray-compact';
     selectionMode = true;
     rememberedContent = input.value || compactGrayAcceptedValue;
     rememberedFiles = [...attachedFiles];
     fixedWrapper.style.display = 'none';
     selectionModeEl.style.display = 'flex';
+    saveSelectionNavigation('selection', selectionReturnScreen);
   }
 
   function exitSelectionMode(restore = true){
@@ -2470,9 +2475,10 @@
     fixedWrapper.style.removeProperty('display');
     selectionModeEl.style.display = 'none';
     adjustTextarea();
+    saveSelectionNavigation(selectionReturnScreen, 'selection');
   }
 
-  function openEditor(choice){
+  async function openEditor(choice){
     if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
       window.slideEditorControls.preserveInBackground();
     }
@@ -2492,6 +2498,11 @@
     }catch(err){
       // ignore storage failure
     }
+
+    await Promise.all([
+      saveSelectionNavigation('proof-editor', 'selection', choice),
+      saveSlideDraftSnapshot('open-proof-editor')
+    ]);
 
     const params = new URLSearchParams({ lang: choice });
     window.location.href = `editor.html?${params.toString()}`;
@@ -2859,6 +2870,7 @@
   let cookieHistoryTimer = null;
   let pendingCookieHistorySnapshot = null;
   let skipNextModeStatePersist = false;
+  let theoremDraftSaveTimer = null;
   let blueModeCheckToken = 0;
   let loginPopupDismissed = false;
   let suggestionAbortController = null;
@@ -2994,6 +3006,136 @@
       localStorage.removeItem(key);
     }catch(err){
       // ignore storage failure
+    }
+  }
+
+  function patchTheoremDraftRecord(partial){
+    if(!theoremDraftStore || typeof theoremDraftStore.patch !== 'function'){
+      return Promise.resolve(null);
+    }
+    return theoremDraftStore.patch(partial).catch(()=>null);
+  }
+
+  function buildCurrentScreenId(){
+    if(selectionMode) return 'selection';
+    if(state === 1 && container.classList.contains('expanded')) return 'gray-editor';
+    if(state === 1) return 'gray-compact';
+    if(state === 2) return 'blue';
+    return 'search';
+  }
+
+  function getTheoremTitleText(){
+    return String(
+      compactGrayAcceptedValue
+      || (modeDrafts[1] && modeDrafts[1].text)
+      || rememberedContent
+      || (state === 1 ? input.value : '')
+      || ''
+    ).trim();
+  }
+
+  function queueTheoremDraftSave(reason = 'title'){
+    if(theoremDraftSaveTimer){
+      clearTimeout(theoremDraftSaveTimer);
+    }
+    theoremDraftSaveTimer = setTimeout(()=>{
+      theoremDraftSaveTimer = null;
+      saveTheoremTitleNow(reason);
+    }, 180);
+  }
+
+  function saveTheoremTitleNow(reason = 'title'){
+    const titleText = getTheoremTitleText();
+    if(!titleText && state !== 1 && !selectionMode) return Promise.resolve(null);
+    return patchTheoremDraftRecord({
+      title: {
+        text: titleText,
+        updatedAt: new Date().toISOString(),
+        reason
+      },
+      navigation: {
+        currentScreen: buildCurrentScreenId(),
+        updatedAt: new Date().toISOString()
+      }
+    });
+  }
+
+  function saveSelectionNavigation(currentScreen, previousScreen, proofAssistant = ''){
+    return patchTheoremDraftRecord({
+      title: {
+        text: getTheoremTitleText(),
+        updatedAt: new Date().toISOString()
+      },
+      navigation: {
+        currentScreen,
+        previousScreen,
+        proofAssistant,
+        updatedAt: new Date().toISOString()
+      }
+    });
+  }
+
+  function saveSlideDraftSnapshot(reason = 'slide-editor'){
+    if(!window.slideEditorControls || typeof window.slideEditorControls.getPersistedRecord !== 'function'){
+      return Promise.resolve(null);
+    }
+    const record = window.slideEditorControls.getPersistedRecord();
+    const snapshotSummary = window.slideEditorControls.getSnapshotSummary && typeof window.slideEditorControls.getSnapshotSummary === 'function'
+      ? window.slideEditorControls.getSnapshotSummary()
+      : null;
+    return patchTheoremDraftRecord({
+      title: {
+        text: getTheoremTitleText(),
+        updatedAt: new Date().toISOString()
+      },
+      summarySlide: {
+        record,
+        snapshotSummary,
+        updatedAt: new Date().toISOString(),
+        reason
+      },
+      navigation: {
+        currentScreen: buildCurrentScreenId(),
+        updatedAt: new Date().toISOString()
+      }
+    });
+  }
+
+  async function restoreTheoremDraftTitle(){
+    if(!theoremDraftStore || typeof theoremDraftStore.read !== 'function') return false;
+    try{
+      const draft = await theoremDraftStore.read();
+      if(!draft || !draft.title || typeof draft.title.text !== 'string') return false;
+      const titleText = draft.title.text.trim();
+      if(!titleText) return false;
+      const navigation = draft.navigation && typeof draft.navigation === 'object'
+        ? draft.navigation
+        : {};
+
+      compactGrayAcceptedValue = titleText;
+      rememberedContent = titleText;
+      setModeDraft(1, titleText, []);
+
+      if(!input.value || (state === 1 && !input.value.trim())){
+        input.value = titleText;
+        lastInputValue = input.value;
+        adjustTextarea();
+      }
+
+      if(!editorReturnContext && navigation.currentScreen === 'selection'){
+        selectionReturnScreen = typeof navigation.previousScreen === 'string' && navigation.previousScreen
+          ? navigation.previousScreen
+          : 'gray-editor';
+        state = 1;
+        selectionMode = true;
+        fixedWrapper.style.display = 'none';
+        selectionModeEl.style.display = 'flex';
+        bodyEl.classList.add('scrolled');
+        input.placeholder = 'Write - Problem name';
+      }
+      return true;
+    }catch(err){
+      return false;
     }
   }
 
@@ -3914,13 +4056,16 @@
     compactGrayAcceptedValue = input.value;
     state = 1;
     if(returnToSelection){
+      selectionReturnScreen = 'gray-editor';
       selectionMode = true;
       fixedWrapper.style.display = 'none';
       selectionModeEl.style.display = 'flex';
+      saveSelectionNavigation('selection', selectionReturnScreen, editorReturnContext.proofAssistant || '');
     }else{
       selectionMode = false;
       selectionModeEl.style.display = 'none';
       fixedWrapper.style.removeProperty('display');
+      saveSelectionNavigation('gray-compact', 'proof-editor', editorReturnContext.proofAssistant || '');
     }
     adjustTextarea();
     persistModeState();
@@ -3977,6 +4122,9 @@
       sessionStorage.removeItem(EDITOR_RETURN_KEY);
     }catch(err){
       // ignore storage failure
+    }
+    if(theoremDraftStore && typeof theoremDraftStore.clear === 'function'){
+      theoremDraftStore.clear();
     }
   }
 
@@ -4462,6 +4610,9 @@
     adjustTextarea();
     persistModeState();
     scheduleCookieHistorySnapshot('input');
+    if(state === 1 || selectionMode){
+      queueTheoremDraftSave('title-input');
+    }
   }
 
   ['input','keyup','change','cut','paste','compositionend'].forEach(evt=>{
@@ -4923,10 +5074,21 @@
   window.addEventListener('slide-editor:state-saved', ()=>{
     persistModeState();
     scheduleCookieHistorySnapshot('slide-editor');
+    saveSlideDraftSnapshot('slide-editor');
   });
 
-  restorePersistedModeState();
-  persistModeState();
+  (async ()=>{
+    restorePersistedModeState();
+    await restoreTheoremDraftTitle();
+    persistModeState();
+  })();
+
+  window.addEventListener('pagehide', ()=>{
+    if(state === 1 || selectionMode){
+      saveTheoremTitleNow('pagehide');
+      saveSlideDraftSnapshot('pagehide');
+    }
+  });
 
 </script>
 <script src="https://unpkg.com/konva@9.3.14/konva.min.js"></script>

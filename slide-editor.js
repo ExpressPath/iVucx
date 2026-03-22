@@ -12,6 +12,7 @@
   const imageInput = document.getElementById('slideImageInput');
   const videoInput = document.getElementById('slideVideoInput');
   const fileInput = document.getElementById('slideFileInput');
+  const theoremDraftStore = window.ivucxTheoremDraftStore || null;
   const toolButtons = Array.from(document.querySelectorAll('[data-tool]'));
   const shapeToolButton = document.querySelector('[data-tool="shape"]');
   const lineToolButton = document.querySelector('[data-tool="line"]');
@@ -1943,6 +1944,10 @@
     };
   }
 
+  function getPersistedEditorRecordSnapshot(){
+    return JSON.parse(JSON.stringify(buildPersistedEditorRecord()));
+  }
+
   function buildEditorSnapshotSummary(){
     return {
       slideCount: slides.length,
@@ -2275,6 +2280,27 @@
     return applyPersistedEditorRecord(record);
   }
 
+  async function readSharedTheoremSlideRecord(){
+    if (!theoremDraftStore || typeof theoremDraftStore.read !== 'function') return null;
+    try{
+      const draft = await theoremDraftStore.read();
+      const record = draft && draft.summarySlide && typeof draft.summarySlide === 'object'
+        ? draft.summarySlide.record
+        : null;
+      return record && typeof record === 'object'
+        ? JSON.parse(JSON.stringify(record))
+        : null;
+    }catch(err){
+      return null;
+    }
+  }
+
+  async function restoreSharedTheoremDraftState(){
+    const record = await readSharedTheoremSlideRecord();
+    if (!record) return false;
+    return applyPersistedEditorRecord(record);
+  }
+
   function startEditorSession(){
     sessionSeedText = searchInput ? searchInput.value : '';
     sessionBaselineDigest = getEditorStateDigest();
@@ -2411,6 +2437,7 @@
     preserveInBackground: preserveEditorStateInBackground,
     discardEditorState,
     clearPersistedState: clearPersistedEditorState,
+    getPersistedRecord: getPersistedEditorRecordSnapshot,
     getSnapshotSummary: buildEditorSnapshotSummary,
     canCycleOutByScrollDirection(deltaY){
       if (!slides.length) return false;
@@ -3896,10 +3923,15 @@
     renderThumbs();
 
     isInitialized = true;
-    restorePersistedEditorState().finally(() => {
-      hasCompletedPersistenceBootstrap = true;
-      schedulePersistentSave();
-    });
+    restorePersistedEditorState()
+      .then(restored => {
+        if (restored) return true;
+        return restoreSharedTheoremDraftState();
+      })
+      .finally(() => {
+        hasCompletedPersistenceBootstrap = true;
+        schedulePersistentSave();
+      });
   }
 
   function createSlide(type = 'canvas', payload = null, options = {}){

@@ -413,6 +413,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
   <script src="CoqRunner.js"></script>
+  <script src="theorem-draft-store.js"></script>
   <script>
     (function(){
       const INIT_STORAGE_KEY = 'ivucxEditorInit';
@@ -436,6 +437,7 @@
       const editorMount = document.getElementById('editor');
       const toastEl = document.getElementById('toast');
       const toastMessageEl = document.getElementById('toastMessage');
+      const theoremDraftStore = window.ivucxTheoremDraftStore || null;
 
       const languageConfig = {
         Lean: {
@@ -499,10 +501,10 @@
 
 
 
-      const summaryText = typeof initPayload.summary === 'string'
+      let summaryText = typeof initPayload.summary === 'string'
         ? initPayload.summary
         : (typeof initPayload.draft === 'string' ? initPayload.draft : '');
-      const initialDraft = initPayload.keepSummaryBackground
+      let initialDraft = initPayload.keepSummaryBackground
         ? ''
         : (typeof initPayload.draft === 'string'
           ? initPayload.draft
@@ -517,19 +519,7 @@
       let toastTimer = null;
       let keepAliveTimer = null;
       let keepAliveInFlight = false;
-
-      if(selectedLanguage === 'Lean'){
-        leanSeed = initialDraft && initialDraft.trim()
-          ? initialDraft
-          : (selectedConfig && selectedConfig.starter ? selectedConfig.starter : '');
-      }
-
-      setStatus('Ready');
-
-      setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, summaryText);
-      setLeanMode(selectedLanguage === 'Lean');
-      startKeepAlivePings();
-
+      let proofDraftSaveTimer = null;
 
       backBtn.addEventListener('click', ()=>{
         handleBackNavigation();
@@ -543,18 +533,25 @@
       if(leanGoalsVerifyBtn){
         leanGoalsVerifyBtn.addEventListener('click', ()=>{
           renderLeanGoalsSummary(leanGoalsInput ? leanGoalsInput.value : '');
+          scheduleProofDraftSave('lean-goals');
         });
       }
-
-      if(selectedLanguage === 'Lean'){
-        if(!leanSeed && selectedConfig && selectedConfig.starter){
-          leanSeed = selectedConfig.starter;
-        }
-        initializeEditor(leanSeed, selectedLanguage);
-      } else {
-        initializeEditor(initialDraft, selectedLanguage);
+      if(leanGoalsInput){
+        leanGoalsInput.addEventListener('input', ()=>{
+          scheduleProofDraftSave('lean-goals-input');
+        });
       }
       window.addEventListener('paste', handleProofFilePaste, true);
+      window.addEventListener('pagehide', ()=>{
+        saveProofDraftSnapshot('pagehide');
+      });
+      document.addEventListener('visibilitychange', ()=>{
+        if(document.visibilityState === 'hidden'){
+          saveProofDraftSnapshot('visibility-hidden');
+        }
+      });
+
+      bootEditor();
 
       function readInitPayload(){
         try{
@@ -778,6 +775,10 @@
           editorInstance.addCommand(monacoRef.KeyMod.CtrlCmd | monacoRef.KeyCode.Enter, function(){
             runProof();
           });
+          editorInstance.onDidChangeModelContent(function(){
+            scheduleProofDraftSave('monaco-edit');
+          });
+          saveProofDraftSnapshot('editor-ready');
         }, function(){
           activateFallbackEditor(initialText);
           outputEl.textContent += '\nMonaco loading failed. Fallback textarea is active.';
@@ -789,6 +790,10 @@
         editorMount.style.display = 'none';
         fallbackEditor.style.display = 'block';
         fallbackEditor.value = initialText;
+        saveProofDraftSnapshot('fallback-ready');
+        fallbackEditor.addEventListener('input', function(){
+          scheduleProofDraftSave('fallback-edit');
+        });
         fallbackEditor.addEventListener('keydown', function(e){
           const isRunShortcut = (e.ctrlKey || e.metaKey) && e.key === 'Enter';
           if(!isRunShortcut) return;
@@ -803,12 +808,33 @@
         return '';
       }
 
-      function handleBackNavigation(){
+      async function handleBackNavigation(){
         const currentCode = getEditorCode();
         if(currentCode.length >= 30){
           const shouldReturn = window.confirm('The editor has 30+ lines. Return to the proof assistant selection?');
           if(!shouldReturn) return;
         }
+
+        await patchTheoremDraftRecord({
+          title: {
+            text: summaryText || '',
+            updatedAt: new Date().toISOString()
+          },
+          proof: {
+            language: selectedLanguage,
+            fileName: selectedConfig ? selectedConfig.fileName : '',
+            code: currentCode,
+            goalsText: leanGoalsInput ? leanGoalsInput.value : '',
+            updatedAt: new Date().toISOString(),
+            reason: 'back-navigation'
+          },
+          navigation: {
+            currentScreen: 'selection',
+            previousScreen: 'proof-editor',
+            proofAssistant: selectedLanguage,
+            updatedAt: new Date().toISOString()
+          }
+        });
 
         const returnPayload = {
           summary: summaryText,
@@ -1156,6 +1182,122 @@
           showToast('Post as a proof?', 'ok');
           return { status: 'allowed', proof_state: 'YY', reason: summary };
         }
+      }
+
+      function patchTheoremDraftRecord(partial){
+        if(!theoremDraftStore || typeof theoremDraftStore.patch !== 'function'){
+          return Promise.resolve(null);
+        }
+        return theoremDraftStore.patch(partial).catch(()=>null);
+      }
+
+      function buildProofDraftSnapshot(reason = 'proof-editor'){
+        return {
+          title: {
+            text: summaryText || '',
+            updatedAt: new Date().toISOString()
+          },
+          proof: {
+            language: selectedLanguage,
+            fileName: selectedConfig ? selectedConfig.fileName : '',
+            code: getEditorCode(),
+            goalsText: leanGoalsInput ? leanGoalsInput.value : '',
+            updatedAt: new Date().toISOString(),
+            reason
+          },
+          navigation: {
+            currentScreen: 'proof-editor',
+            previousScreen: 'selection',
+            proofAssistant: selectedLanguage,
+            updatedAt: new Date().toISOString()
+          }
+        };
+      }
+
+      function saveProofDraftSnapshot(reason = 'proof-editor'){
+        return patchTheoremDraftRecord(buildProofDraftSnapshot(reason));
+      }
+
+      function scheduleProofDraftSave(reason = 'proof-editor'){
+        if(proofDraftSaveTimer){
+          clearTimeout(proofDraftSaveTimer);
+        }
+        proofDraftSaveTimer = setTimeout(()=>{
+          proofDraftSaveTimer = null;
+          saveProofDraftSnapshot(reason);
+        }, 220);
+      }
+
+      async function restoreProofDraftFromBackground(){
+        if(!theoremDraftStore || typeof theoremDraftStore.read !== 'function'){
+          return { summary: summaryText, draft: initialDraft, goalsText: '' };
+        }
+        try{
+          const record = await theoremDraftStore.read();
+          if(!record || typeof record !== 'object'){
+            return { summary: summaryText, draft: initialDraft, goalsText: '' };
+          }
+
+          const storedTitle = record.title && typeof record.title.text === 'string'
+            ? record.title.text
+            : '';
+          const storedProof = record.proof && typeof record.proof === 'object'
+            ? record.proof
+            : null;
+          const nextSummary = storedTitle || summaryText;
+          const nextDraft = storedProof
+            && storedProof.language === selectedLanguage
+            && typeof storedProof.code === 'string'
+            ? storedProof.code
+            : initialDraft;
+          const nextGoalsText = storedProof
+            && storedProof.language === selectedLanguage
+            && typeof storedProof.goalsText === 'string'
+            ? storedProof.goalsText
+            : '';
+
+          return {
+            summary: nextSummary,
+            draft: nextDraft,
+            goalsText: nextGoalsText
+          };
+        }catch(err){
+          return { summary: summaryText, draft: initialDraft, goalsText: '' };
+        }
+      }
+
+      async function bootEditor(){
+        setStatus('Ready');
+
+        const restored = await restoreProofDraftFromBackground();
+        summaryText = typeof restored.summary === 'string' ? restored.summary : summaryText;
+        initialDraft = typeof restored.draft === 'string' ? restored.draft : initialDraft;
+        const restoredGoalsText = typeof restored.goalsText === 'string' ? restored.goalsText : '';
+
+        setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, summaryText);
+        setLeanMode(selectedLanguage === 'Lean');
+        startKeepAlivePings();
+
+        if(selectedLanguage === 'Lean'){
+          leanSeed = initialDraft && initialDraft.trim()
+            ? initialDraft
+            : (selectedConfig && selectedConfig.starter ? selectedConfig.starter : '');
+          if(!leanSeed && selectedConfig && selectedConfig.starter){
+            leanSeed = selectedConfig.starter;
+          }
+          initializeEditor(leanSeed, selectedLanguage);
+        } else {
+          initializeEditor(initialDraft, selectedLanguage);
+        }
+
+        if(leanGoalsInput){
+          leanGoalsInput.value = restoredGoalsText;
+        }
+        if(selectedLanguage === 'Lean'){
+          renderLeanGoalsSummary(restoredGoalsText);
+        }
+
+        saveProofDraftSnapshot('boot');
       }
 
       async function requestCoqServer(code){
