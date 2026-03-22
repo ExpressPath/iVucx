@@ -244,6 +244,7 @@
   let lineStart = null;
   let lineCurvePoints = [];
   let thumbTimer = null;
+  let draggingSlideIndex = -1;
   let videoAnimation = null;
   let activeTextEditor = null;
   let activeTextNode = null;
@@ -3695,6 +3696,51 @@
     updateDocumentNavPopup();
   }
 
+  function reorderSlide(fromIndex, toIndex){
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= slides.length || toIndex > slides.length){
+      return false;
+    }
+    const normalizedInsertIndex = Math.max(0, Math.min(
+      toIndex - (fromIndex < toIndex ? 1 : 0),
+      slides.length - 1
+    ));
+    if (fromIndex === normalizedInsertIndex){
+      return false;
+    }
+    const [movedSlide] = slides.splice(fromIndex, 1);
+    if (!movedSlide) return false;
+    const insertIndex = Math.max(0, Math.min(
+      toIndex - (fromIndex < toIndex ? 1 : 0),
+      slides.length
+    ));
+    slides.splice(insertIndex, 0, movedSlide);
+
+    if (currentSlideIndex === fromIndex){
+      currentSlideIndex = insertIndex;
+    } else if (fromIndex < currentSlideIndex && insertIndex >= currentSlideIndex){
+      currentSlideIndex -= 1;
+    } else if (fromIndex > currentSlideIndex && insertIndex <= currentSlideIndex){
+      currentSlideIndex += 1;
+    }
+
+    renderThumbs();
+    showSlide(currentSlideIndex, { syncSeedFromInput: false, allowHiddenInPresentation: true });
+    schedulePersistentSave();
+    return true;
+  }
+
+  function clearThumbDragState(keepDragging = false){
+    if (!thumbsEl) return;
+    thumbsEl.querySelectorAll('.slide-thumb, .slide-thumb-add').forEach((element) => {
+      element.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after', 'is-drop-target');
+    });
+    if (!keepDragging || draggingSlideIndex === -1) return;
+    const draggingThumb = thumbsEl.querySelector(`.slide-thumb[data-slide-index="${draggingSlideIndex}"]`);
+    if (draggingThumb){
+      draggingThumb.classList.add('is-dragging');
+    }
+  }
+
   function renderThumbs(){
     thumbsEl.innerHTML = '';
     const isStowed = thumbsEl.classList.contains('is-stowed');
@@ -3717,6 +3763,8 @@
       thumb.className = 'slide-thumb'
         + (index === currentSlideIndex ? ' is-active' : '')
         + (slide.hidden ? ' is-hidden' : '');
+      thumb.draggable = true;
+      thumb.dataset.slideIndex = String(index);
 
       const label = document.createElement('div');
       label.className = 'slide-thumb-index';
@@ -3747,6 +3795,54 @@
         thumb.appendChild(flag);
       }
       thumb.addEventListener('click', () => showSlide(index));
+      thumb.addEventListener('dragstart', (e) => {
+        if (!isEditorActive){
+          e.preventDefault();
+          return;
+        }
+        draggingSlideIndex = index;
+        clearThumbDragState();
+        thumb.classList.add('is-dragging');
+        if (e.dataTransfer){
+          e.dataTransfer.effectAllowed = 'move';
+          try{
+            e.dataTransfer.setData('text/plain', String(index));
+          }catch(err){
+            // ignore browser drag payload quirks
+          }
+        }
+      });
+      thumb.addEventListener('dragover', (e) => {
+        if (!isEditorActive || draggingSlideIndex === -1 || draggingSlideIndex === index){
+          return;
+        }
+        e.preventDefault();
+        clearThumbDragState(true);
+        const rect = thumb.getBoundingClientRect();
+        const dropAfter = e.clientY > rect.top + rect.height / 2;
+        thumb.classList.add(dropAfter ? 'is-drop-after' : 'is-drop-before');
+        if (e.dataTransfer){
+          e.dataTransfer.dropEffect = 'move';
+        }
+      });
+      thumb.addEventListener('drop', (e) => {
+        if (!isEditorActive || draggingSlideIndex === -1){
+          return;
+        }
+        e.preventDefault();
+        const rect = thumb.getBoundingClientRect();
+        const dropAfter = e.clientY > rect.top + rect.height / 2;
+        const targetIndex = dropAfter ? index + 1 : index;
+        const moved = reorderSlide(draggingSlideIndex, targetIndex);
+        draggingSlideIndex = -1;
+        if (!moved){
+          clearThumbDragState();
+        }
+      });
+      thumb.addEventListener('dragend', () => {
+        draggingSlideIndex = -1;
+        clearThumbDragState();
+      });
       thumb.addEventListener('contextmenu', (e) => {
         if (!isEditorActive) return;
         e.preventDefault();
@@ -3768,6 +3864,31 @@
     addBtn.className = 'slide-thumb-add';
     addBtn.type = 'button';
     addBtn.textContent = '+ New slide';
+    addBtn.addEventListener('dragover', (e) => {
+      if (!isEditorActive || draggingSlideIndex === -1){
+        return;
+      }
+      e.preventDefault();
+      clearThumbDragState(true);
+      addBtn.classList.add('is-drop-target');
+      if (e.dataTransfer){
+        e.dataTransfer.dropEffect = 'move';
+      }
+    });
+    addBtn.addEventListener('drop', (e) => {
+      if (!isEditorActive || draggingSlideIndex === -1){
+        return;
+      }
+      e.preventDefault();
+      const moved = reorderSlide(draggingSlideIndex, slides.length);
+      draggingSlideIndex = -1;
+      if (!moved){
+        clearThumbDragState();
+      }
+    });
+    addBtn.addEventListener('dragleave', () => {
+      addBtn.classList.remove('is-drop-target');
+    });
     addBtn.addEventListener('click', () => {
       createSlide();
       renderThumbs();
@@ -4012,7 +4133,7 @@
       if (target){
         if (isCssObjectNode(target)){
           items.push({
-            label: 'Edit CSS object',
+            label: 'Edit CSS object code',
             action: () => editCssObject(target)
           });
         } else if (target.className === 'Text'){
@@ -5247,7 +5368,7 @@
     return new Konva.Text({
       x,
       y,
-      text: 'Double click to edit',
+      text: '',
       fontSize: 32,
       fontFamily: 'Arial',
       fill: '#111111',
@@ -5458,7 +5579,7 @@
     return node;
   }
 
-  function createEquationNode(x, y, source = 'y=x^2+1'){
+  function createEquationNode(x, y, source = ''){
     const node = new Konva.Text({
       x,
       y,
