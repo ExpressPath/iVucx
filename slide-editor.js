@@ -764,6 +764,23 @@
     return Math.max(1, raw || 1.25);
   }
 
+  function ensureEquationNodeHitArea(node){
+    if (!isEquationNode(node)) return;
+    if (typeof node.listening === 'function') node.listening(true);
+    if (typeof node.fill === 'function') node.fill('rgba(0,0,0,0)');
+    if (typeof node.fillEnabled === 'function') node.fillEnabled(true);
+    if (typeof node.stroke === 'function') node.stroke('rgba(0,0,0,0)');
+    if (typeof node.strokeEnabled === 'function') node.strokeEnabled(false);
+    if (typeof node.hitFunc === 'function'){
+      node.hitFunc((ctx, shape) => {
+        ctx.beginPath();
+        ctx.rect(0, 0, Math.max(MIN_SIZE, shape.width()), Math.max(40, shape.height()));
+        ctx.closePath();
+        ctx.fillStrokeShape(shape);
+      });
+    }
+  }
+
   function applyEquationNodeTextStyle(node, overrides = {}){
     if (!isEquationNode(node)) return;
     const fontFamily = String(overrides.fontFamily || getEquationNodeFontFamily(node) || EQUATION_FONT_STACK);
@@ -784,11 +801,8 @@
     if (typeof node.fontSize === 'function') node.fontSize(fontSize);
     if (typeof node.align === 'function') node.align(align);
     if (typeof node.lineHeight === 'function') node.lineHeight(lineHeight);
-    if (typeof node.fill === 'function') node.fill('rgba(0,0,0,0)');
-    if (typeof node.fillEnabled === 'function') node.fillEnabled(false);
-    if (typeof node.stroke === 'function') node.stroke('');
-    if (typeof node.strokeEnabled === 'function') node.strokeEnabled(false);
     if (typeof node.shadowEnabled === 'function') node.shadowEnabled(false);
+    ensureEquationNodeHitArea(node);
   }
 
   let equationRenderHost = null;
