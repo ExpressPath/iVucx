@@ -884,7 +884,23 @@
       .replace(/'/g, '&apos;');
   }
 
-  function buildEquationStaticRender(source, node){
+  function tintEquationRenderTree(root, fill){
+    if (!(root instanceof Element)) return;
+    const nodes = [root, ...Array.from(root.querySelectorAll('*'))];
+    nodes.forEach((element) => {
+      if (!(element instanceof HTMLElement)) return;
+      element.style.background = 'transparent';
+      element.style.backgroundColor = 'transparent';
+      element.style.caretColor = 'transparent';
+      element.style.color = fill;
+      element.style.borderColor = fill;
+      element.style.outlineColor = fill;
+      element.style.textShadow = 'none';
+      element.style.setProperty('-webkit-text-fill-color', fill);
+    });
+  }
+
+  function buildEquationFallbackTextRender(source, node){
     const host = ensureEquationRenderHost();
     host.innerHTML = '';
     const displayText = renderEquationSource(source);
@@ -945,6 +961,100 @@
       width: naturalWidth,
       height: naturalHeight
     };
+  }
+
+  function buildEquationMathQuillRender(source, node){
+    const MQ = getMathQuillInterface();
+    if (!MQ) return null;
+
+    const host = ensureEquationRenderHost();
+    host.innerHTML = '';
+
+    const latex = getEquationEditorLatex(node);
+    const fontSize = getEquationNodeFontSize(node);
+    const lineHeight = getEquationNodeLineHeight(node);
+    const fill = getEquationNodeFill(node);
+    const fontFamily = getEquationNodeFontFamily(node);
+    const align = getEquationNodeAlign(node);
+    const paddingX = 10;
+    const paddingY = 8;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.display = 'inline-block';
+    wrapper.style.boxSizing = 'border-box';
+    wrapper.style.padding = `${paddingY}px ${paddingX}px`;
+    wrapper.style.margin = '0';
+    wrapper.style.background = 'transparent';
+    wrapper.style.whiteSpace = 'nowrap';
+    wrapper.style.overflow = 'visible';
+    wrapper.style.color = fill;
+    wrapper.style.fontSize = `${fontSize}px`;
+    wrapper.style.fontFamily = fontFamily;
+    wrapper.style.lineHeight = String(lineHeight);
+    wrapper.style.textAlign = align;
+    wrapper.style.minHeight = `${Math.ceil(fontSize * lineHeight)}px`;
+
+    const staticRoot = document.createElement('span');
+    staticRoot.style.display = 'inline-block';
+    staticRoot.style.background = 'transparent';
+    wrapper.appendChild(staticRoot);
+    host.appendChild(wrapper);
+
+    try{
+      const staticMath = MQ.StaticMath(staticRoot);
+      if (!staticMath) return null;
+      if (typeof staticMath.latex === 'function'){
+        staticMath.latex(latex || '\\:');
+      } else {
+        staticRoot.textContent = renderEquationSource(source) || ' ';
+      }
+      if (typeof staticMath.reflow === 'function'){
+        staticMath.reflow();
+      }
+    }catch(err){
+      host.innerHTML = '';
+      return null;
+    }
+
+    tintEquationRenderTree(wrapper, fill);
+
+    const rect = wrapper.getBoundingClientRect();
+    const naturalWidth = Math.max(MIN_SIZE, Math.ceil(rect.width || 0), source ? 0 : 160);
+    const naturalHeight = Math.max(
+      40,
+      Math.ceil(rect.height || 0),
+      Math.ceil(fontSize * lineHeight) + (paddingY * 2)
+    );
+    const clonedWrapper = cloneNodeWithInlineStyles(wrapper, {
+      isEquation: true,
+      equationColor: fill
+    });
+    if (!clonedWrapper){
+      host.innerHTML = '';
+      return null;
+    }
+
+    const serialized = new XMLSerializer().serializeToString(clonedWrapper);
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${naturalWidth}" height="${naturalHeight}" viewBox="0 0 ${naturalWidth} ${naturalHeight}">
+        <foreignObject x="0" y="0" width="${naturalWidth}" height="${naturalHeight}">
+          ${serialized}
+        </foreignObject>
+      </svg>
+    `.trim();
+
+    host.innerHTML = '';
+    return {
+      dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+      width: naturalWidth,
+      height: naturalHeight
+    };
+  }
+
+  function buildEquationStaticRender(source, node){
+    const mathQuillRender = buildEquationMathQuillRender(source, node);
+    if (mathQuillRender) return mathQuillRender;
+    return buildEquationFallbackTextRender(source, node);
   }
 
   function updateEquationNodeRender(node, { preserveScale = true } = {}){
