@@ -640,6 +640,14 @@
     return String(node.getAttr('equationSource') || fallbackText || '');
   }
 
+  function normalizeEquationEditableLatex(source){
+    const normalized = normalizeEquationSource(source);
+    if (!normalized) return '';
+    return isMathQuillLatex(normalized)
+      ? normalized
+      : convertPlainEquationSourceToMathQuillLatex(normalized);
+  }
+
   function getMathQuillInterface(){
     if (!window.MathQuill || typeof window.MathQuill.getInterface !== 'function') return null;
     try{
@@ -707,11 +715,7 @@
   }
 
   function getEquationEditorLatex(node){
-    const source = getEquationSource(node);
-    if (!source) return '';
-    return isMathQuillLatex(source)
-      ? source
-      : convertPlainEquationSourceToMathQuillLatex(source);
+    return normalizeEquationEditableLatex(getEquationSource(node));
   }
 
   function getEquationNodeFontFamily(node){
@@ -1338,6 +1342,10 @@
   function createMathQuillEditor(textNode){
     const MQ = getMathQuillInterface();
     if (!MQ) return null;
+    const initialLatex = getEquationEditorLatex(textNode);
+    if (textNode && textNode.setAttr){
+      textNode.setAttr('equationSource', initialLatex);
+    }
 
     const wrapper = document.createElement('div');
     wrapper.className = 'slide-mathquill-editor';
@@ -1365,7 +1373,7 @@
       }
     });
 
-    mathField.latex(getEquationEditorLatex(textNode));
+    mathField.latex(initialLatex);
     activeMathField = mathField;
 
     wrapper.addEventListener('keydown', (e) => {
@@ -1670,9 +1678,9 @@
           selectionLabel.textContent = `CSS object error - ${result.message}`;
         }
       } else if (textNode.getAttr && textNode.getAttr('isEquation')){
-        const nextSource = activeMathField
+        const nextSource = normalizeEquationEditableLatex(activeMathField
           ? activeMathField.latex()
-          : editorEl.value;
+          : editorEl.value);
         textNode.setAttr('equationSource', nextSource);
         applyEquationNodeTextStyle(textNode);
         updateEquationNodeRender(textNode, { preserveScale: true });
@@ -5617,6 +5625,9 @@
 
   function bindNodeEvents(node){
     node.draggable(true);
+    if (isEquationNode(node) && typeof node.dragDistance === 'function'){
+      node.dragDistance(6);
+    }
     node.on('transformstart dragstart', () => {
       hideContextMenu();
       clearGuideLines();
