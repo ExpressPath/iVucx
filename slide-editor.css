@@ -534,6 +534,41 @@ body.slide-presenting .slide-canvas{
   color:#1f2933;
 }
 
+.slide-inline-field{
+  flex:0 0 120px;
+  min-width:0;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+}
+
+.slide-inline-field input{
+  flex:1 1 auto;
+  min-width:0;
+}
+
+.slide-inline-hint{
+  flex:0 0 auto;
+  min-width:34px;
+  padding:3px 6px;
+  border:1px solid rgba(15,23,42,0.08);
+  border-radius:999px;
+  background:rgba(15,23,42,0.04);
+  color:rgba(31,41,51,0.48);
+  font-size:11px;
+  line-height:1.2;
+  text-align:center;
+  user-select:none;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity .16s ease;
+}
+
+.slide-inline-hint.has-value{
+  opacity:1;
+}
+
 .slide-control input[type="range"]{
   flex:1 1 auto;
 }

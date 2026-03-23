@@ -34,6 +34,7 @@
   const propAnimDuration = document.getElementById('propAnimDuration');
   const propAnimDelay = document.getElementById('propAnimDelay');
   const propAnimOrder = document.getElementById('propAnimOrder');
+  const propAnimOrderHint = document.getElementById('propAnimOrderHint');
   const propAnimCssWrap = document.getElementById('propAnimCssWrap');
   const propAnimCss = document.getElementById('propAnimCss');
   const propAnimCssStatus = document.getElementById('propAnimCssStatus');
@@ -62,6 +63,9 @@
     duration: 0.6,
     delay: 0,
     order: 0,
+    orderInput: '',
+    afterPrevious: false,
+    previousOrder: 0,
     videoAction: 'none',
     videoSound: 'mute',
     videoLoop: true,
@@ -1924,13 +1928,87 @@
     return Math.round(numeric * 100) / 100;
   }
 
+  function parseAnimationOrderSpec(rawValue, needsOrder = true){
+    if (!needsOrder){
+      return {
+        order: 0,
+        orderInput: '',
+        afterPrevious: false,
+        previousOrder: 0
+      };
+    }
+
+    const rawText = String(rawValue ?? '').trim();
+    if (!rawText){
+      return {
+        order: 1,
+        orderInput: '1',
+        afterPrevious: false,
+        previousOrder: 0
+      };
+    }
+
+    const match = rawText.match(/^(\d{1,2})(\+)?$/);
+    if (match){
+      const baseOrder = Math.max(1, Math.min(99, Number(match[1]) || 1));
+      const afterPrevious = !!match[2];
+      const effectiveOrder = afterPrevious
+        ? Math.max(1, Math.min(99, baseOrder + 1))
+        : baseOrder;
+      return {
+        order: effectiveOrder,
+        orderInput: afterPrevious ? `${baseOrder}+` : String(baseOrder),
+        afterPrevious,
+        previousOrder: afterPrevious ? baseOrder : 0
+      };
+    }
+
+    const numeric = Number(rawText);
+    if (Number.isFinite(numeric)){
+      const order = Math.max(1, Math.min(99, Math.round(numeric)));
+      return {
+        order,
+        orderInput: String(order),
+        afterPrevious: false,
+        previousOrder: 0
+      };
+    }
+
+    return {
+      order: 1,
+      orderInput: '1',
+      afterPrevious: false,
+      previousOrder: 0
+    };
+  }
+
+  function getAnimationOrderHintText(config){
+    return config && config.afterPrevious && config.order > 0
+      ? `(${config.order})`
+      : '';
+  }
+
+  function updateAnimationOrderFieldUi(config, { disabled = false } = {}){
+    if (propAnimOrder){
+      const value = config && config.orderInput
+        ? config.orderInput
+        : (config && config.order > 0 ? String(config.order) : '1');
+      propAnimOrder.value = value;
+      propAnimOrder.disabled = !!disabled;
+    }
+    if (propAnimOrderHint){
+      const hint = getAnimationOrderHintText(config);
+      propAnimOrderHint.textContent = hint;
+      propAnimOrderHint.classList.toggle('has-value', !!hint);
+    }
+  }
+
   function normalizeNodeAnimationConfig(rawConfig){
     const type = rawConfig && NODE_ANIMATION_TYPES.has(rawConfig.type)
       ? rawConfig.type
       : (rawConfig && NODE_ANIMATION_TYPES.has(rawConfig.animType) ? rawConfig.animType : DEFAULT_NODE_ANIMATION.type);
     const durationValue = Number(rawConfig && (rawConfig.duration ?? rawConfig.animDuration));
     const delayValue = Number(rawConfig && (rawConfig.delay ?? rawConfig.animDelay));
-    const orderValue = Number(rawConfig && (rawConfig.order ?? rawConfig.animOrder));
     const videoAction = rawConfig && VIDEO_ANIMATION_ACTIONS.has(rawConfig.videoAction)
       ? rawConfig.videoAction
       : (rawConfig && VIDEO_ANIMATION_ACTIONS.has(rawConfig.animVideoAction) ? rawConfig.animVideoAction : 'none');
@@ -1940,13 +2018,18 @@
     const videoLoopValue = rawConfig && (rawConfig.videoLoop ?? rawConfig.animVideoLoop);
     const cssText = String(rawConfig && (rawConfig.cssText ?? rawConfig.animCssText) || '').trim();
     const needsOrder = type !== 'none' || videoAction !== 'none';
+    const parsedOrder = parseAnimationOrderSpec(
+      rawConfig && (rawConfig.orderInput ?? rawConfig.animOrderInput ?? rawConfig.order ?? rawConfig.animOrder),
+      needsOrder
+    );
     return {
       type,
       duration: Number.isFinite(durationValue) ? Math.max(0.1, Math.min(8, roundMetric(durationValue))) : DEFAULT_NODE_ANIMATION.duration,
       delay: Number.isFinite(delayValue) ? Math.max(0, Math.min(8, roundMetric(delayValue))) : DEFAULT_NODE_ANIMATION.delay,
-      order: !needsOrder
-        ? 0
-        : (Number.isFinite(orderValue) ? Math.max(1, Math.min(99, Math.round(orderValue))) : 1),
+      order: parsedOrder.order,
+      orderInput: parsedOrder.orderInput,
+      afterPrevious: parsedOrder.afterPrevious,
+      previousOrder: parsedOrder.previousOrder,
       videoAction,
       videoSound,
       videoLoop: typeof videoLoopValue === 'boolean'
@@ -1963,6 +2046,8 @@
       duration: node.getAttr('animDuration'),
       delay: node.getAttr('animDelay'),
       order: node.getAttr('animOrder'),
+      orderInput: node.getAttr('animOrderInput'),
+      afterPrevious: node.getAttr('animAfterPrevious'),
       videoAction: node.getAttr('animVideoAction'),
       videoSound: node.getAttr('animVideoSound'),
       videoLoop: node.getAttr('animVideoLoop'),
@@ -1977,6 +2062,8 @@
     node.setAttr('animDuration', normalized.duration);
     node.setAttr('animDelay', normalized.delay);
     node.setAttr('animOrder', normalized.order);
+    node.setAttr('animOrderInput', normalized.orderInput);
+    node.setAttr('animAfterPrevious', normalized.afterPrevious);
     node.setAttr('animVideoAction', normalized.videoAction);
     node.setAttr('animVideoSound', normalized.videoSound);
     node.setAttr('animVideoLoop', normalized.videoLoop);
@@ -2797,7 +2884,11 @@
     nodes.sort((a, b) => {
       const aOrder = a.config.order > 0 ? a.config.order : 1000 + a.index;
       const bOrder = b.config.order > 0 ? b.config.order : 1000 + b.index;
-      return aOrder - bOrder || a.index - b.index;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      if (!!a.config.afterPrevious !== !!b.config.afterPrevious){
+        return a.config.afterPrevious ? -1 : 1;
+      }
+      return a.index - b.index;
     });
 
     return nodes;
@@ -2809,6 +2900,17 @@
       .map(entry => entry.config.order)
       .filter(order => order > 0);
     return animated.length ? Math.min(99, Math.max(...animated) + 1) : 1;
+  }
+
+  function getAnimationSequenceSpan(node, config){
+    const resolvedConfig = config || getNodeAnimationConfig(node);
+    const delay = Math.max(0, Number(resolvedConfig && resolvedConfig.delay) || 0);
+    const hasVisualAnimation = !!(resolvedConfig && resolvedConfig.type && resolvedConfig.type !== 'none');
+    const hasMediaCue = hasQueuedMediaCue(node, resolvedConfig);
+    if (!hasVisualAnimation){
+      return hasMediaCue ? delay + 0.04 : 0;
+    }
+    return delay + Math.max(0.1, Number(resolvedConfig.duration) || DEFAULT_NODE_ANIMATION.duration);
   }
 
   function hideContextMenu(){
@@ -3928,9 +4030,20 @@
   function playNextPresentationAnimation(){
     if (!isPresentationMode) return false;
     if (presentationAnimationIndex >= presentationAnimationQueue.length) return false;
-    const entry = presentationAnimationQueue[presentationAnimationIndex];
-    presentationAnimationIndex += 1;
-    return runNodeEntryAnimation(entry.node);
+    let delayOffset = 0;
+    let played = false;
+
+    while (presentationAnimationIndex < presentationAnimationQueue.length){
+      const entry = presentationAnimationQueue[presentationAnimationIndex];
+      if (played && !entry.config.afterPrevious){
+        break;
+      }
+      presentationAnimationIndex += 1;
+      played = runNodeEntryAnimation(entry.node, { delayOffset }) || played;
+      delayOffset += getAnimationSequenceSpan(entry.node, entry.config);
+    }
+
+    return played;
   }
 
   function setPresentationMode(active){
@@ -5148,7 +5261,11 @@
           duration: propAnimDuration ? propAnimDuration.value : undefined,
           delay: propAnimDelay ? propAnimDelay.value : undefined,
           order: needsOrder
-            ? (currentConfig.order > 0 ? currentConfig.order : getNextAnimationOrder(currentLayer, selectedNode))
+            ? (
+                currentConfig.order > 0
+                  ? (currentConfig.orderInput || currentConfig.order)
+                  : getNextAnimationOrder(currentLayer, selectedNode)
+              )
             : 0,
           videoAction: currentConfig.videoAction,
           videoSound: currentConfig.videoSound,
@@ -5200,6 +5317,23 @@
     }
 
     if (propAnimOrder){
+      propAnimOrder.addEventListener('input', () => {
+        if (!selectedNode || hasMultipleSelection()) return;
+        const currentConfig = getNodeAnimationConfig(selectedNode);
+        const previewConfig = normalizeNodeAnimationConfig({
+          type: propAnimType ? propAnimType.value : currentConfig.type,
+          duration: propAnimDuration ? propAnimDuration.value : currentConfig.duration,
+          delay: propAnimDelay ? propAnimDelay.value : currentConfig.delay,
+          orderInput: propAnimOrder.value,
+          videoAction: propVideoAction ? propVideoAction.value : currentConfig.videoAction,
+          videoSound: propVideoSound ? propVideoSound.value : currentConfig.videoSound,
+          videoLoop: propVideoLoop ? propVideoLoop.checked : currentConfig.videoLoop,
+          cssText: propAnimCss ? propAnimCss.value : currentConfig.cssText
+        });
+        updateAnimationOrderFieldUi(previewConfig, {
+          disabled: previewConfig.type === 'none' && previewConfig.videoAction === 'none'
+        });
+      });
       propAnimOrder.addEventListener('change', () => {
         if (!selectedNode || hasMultipleSelection()) return;
         setNodeAnimationConfig(selectedNode, {
@@ -5229,7 +5363,11 @@
           duration: currentConfig.duration,
           delay: currentConfig.delay,
           order: needsOrder
-            ? (currentConfig.order > 0 ? currentConfig.order : getNextAnimationOrder(currentLayer, selectedNode))
+            ? (
+                currentConfig.order > 0
+                  ? (currentConfig.orderInput || currentConfig.order)
+                  : getNextAnimationOrder(currentLayer, selectedNode)
+              )
             : 0,
           videoAction: nextAction,
           videoSound: propVideoSound ? propVideoSound.value : undefined,
@@ -5533,7 +5671,7 @@
       if (commonPanel) commonPanel.style.display = 'none';
       if (mediaPanel) mediaPanel.style.display = 'none';
       if (propShapeFill) propShapeFill.disabled = false;
-      if (propAnimOrder) propAnimOrder.disabled = true;
+      updateAnimationOrderFieldUi(null, { disabled: true });
       if (propAnimPreview) propAnimPreview.disabled = true;
       if (propFont) propFont.disabled = false;
       updateCssAnimationUi(null, null);
@@ -5547,7 +5685,7 @@
       if (commonPanel) commonPanel.style.display = 'none';
       if (mediaPanel) mediaPanel.style.display = 'none';
       if (propShapeFill) propShapeFill.disabled = false;
-      if (propAnimOrder) propAnimOrder.disabled = true;
+      updateAnimationOrderFieldUi(null, { disabled: true });
       if (propAnimPreview) propAnimPreview.disabled = true;
       if (propFont) propFont.disabled = false;
       updateCssAnimationUi(null, null);
@@ -5618,9 +5756,10 @@
     }
     if (propAnimDuration) propAnimDuration.value = String(animationConfig.duration);
     if (propAnimDelay) propAnimDelay.value = String(animationConfig.delay);
-    if (propAnimOrder) propAnimOrder.value = String(animationConfig.order > 0 ? animationConfig.order : 1);
+    updateAnimationOrderFieldUi(animationConfig, {
+      disabled: animationConfig.type === 'none' && animationConfig.videoAction === 'none'
+    });
     updateCssAnimationUi(node, animationConfig);
-    if (propAnimOrder) propAnimOrder.disabled = animationConfig.type === 'none' && animationConfig.videoAction === 'none';
     if (propAnimPreview){
       const cssInvalid = animationConfig.type === 'css-edit' && !resolveCustomCssAnimationStates(node, animationConfig).ok;
       propAnimPreview.disabled = (animationConfig.type === 'none' && animationConfig.videoAction === 'none') || cssInvalid;
