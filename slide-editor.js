@@ -419,21 +419,82 @@
     return mentions;
   }
 
-  function buildMentionOverlayHtml(text, mentions){
-    if (!mentions.length){
+  function buildPageReferenceLinksFromText(text){
+    const source = String(text || '');
+    if (!source.includes('p.')) return [];
+
+    const links = [];
+    const pattern = /(^|[^0-9A-Za-z_])(p\.(\d+))/g;
+    let match;
+    while ((match = pattern.exec(source))){
+      const prefix = match[1] || '';
+      const tokenText = match[2] || '';
+      const pageNumber = Number.parseInt(match[3] || '', 10);
+      const start = match.index + prefix.length;
+      const end = start + tokenText.length;
+      const nextChar = source[end];
+      if (nextChar && /[0-9A-Za-z_.-]/.test(nextChar)) continue;
+      if (!Number.isFinite(pageNumber) || pageNumber < 1 || pageNumber > slides.length) continue;
+      links.push({
+        type: 'page',
+        start,
+        end,
+        token: tokenText,
+        pageNumber,
+        targetIndex: pageNumber - 1
+      });
+    }
+    return links;
+  }
+
+  function buildInteractiveTextTokens(text){
+    const source = String(text || '');
+    const claimed = new Array(source.length).fill(false);
+    const tokens = [];
+
+    buildTextMentionsFromNodeText(source).forEach(mention => {
+      for (let index = mention.start; index < mention.end; index += 1){
+        claimed[index] = true;
+      }
+      tokens.push({
+        ...mention,
+        type: 'file'
+      });
+    });
+
+    buildPageReferenceLinksFromText(source).forEach(link => {
+      let overlaps = false;
+      for (let index = link.start; index < link.end; index += 1){
+        if (claimed[index]){
+          overlaps = true;
+          break;
+        }
+      }
+      if (overlaps) return;
+      for (let index = link.start; index < link.end; index += 1){
+        claimed[index] = true;
+      }
+      tokens.push(link);
+    });
+
+    return tokens.sort((a, b) => a.start - b.start || a.end - b.end);
+  }
+
+  function buildInteractiveOverlayHtml(text, tokens){
+    if (!tokens.length){
       return escapeMentionHtml(text);
     }
 
     const parts = [];
     let cursor = 0;
-    mentions.forEach((mention, index) => {
-      if (mention.start > cursor){
-        parts.push(escapeMentionHtml(text.slice(cursor, mention.start)));
+    tokens.forEach((token, index) => {
+      if (token.start > cursor){
+        parts.push(escapeMentionHtml(text.slice(cursor, token.start)));
       }
       parts.push(
-        `<span class="slide-file-mention" data-mention-index="${index}">${escapeMentionHtml(text.slice(mention.start, mention.end))}</span>`
+        `<span class="slide-file-mention" data-token-index="${index}">${escapeMentionHtml(text.slice(token.start, token.end))}</span>`
       );
-      cursor = mention.end;
+      cursor = token.end;
     });
     if (cursor < text.length){
       parts.push(escapeMentionHtml(text.slice(cursor)));
@@ -904,6 +965,28 @@
     return true;
   }
 
+  function navigateToLinkedSlide(targetIndex){
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= slides.length){
+      return false;
+    }
+    let nextIndex = targetIndex;
+    if (isPresentationMode && isSlideHidden(slides[nextIndex])){
+      const fallbackIndex = resolvePresentationIndex(nextIndex, 1);
+      if (fallbackIndex === -1){
+        return false;
+      }
+      nextIndex = fallbackIndex;
+    }
+    showSlide(nextIndex, {
+      syncSeedFromInput: false,
+      allowHiddenInPresentation: !isPresentationMode
+    });
+    if (typeof slideCanvas.focus === 'function'){
+      slideCanvas.focus();
+    }
+    return true;
+  }
+
   function submitSlideJumpOverlay(){
     if (!slideJumpInput) return false;
     return jumpToSlideNumber(slideJumpInput.value);
@@ -964,7 +1047,9 @@
       if (isCssObjectNode(node) || isEquationNode(node)) return false;
       if (node === activeTextNode) return false;
       if (!isPresentationMode && selectedNodes.includes(node)) return false;
-      return typeof node.text === 'function' && node.text().includes('@');
+      if (typeof node.text !== 'function') return false;
+      const text = node.text();
+      return text.includes('@') || text.includes('p.');
     });
 
     if (!textNodes.length) return;
@@ -972,8 +1057,8 @@
 
     textNodes.forEach(node => {
       const text = node.text();
-      const mentions = buildTextMentionsFromNodeText(text);
-      if (!mentions.length) return;
+      const tokens = buildInteractiveTextTokens(text);
+      if (!tokens.length) return;
 
       const absPos = node.getAbsolutePosition();
       const absScale = node.getAbsoluteScale ? node.getAbsoluteScale() : { x: 1, y: 1 };
@@ -996,7 +1081,7 @@
       wrapper.style.textAlign = node.align ? node.align() : 'left';
       wrapper.style.opacity = String(node.opacity());
       wrapper.style.transform = rotation ? `rotate(${rotation}deg)` : '';
-      wrapper.innerHTML = buildMentionOverlayHtml(text, mentions);
+      wrapper.innerHTML = buildInteractiveOverlayHtml(text, tokens);
 
       wrapper.querySelectorAll('.slide-file-mention').forEach((el, index) => {
         el.addEventListener('click', (event) => {
@@ -1005,7 +1090,15 @@
           if (!isPresentationMode){
             selectNode(node);
           }
-          openMentionPreview(mentions[index].document);
+          const token = tokens[index];
+          if (!token) return;
+          if (token.type === 'file'){
+            openMentionPreview(token.document);
+            return;
+          }
+          if (token.type === 'page'){
+            navigateToLinkedSlide(token.targetIndex);
+          }
         });
       });
 
