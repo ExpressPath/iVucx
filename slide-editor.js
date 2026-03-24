@@ -502,6 +502,10 @@
     }
   }
 
+  function isMentionPreviewOpen(){
+    return !!(mentionPreviewEl && !mentionPreviewEl.hidden);
+  }
+
   function openMentionPreview(documentInfo){
     if (!documentInfo) return;
     ensureMentionPreview();
@@ -541,13 +545,13 @@
   function refreshMentionOverlay(){
     mentionOverlayFrame = 0;
     if (!mentionOverlayHost){
-      if (!isEditorActive || !stageHost) return;
+      if ((!isEditorActive && !isPresentationMode) || !stageHost) return;
       ensureMentionOverlayHost();
     }
     if (!mentionOverlayHost) return;
 
     mentionOverlayHost.replaceChildren();
-    const shouldHide = !isEditorActive || isPresentationMode || isDocumentSlide() || !currentLayer || !stage;
+    const shouldHide = (!isEditorActive && !isPresentationMode) || isDocumentSlide() || !currentLayer || !stage;
     mentionOverlayHost.hidden = shouldHide;
     if (shouldHide) return;
 
@@ -555,7 +559,7 @@
       if (!node || node.className !== 'Text') return false;
       if (isCssObjectNode(node) || isEquationNode(node)) return false;
       if (node === activeTextNode) return false;
-      if (selectedNodes.includes(node)) return false;
+      if (!isPresentationMode && selectedNodes.includes(node)) return false;
       return typeof node.text === 'function' && node.text().includes('@');
     });
 
@@ -594,7 +598,9 @@
         el.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
-          selectNode(node);
+          if (!isPresentationMode){
+            selectNode(node);
+          }
           openMentionPreview(mentions[index].document);
         });
       });
@@ -2085,6 +2091,17 @@
   function getContentNodes(layer = currentLayer){
     if (!layer) return [];
     return layer.getChildren(node => !node.getAttr('isBackground'));
+  }
+
+  function applyPresentationNodeInteractivity(){
+    slides.forEach(slide => {
+      if (!slide || slide.type !== 'canvas' || !slide.layer) return;
+      getContentNodes(slide.layer).forEach(node => {
+        if (typeof node.draggable === 'function'){
+          node.draggable(!isPresentationMode);
+        }
+      });
+    });
   }
 
   function normalizeLayerOrdering(layer = currentLayer){
@@ -4177,6 +4194,9 @@
       if (nodeLayer){
         nodeLayer.batchDraw();
       }
+      if (isPresentationMode){
+        scheduleMentionOverlayRefresh();
+      }
       if (onComplete){
         try{
           onComplete();
@@ -4303,6 +4323,7 @@
       applyAnimationStartState(entry.node, entry.config);
     });
     currentLayer.batchDraw();
+    scheduleMentionOverlayRefresh();
   }
 
   function playNextPresentationAnimation(){
@@ -4334,11 +4355,24 @@
     isPresentationMode = active;
     bodyEl.classList.toggle('slide-presenting', active);
     slideCanvas.classList.toggle('is-presenting', active);
+    hideContextMenu();
+    if (!active){
+      closeMentionPreview();
+    }
     if (active && typeof slideCanvas.focus === 'function'){
       slideCanvas.focus();
     }
-    if (!active){
-      clearGuideLines();
+    clearGuideLines();
+    applyPresentationNodeInteractivity();
+    if (transformer){
+      transformer.visible(!active);
+      if (!active){
+        transformer.nodes(selectedNodes);
+        applyTransformerConfig(selectedNode);
+      }
+    }
+    if (uiLayer){
+      uiLayer.batchDraw();
     }
     updateDocumentNavPopup();
     resizeStage();
@@ -4360,6 +4394,15 @@
 
   async function enterPresentationMode(){
     if (!slideCanvas.requestFullscreen) return;
+    if (isEditingText()){
+      closeActiveTextEditor(true);
+    }
+    if (lineDraft){
+      cancelLineDraft();
+    }
+    hideSelectionMarquee();
+    hideContextMenu();
+    clearGuideLines();
     const firstVisibleIndex = resolvePresentationIndex(currentSlideIndex, 1);
     if (firstVisibleIndex === -1){
       if (selectionLabel){
@@ -4393,6 +4436,23 @@
   function handlePresentationKeydown(e){
     if (!isPresentationMode) return false;
     const isSpace = e.key === ' ' || e.code === 'Space';
+
+    if (isMentionPreviewOpen()){
+      if (e.key === 'Escape'){
+        closeMentionPreview();
+        e.preventDefault();
+        return true;
+      }
+      if (
+        e.key === 'ArrowRight' || e.key === 'ArrowLeft'
+        || e.key === 'ArrowUp' || e.key === 'ArrowDown'
+        || e.key === 'PageDown' || e.key === 'PageUp'
+        || e.key === 'Backspace' || isSpace
+      ){
+        e.preventDefault();
+        return true;
+      }
+    }
 
     if (e.key === 'Escape'){
       if (document.fullscreenElement && document.exitFullscreen){
@@ -4970,7 +5030,7 @@
 
   function bindStageEvents(){
     stage.on('mousedown touchstart', (e) => {
-      if (!isEditorActive) return;
+      if (!isEditorActive || isPresentationMode) return;
       hideContextMenu();
       const pos = getStagePointer();
 
@@ -5051,7 +5111,7 @@
     });
 
     stage.on('mousemove touchmove', () => {
-      if (!isEditorActive) return;
+      if (!isEditorActive || isPresentationMode) return;
       const pos = getStagePointer();
       if (!pos) return;
       if (selectionMarqueeStart && selectionMarquee){
@@ -5076,7 +5136,7 @@
     });
 
     stage.on('mouseup touchend', () => {
-      if (!isEditorActive) return;
+      if (!isEditorActive || isPresentationMode) return;
       if (selectionMarqueeStart && selectionMarquee){
         const selectionBox = selectionMarquee.getClientRect({ relativeTo: currentLayer });
         const wasClick = selectionBox.width < 4 && selectionBox.height < 4;
@@ -5102,13 +5162,13 @@
     });
 
     stage.on('dblclick dbltap', () => {
-      if (!isEditorActive) return;
+      if (!isEditorActive || isPresentationMode) return;
       if (!isCurveDraftActive()) return;
       finalizeCurveDraft();
     });
 
     stage.on('contextmenu', (e) => {
-      if (!isEditorActive) return;
+      if (!isEditorActive || isPresentationMode) return;
       e.evt.preventDefault();
 
       const point = getStagePointer();
@@ -6068,7 +6128,7 @@
   }
 
   function bindNodeEvents(node){
-    node.draggable(true);
+    node.draggable(!isPresentationMode);
     if (isEquationNode(node) && typeof node.dragDistance === 'function'){
       node.dragDistance(6);
     }
@@ -6138,15 +6198,25 @@
 
     if (isVideoNode(node)){
       node.on('dblclick dbltap', () => {
+        if (isPresentationMode) return;
         if (!isNodeSelected(node)) return;
         toggleVideoNodePlayback(node);
       });
     } else if (isCssObjectNode(node)){
-      node.on('dblclick dbltap', () => editCssObject(node));
+      node.on('dblclick dbltap', () => {
+        if (isPresentationMode) return;
+        editCssObject(node);
+      });
     } else if (isEquationNode(node)){
-      node.on('dblclick dbltap', () => editText(node));
+      node.on('dblclick dbltap', () => {
+        if (isPresentationMode) return;
+        editText(node);
+      });
     } else if (node.className === 'Text'){
-      node.on('dblclick dbltap', () => editText(node));
+      node.on('dblclick dbltap', () => {
+        if (isPresentationMode) return;
+        editText(node);
+      });
     }
   }
 

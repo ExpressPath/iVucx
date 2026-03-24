@@ -355,6 +355,16 @@ body.scrolled .search-container.expanded .search-mode-close{
   text-align:center;
 }
 
+body.slide-presenting .slide-mention-preview{
+  inset:0;
+  padding:24px;
+  background:rgba(8,15,28,0.58);
+}
+
+body.slide-presenting .slide-mention-preview-card{
+  max-height:calc(100vh - 48px);
+}
+
 body.slide-presenting .slide-doc-viewer{
   inset:0;
   padding:16px;
