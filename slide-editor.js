@@ -278,6 +278,15 @@
   let mentionPreviewBodyEl = null;
   let mentionPreviewCloseBtn = null;
   let mentionOverlayFrame = 0;
+  let mentionSuggestEl = null;
+  let mentionSuggestItems = [];
+  let mentionSuggestIndex = 0;
+  let mentionSuggestState = null;
+  let slideJumpOverlay = null;
+  let slideJumpInput = null;
+  let slideJumpStatus = null;
+  let slideShortcutBuffer = '';
+  let slideShortcutTimer = null;
   let isPresentationMode = false;
   let objectAnimationTweens = [];
   let presentationAnimationQueue = [];
@@ -540,6 +549,401 @@
 
     mentionPreviewEl.hidden = false;
     mentionPreviewEl.classList.add('is-active');
+  }
+
+  function ensureMentionSuggestEl(){
+    if (mentionSuggestEl) return mentionSuggestEl;
+    const popup = document.createElement('div');
+    popup.className = 'slide-mention-suggest';
+    popup.hidden = true;
+    document.body.appendChild(popup);
+    mentionSuggestEl = popup;
+    return mentionSuggestEl;
+  }
+
+  function closeMentionSuggest(){
+    mentionSuggestState = null;
+    mentionSuggestItems = [];
+    mentionSuggestIndex = 0;
+    if (!mentionSuggestEl) return;
+    mentionSuggestEl.hidden = true;
+    mentionSuggestEl.classList.remove('is-active');
+    mentionSuggestEl.innerHTML = '';
+  }
+
+  function isMentionSuggestOpen(){
+    return !!(mentionSuggestState && mentionSuggestEl && !mentionSuggestEl.hidden);
+  }
+
+  function getTextEditorMentionQuery(textarea){
+    if (!textarea || textarea !== activeTextEditor) return null;
+    const start = Number(textarea.selectionStart);
+    const end = Number(textarea.selectionEnd);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start !== end) return null;
+    const before = textarea.value.slice(0, end);
+    const lineStart = Math.max(before.lastIndexOf('\n'), before.lastIndexOf('\r')) + 1;
+    const atIndex = before.lastIndexOf('@');
+    if (atIndex < lineStart) return null;
+    const query = before.slice(atIndex + 1);
+    if (/\s$/.test(query)) return null;
+    return {
+      start: atIndex,
+      end,
+      query
+    };
+  }
+
+  function getMentionSuggestionDocs(query){
+    const normalizedQuery = normalizeMentionTitle(query).toLowerCase();
+    const docs = getMentionableDocumentSlides().map(entry => ({
+      ...entry,
+      searchTitle: entry.title.toLowerCase()
+    }));
+
+    const filtered = normalizedQuery
+      ? docs.filter(entry => entry.searchTitle.includes(normalizedQuery))
+      : docs;
+
+    return filtered
+      .sort((a, b) => {
+        const aStarts = normalizedQuery ? a.searchTitle.startsWith(normalizedQuery) : true;
+        const bStarts = normalizedQuery ? b.searchTitle.startsWith(normalizedQuery) : true;
+        if (aStarts !== bStarts){
+          return aStarts ? -1 : 1;
+        }
+        return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+      })
+      .slice(0, 5);
+  }
+
+  function positionMentionSuggest(){
+    if (!mentionSuggestEl || mentionSuggestEl.hidden || !activeTextEditor) return;
+    const rect = activeTextEditor.getBoundingClientRect();
+    const width = Math.max(260, Math.min(420, rect.width));
+    mentionSuggestEl.style.width = `${width}px`;
+    const popupRect = mentionSuggestEl.getBoundingClientRect();
+    const left = Math.max(12, Math.min(rect.left, window.innerWidth - popupRect.width - 12));
+    const preferredTop = rect.bottom + 8;
+    const top = preferredTop + popupRect.height <= window.innerHeight - 12
+      ? preferredTop
+      : Math.max(12, rect.top - popupRect.height - 8);
+    mentionSuggestEl.style.left = `${left}px`;
+    mentionSuggestEl.style.top = `${top}px`;
+  }
+
+  function renderMentionSuggest(){
+    ensureMentionSuggestEl();
+    if (!mentionSuggestState || !mentionSuggestState.suggestions.length){
+      closeMentionSuggest();
+      return;
+    }
+
+    mentionSuggestEl.innerHTML = '';
+    mentionSuggestState.suggestions.forEach((entry, index) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = `slide-mention-suggest-item${index === mentionSuggestIndex ? ' is-active' : ''}`;
+
+      const label = document.createElement('span');
+      label.className = 'slide-mention-suggest-label';
+      label.textContent = `@${entry.title}`;
+
+      const meta = document.createElement('span');
+      meta.className = 'slide-mention-suggest-meta';
+      meta.textContent = 'File';
+
+      item.append(label, meta);
+      item.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+      });
+      item.addEventListener('click', () => {
+        applyMentionSuggestion(entry);
+      });
+      mentionSuggestEl.appendChild(item);
+    });
+
+    mentionSuggestEl.hidden = false;
+    mentionSuggestEl.classList.add('is-active');
+    positionMentionSuggest();
+  }
+
+  function refreshMentionSuggest(textarea = activeTextEditor){
+    if (!(textarea instanceof HTMLTextAreaElement) || !activeTextNode || isEquationNode(activeTextNode) || isCssObjectNode(activeTextNode)){
+      closeMentionSuggest();
+      return;
+    }
+    const queryState = getTextEditorMentionQuery(textarea);
+    if (!queryState){
+      closeMentionSuggest();
+      return;
+    }
+    const suggestions = getMentionSuggestionDocs(queryState.query);
+    if (!suggestions.length){
+      closeMentionSuggest();
+      return;
+    }
+    const previousTitle = mentionSuggestState
+      ? mentionSuggestState.suggestions[mentionSuggestIndex] && mentionSuggestState.suggestions[mentionSuggestIndex].title
+      : '';
+    mentionSuggestState = {
+      textarea,
+      rangeStart: queryState.start,
+      rangeEnd: queryState.end,
+      suggestions
+    };
+    const nextIndex = suggestions.findIndex(entry => entry.title === previousTitle);
+    mentionSuggestIndex = nextIndex >= 0 ? nextIndex : 0;
+    renderMentionSuggest();
+  }
+
+  function applyMentionSuggestion(entry){
+    if (!mentionSuggestState || !mentionSuggestState.textarea) return;
+    const textarea = mentionSuggestState.textarea;
+    const replacement = `@${entry.title} `;
+    const before = textarea.value.slice(0, mentionSuggestState.rangeStart);
+    const after = textarea.value.slice(mentionSuggestState.rangeEnd);
+    textarea.value = `${before}${replacement}${after}`;
+    const nextCaret = before.length + replacement.length;
+    textarea.selectionStart = nextCaret;
+    textarea.selectionEnd = nextCaret;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    refreshMentionSuggest(textarea);
+  }
+
+  function moveMentionSuggestSelection(delta){
+    if (!isMentionSuggestOpen()) return;
+    const count = mentionSuggestState.suggestions.length;
+    mentionSuggestIndex = (mentionSuggestIndex + delta + count) % count;
+    renderMentionSuggest();
+  }
+
+  function handleMentionSuggestKeydown(e){
+    if (!isMentionSuggestOpen()) return false;
+    if (e.key === 'ArrowDown'){
+      moveMentionSuggestSelection(1);
+      e.preventDefault();
+      return true;
+    }
+    if (e.key === 'ArrowUp'){
+      moveMentionSuggestSelection(-1);
+      e.preventDefault();
+      return true;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab'){
+      const next = mentionSuggestState.suggestions[mentionSuggestIndex];
+      if (next){
+        applyMentionSuggestion(next);
+        e.preventDefault();
+        return true;
+      }
+    }
+    if (e.key === 'Escape'){
+      closeMentionSuggest();
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
+  function attachMentionSuggestToTextarea(textarea){
+    if (!(textarea instanceof HTMLTextAreaElement)) return;
+    const refresh = () => refreshMentionSuggest(textarea);
+    textarea.addEventListener('input', refresh);
+    textarea.addEventListener('click', refresh);
+    textarea.addEventListener('keyup', refresh);
+    textarea.addEventListener('keydown', (e) => {
+      if (handleMentionSuggestKeydown(e)) return;
+      if (e.key === '@'){
+        requestAnimationFrame(refresh);
+      }
+    });
+    textarea.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (document.activeElement && mentionSuggestEl && mentionSuggestEl.contains(document.activeElement)) return;
+        closeMentionSuggest();
+      }, 0);
+    });
+  }
+
+  function clearSlideShortcutBuffer(){
+    slideShortcutBuffer = '';
+    if (slideShortcutTimer){
+      clearTimeout(slideShortcutTimer);
+      slideShortcutTimer = null;
+    }
+  }
+
+  function ensureSlideJumpOverlay(){
+    if (slideJumpOverlay || !slideCanvas) return slideJumpOverlay;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'slide-jump-overlay';
+    overlay.hidden = true;
+
+    const card = document.createElement('div');
+    card.className = 'slide-jump-card';
+
+    const title = document.createElement('div');
+    title.className = 'slide-jump-title';
+    title.textContent = 'Jump To Slide';
+
+    const copy = document.createElement('div');
+    copy.className = 'slide-jump-copy';
+    copy.textContent = 'Type the slide number after p. and press Enter.';
+
+    slideJumpInput = document.createElement('input');
+    slideJumpInput.className = 'slide-jump-input';
+    slideJumpInput.type = 'text';
+    slideJumpInput.inputMode = 'numeric';
+    slideJumpInput.placeholder = 'Slide number';
+
+    slideJumpStatus = document.createElement('div');
+    slideJumpStatus.className = 'slide-jump-status';
+
+    card.append(title, copy, slideJumpInput, slideJumpStatus);
+    overlay.appendChild(card);
+
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay){
+        closeSlideJumpOverlay();
+      }
+    });
+    slideJumpInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter'){
+        const ok = submitSlideJumpOverlay();
+        if (!ok){
+          e.preventDefault();
+        }
+        return;
+      }
+      if (e.key === 'Escape'){
+        closeSlideJumpOverlay();
+        e.preventDefault();
+      }
+    });
+    slideJumpInput.addEventListener('input', () => {
+      if (slideJumpStatus){
+        slideJumpStatus.textContent = '';
+      }
+    });
+
+    slideCanvas.appendChild(overlay);
+    slideJumpOverlay = overlay;
+    return slideJumpOverlay;
+  }
+
+  function isSlideJumpOverlayOpen(){
+    return !!(slideJumpOverlay && !slideJumpOverlay.hidden);
+  }
+
+  function openSlideJumpOverlay(initialValue = ''){
+    ensureSlideJumpOverlay();
+    if (!slideJumpOverlay || !slideJumpInput) return;
+    slideJumpOverlay.hidden = false;
+    slideJumpOverlay.classList.add('is-active');
+    slideJumpInput.value = initialValue;
+    if (slideJumpStatus){
+      slideJumpStatus.textContent = isPresentationMode
+        ? `Visible slides: ${getPresentationVisibleIndexes().length}`
+        : `Slides: ${slides.length}`;
+    }
+    requestAnimationFrame(() => {
+      slideJumpInput.focus();
+      slideJumpInput.select();
+    });
+  }
+
+  function closeSlideJumpOverlay(){
+    clearSlideShortcutBuffer();
+    if (!slideJumpOverlay) return;
+    slideJumpOverlay.hidden = true;
+    slideJumpOverlay.classList.remove('is-active');
+    if (slideJumpInput){
+      slideJumpInput.value = '';
+    }
+    if (slideJumpStatus){
+      slideJumpStatus.textContent = '';
+    }
+    if (typeof slideCanvas.focus === 'function'){
+      slideCanvas.focus();
+    }
+  }
+
+  function jumpToSlideNumber(rawValue){
+    const value = Number.parseInt(String(rawValue || '').trim(), 10);
+    if (!Number.isFinite(value) || value < 1){
+      if (slideJumpStatus){
+        slideJumpStatus.textContent = 'Enter a valid slide number.';
+      }
+      return false;
+    }
+
+    if (isPresentationMode){
+      const visibleIndexes = getPresentationVisibleIndexes();
+      const targetIndex = visibleIndexes[value - 1];
+      if (!Number.isInteger(targetIndex)){
+        if (slideJumpStatus){
+          slideJumpStatus.textContent = `Visible slides are 1-${visibleIndexes.length}.`;
+        }
+        return false;
+      }
+      showSlide(targetIndex, { allowHiddenInPresentation: true, syncSeedFromInput: false });
+      closeSlideJumpOverlay();
+      return true;
+    }
+
+    const targetIndex = value - 1;
+    if (targetIndex < 0 || targetIndex >= slides.length){
+      if (slideJumpStatus){
+        slideJumpStatus.textContent = `Slides are 1-${slides.length}.`;
+      }
+      return false;
+    }
+    showSlide(targetIndex, { allowHiddenInPresentation: true, syncSeedFromInput: false });
+    closeSlideJumpOverlay();
+    return true;
+  }
+
+  function submitSlideJumpOverlay(){
+    if (!slideJumpInput) return false;
+    return jumpToSlideNumber(slideJumpInput.value);
+  }
+
+  function handleSlideJumpShortcutKeydown(e){
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      clearSlideShortcutBuffer();
+      return false;
+    }
+    if (isMentionPreviewOpen()){
+      clearSlideShortcutBuffer();
+      return false;
+    }
+    if (e.key === 'Escape' && isSlideJumpOverlayOpen()){
+      closeSlideJumpOverlay();
+      e.preventDefault();
+      return true;
+    }
+    if (isSlideJumpOverlayOpen()){
+      return false;
+    }
+    if (slideShortcutBuffer === 'p' && e.key === '.'){
+      clearSlideShortcutBuffer();
+      openSlideJumpOverlay('');
+      e.preventDefault();
+      return true;
+    }
+    if (!e.repeat && e.key && e.key.toLowerCase && e.key.toLowerCase() === 'p'){
+      slideShortcutBuffer = 'p';
+      if (slideShortcutTimer){
+        clearTimeout(slideShortcutTimer);
+      }
+      slideShortcutTimer = setTimeout(() => {
+        clearSlideShortcutBuffer();
+      }, 900);
+      return false;
+    }
+    clearSlideShortcutBuffer();
+    return false;
   }
 
   function refreshMentionOverlay(){
@@ -1970,6 +2374,7 @@
 
   function closeActiveTextEditor(commit){
     if (!activeTextEditor || !activeTextNode) return;
+    closeMentionSuggest();
     const editorEl = activeTextEditor;
     const textNode = activeTextNode;
     if (commit){
@@ -2085,6 +2490,7 @@
     }
     activeTextEditor.style.height = 'auto';
     activeTextEditor.style.height = `${Math.max(minHeight, activeTextEditor.scrollHeight)}px`;
+    positionMentionSuggest();
     positionEquationPopover();
   }
 
@@ -4512,6 +4918,7 @@
     if (!active){
       hideContextMenu();
       closeMentionPreview();
+      closeSlideJumpOverlay();
       cssLayoutDismissedNode = null;
       container.classList.remove('slide-css-editing');
       thumbsEl.classList.remove('is-stowed');
@@ -5376,9 +5783,11 @@
 
     window.addEventListener('keydown', (e) => {
       if (handlePresentationKeydown(e)) return;
-      if (!isEditorActive) return;
       const tag = document.activeElement ? document.activeElement.tagName : '';
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || isEditingText()) return;
+      const hasFormFocus = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      if (!hasFormFocus && !isEditingText() && handleSlideJumpShortcutKeydown(e)) return;
+      if (!isEditorActive) return;
+      if (hasFormFocus || isEditingText()) return;
 
       if (isCurveDraftActive()){
         if (e.key === 'Enter'){
@@ -5465,14 +5874,21 @@
 
     const resizeObserver = new ResizeObserver(() => resizeStage());
     resizeObserver.observe(stageHost);
-    window.addEventListener('resize', resizeStage);
+    window.addEventListener('resize', () => {
+      resizeStage();
+      positionMentionSuggest();
+    });
     window.addEventListener('scroll', () => {
       if (activeTextEditor){
         scheduleTextEditorPosition(false);
       }
+      positionMentionSuggest();
     }, true);
     if (window.visualViewport){
-      window.visualViewport.addEventListener('resize', resizeStage);
+      window.visualViewport.addEventListener('resize', () => {
+        resizeStage();
+        positionMentionSuggest();
+      });
     }
 
     stageHost.addEventListener('contextmenu', (e) => {
@@ -7136,6 +7552,10 @@
     activeTextEditor = textarea;
     activeTextNode = textNode;
     scheduleTextEditorPosition(false);
+    if (!isEquation){
+      attachMentionSuggestToTextarea(textarea);
+      refreshMentionSuggest(textarea);
+    }
     if (isEquation){
       createEquationPopover(textarea);
       positionEquationPopover();
