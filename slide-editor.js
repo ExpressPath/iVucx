@@ -272,6 +272,12 @@
   let docPrevSlideBtn = null;
   let docNextSlideBtn = null;
   let docNavLabel = null;
+  let mentionOverlayHost = null;
+  let mentionPreviewEl = null;
+  let mentionPreviewTitleEl = null;
+  let mentionPreviewBodyEl = null;
+  let mentionPreviewCloseBtn = null;
+  let mentionOverlayFrame = 0;
   let isPresentationMode = false;
   let objectAnimationTweens = [];
   let presentationAnimationQueue = [];
@@ -333,6 +339,277 @@
 
   function isEquationNode(node){
     return !!(node && node.getAttr && node.getAttr('isEquation'));
+  }
+
+  function normalizeMentionTitle(value){
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function escapeMentionHtml(value){
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function getMentionableDocumentSlides(){
+    return slides
+      .filter(slide => slide && slide.type === 'document' && slide.document)
+      .map((slide, index) => ({
+        slideIndex: index,
+        title: normalizeMentionTitle(slide.document.title),
+        document: slide.document
+      }))
+      .filter(entry => !!entry.title);
+  }
+
+  function buildTextMentionsFromNodeText(text){
+    const source = String(text || '');
+    if (!source.includes('@')) return [];
+
+    const docs = getMentionableDocumentSlides()
+      .sort((a, b) => b.title.length - a.title.length);
+    if (!docs.length) return [];
+
+    const mentions = [];
+    const claimed = new Array(source.length).fill(false);
+
+    for (let index = 0; index < source.length; index += 1){
+      if (source[index] !== '@') continue;
+      for (const doc of docs){
+        const token = `@${doc.title}`;
+        if (!source.startsWith(token, index)) continue;
+        const nextChar = source[index + token.length];
+        if (nextChar && /[0-9A-Za-z_.-]/.test(nextChar)) continue;
+
+        let overlaps = false;
+        for (let cursor = index; cursor < index + token.length; cursor += 1){
+          if (claimed[cursor]){
+            overlaps = true;
+            break;
+          }
+        }
+        if (overlaps) continue;
+
+        for (let cursor = index; cursor < index + token.length; cursor += 1){
+          claimed[cursor] = true;
+        }
+        mentions.push({
+          start: index,
+          end: index + token.length,
+          token,
+          title: doc.title,
+          document: doc.document
+        });
+        index += token.length - 1;
+        break;
+      }
+    }
+
+    return mentions;
+  }
+
+  function buildMentionOverlayHtml(text, mentions){
+    if (!mentions.length){
+      return escapeMentionHtml(text);
+    }
+
+    const parts = [];
+    let cursor = 0;
+    mentions.forEach((mention, index) => {
+      if (mention.start > cursor){
+        parts.push(escapeMentionHtml(text.slice(cursor, mention.start)));
+      }
+      parts.push(
+        `<span class="slide-file-mention" data-mention-index="${index}">${escapeMentionHtml(text.slice(mention.start, mention.end))}</span>`
+      );
+      cursor = mention.end;
+    });
+    if (cursor < text.length){
+      parts.push(escapeMentionHtml(text.slice(cursor)));
+    }
+    return parts.join('');
+  }
+
+  function ensureMentionOverlayHost(){
+    if (mentionOverlayHost || !stageHost) return mentionOverlayHost;
+    mentionOverlayHost = document.createElement('div');
+    mentionOverlayHost.className = 'slide-mention-overlay-host';
+    mentionOverlayHost.hidden = true;
+    stageHost.appendChild(mentionOverlayHost);
+    return mentionOverlayHost;
+  }
+
+  function ensureMentionPreview(){
+    if (mentionPreviewEl || !slideCanvas) return mentionPreviewEl;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'slide-mention-preview';
+    overlay.hidden = true;
+
+    const card = document.createElement('div');
+    card.className = 'slide-mention-preview-card';
+
+    const head = document.createElement('div');
+    head.className = 'slide-mention-preview-head';
+
+    mentionPreviewTitleEl = document.createElement('div');
+    mentionPreviewTitleEl.className = 'slide-mention-preview-title';
+
+    mentionPreviewCloseBtn = document.createElement('button');
+    mentionPreviewCloseBtn.type = 'button';
+    mentionPreviewCloseBtn.className = 'slide-mention-preview-close';
+    mentionPreviewCloseBtn.textContent = '\u00D7';
+
+    head.append(mentionPreviewTitleEl, mentionPreviewCloseBtn);
+
+    mentionPreviewBodyEl = document.createElement('div');
+    mentionPreviewBodyEl.className = 'slide-mention-preview-body';
+
+    card.append(head, mentionPreviewBodyEl);
+    overlay.appendChild(card);
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay){
+        closeMentionPreview();
+      }
+    });
+    mentionPreviewCloseBtn.addEventListener('click', closeMentionPreview);
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && mentionPreviewEl && !mentionPreviewEl.hidden){
+        closeMentionPreview();
+      }
+    });
+
+    slideCanvas.appendChild(overlay);
+    mentionPreviewEl = overlay;
+    return mentionPreviewEl;
+  }
+
+  function closeMentionPreview(){
+    if (!mentionPreviewEl) return;
+    mentionPreviewEl.classList.remove('is-active');
+    mentionPreviewEl.hidden = true;
+    if (mentionPreviewBodyEl){
+      mentionPreviewBodyEl.innerHTML = '';
+    }
+    if (mentionPreviewTitleEl){
+      mentionPreviewTitleEl.textContent = '';
+    }
+    if (typeof slideCanvas.focus === 'function'){
+      slideCanvas.focus();
+    }
+  }
+
+  function openMentionPreview(documentInfo){
+    if (!documentInfo) return;
+    ensureMentionPreview();
+    if (!mentionPreviewEl || !mentionPreviewBodyEl || !mentionPreviewTitleEl) return;
+
+    mentionPreviewTitleEl.textContent = documentInfo.title || 'Mentioned file';
+    mentionPreviewBodyEl.innerHTML = '';
+
+    if (documentInfo.kind === 'pdf' && documentInfo.url){
+      const frame = document.createElement('iframe');
+      frame.className = 'slide-mention-preview-frame';
+      frame.src = documentInfo.url;
+      frame.title = documentInfo.title || 'Mentioned file preview';
+      mentionPreviewBodyEl.appendChild(frame);
+    } else if (documentInfo.kind === 'image' && documentInfo.url){
+      const image = document.createElement('img');
+      image.className = 'slide-mention-preview-image';
+      image.src = documentInfo.url;
+      image.alt = documentInfo.title || 'Mentioned file preview';
+      mentionPreviewBodyEl.appendChild(image);
+    } else if (documentInfo.kind === 'text'){
+      const pre = document.createElement('pre');
+      pre.className = 'slide-mention-preview-text';
+      pre.textContent = documentInfo.text || '';
+      mentionPreviewBodyEl.appendChild(pre);
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'slide-mention-preview-empty';
+      empty.textContent = 'This mentioned file cannot be previewed here.';
+      mentionPreviewBodyEl.appendChild(empty);
+    }
+
+    mentionPreviewEl.hidden = false;
+    mentionPreviewEl.classList.add('is-active');
+  }
+
+  function refreshMentionOverlay(){
+    mentionOverlayFrame = 0;
+    if (!mentionOverlayHost){
+      if (!isEditorActive || !stageHost) return;
+      ensureMentionOverlayHost();
+    }
+    if (!mentionOverlayHost) return;
+
+    mentionOverlayHost.replaceChildren();
+    const shouldHide = !isEditorActive || isPresentationMode || isDocumentSlide() || !currentLayer || !stage;
+    mentionOverlayHost.hidden = shouldHide;
+    if (shouldHide) return;
+
+    const textNodes = getContentNodes(currentLayer).filter(node => {
+      if (!node || node.className !== 'Text') return false;
+      if (isCssObjectNode(node) || isEquationNode(node)) return false;
+      if (node === activeTextNode) return false;
+      if (selectedNodes.includes(node)) return false;
+      return typeof node.text === 'function' && node.text().includes('@');
+    });
+
+    if (!textNodes.length) return;
+    mentionOverlayHost.hidden = false;
+
+    textNodes.forEach(node => {
+      const text = node.text();
+      const mentions = buildTextMentionsFromNodeText(text);
+      if (!mentions.length) return;
+
+      const absPos = node.getAbsolutePosition();
+      const absScale = node.getAbsoluteScale ? node.getAbsoluteScale() : { x: 1, y: 1 };
+      const rotation = typeof node.getAbsoluteRotation === 'function'
+        ? node.getAbsoluteRotation()
+        : node.rotation();
+      const lineHeight = Number(node.lineHeight()) || 1.2;
+      const fontSize = Math.max(1, Number(node.fontSize()) || 32);
+      const minHeight = Math.max(node.height(), fontSize * lineHeight) * absScale.y;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'slide-mention-node';
+      wrapper.style.left = `${absPos.x}px`;
+      wrapper.style.top = `${absPos.y}px`;
+      wrapper.style.width = `${Math.max(1, node.width() * absScale.x)}px`;
+      wrapper.style.minHeight = `${Math.max(1, minHeight)}px`;
+      wrapper.style.fontFamily = node.fontFamily();
+      wrapper.style.fontSize = `${fontSize * absScale.y}px`;
+      wrapper.style.lineHeight = String(lineHeight);
+      wrapper.style.textAlign = node.align ? node.align() : 'left';
+      wrapper.style.opacity = String(node.opacity());
+      wrapper.style.transform = rotation ? `rotate(${rotation}deg)` : '';
+      wrapper.innerHTML = buildMentionOverlayHtml(text, mentions);
+
+      wrapper.querySelectorAll('.slide-file-mention').forEach((el, index) => {
+        el.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          selectNode(node);
+          openMentionPreview(mentions[index].document);
+        });
+      });
+
+      mentionOverlayHost.appendChild(wrapper);
+    });
+
+    if (!mentionOverlayHost.childElementCount){
+      mentionOverlayHost.hidden = true;
+    }
+  }
+
+  function scheduleMentionOverlayRefresh(){
+    if (mentionOverlayFrame) return;
+    mentionOverlayFrame = requestAnimationFrame(refreshMentionOverlay);
   }
 
   function pointIntersectsNode(node, point, layer = currentLayer){
@@ -1717,6 +1994,7 @@
     refreshHasContent();
     scheduleThumbUpdate();
     schedulePersistentSave();
+    scheduleMentionOverlayRefresh();
     activeMathField = null;
     pendingTextEditorMathReflow = false;
     if (textEditorPositionFrame){
@@ -4064,6 +4342,7 @@
     }
     updateDocumentNavPopup();
     resizeStage();
+    scheduleMentionOverlayRefresh();
     if (active){
       requestAnimationFrame(() => {
         resizeStage();
@@ -4172,6 +4451,7 @@
     }
     if (!active){
       hideContextMenu();
+      closeMentionPreview();
       cssLayoutDismissedNode = null;
       container.classList.remove('slide-css-editing');
       thumbsEl.classList.remove('is-stowed');
@@ -4187,6 +4467,7 @@
       startEditorSession();
       resizeStage();
     }
+    scheduleMentionOverlayRefresh();
   }
 
   function syncActive(){
@@ -4308,6 +4589,7 @@
     }
     hideSelectionMarquee();
     hideContextMenu();
+    closeMentionPreview();
     clearGuideLines();
     clearObjectAnimationTweens(true);
     if (currentLayer){
@@ -4345,6 +4627,7 @@
     syncVideoAnimation();
     updateUiForCurrentSlide();
     resizeStage();
+    scheduleMentionOverlayRefresh();
     if (isPresentationMode){
       playCurrentSlideAnimations();
     }
@@ -4608,6 +4891,7 @@
     if (!stage) return;
     if (thumbTimer) clearTimeout(thumbTimer);
     thumbTimer = setTimeout(updateThumbForCurrent, 250);
+    scheduleMentionOverlayRefresh();
     schedulePersistentSave();
   }
 
@@ -5565,6 +5849,7 @@
     stage.position({ x, y });
     stage.batchDraw();
     scheduleTextEditorPosition(true);
+    scheduleMentionOverlayRefresh();
   }
 
   function getStagePointer(){
@@ -5586,6 +5871,7 @@
     applyTransformerConfig(selectedNode);
     uiLayer.batchDraw();
     updateInspector(selectedNode);
+    scheduleMentionOverlayRefresh();
   }
 
   function selectNode(node){
@@ -5805,6 +6091,7 @@
     });
     node.on('transform', () => {
       applySnapGuides(node);
+      scheduleMentionOverlayRefresh();
       if (selectedNode === node){
         updateInspector(node);
       }
@@ -5827,6 +6114,7 @@
           currentLayer.batchDraw();
         }
       }
+      scheduleMentionOverlayRefresh();
       if (selectedNode === node){
         updateInspector(node);
       }
@@ -5834,6 +6122,7 @@
     node.on('transformend', () => {
       clearGuideLines();
       normalizeNode(node);
+      scheduleMentionOverlayRefresh();
     });
     node.on('dragend', () => {
       selectedNodes.forEach(item => {
@@ -5843,6 +6132,7 @@
         item.setAttr('multiDragOriginY', null);
       });
       clearGuideLines();
+      scheduleMentionOverlayRefresh();
       scheduleThumbUpdate();
     });
 

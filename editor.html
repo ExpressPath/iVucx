@@ -331,119 +331,6 @@
       border-color:rgba(63,185,80,0.7);
     }
 
-    .file-mention-decoration{
-      color:var(--accent);
-      text-decoration:underline;
-      text-underline-offset:2px;
-      cursor:pointer;
-    }
-
-    .mention-preview-overlay{
-      position:fixed;
-      inset:0;
-      display:none;
-      align-items:center;
-      justify-content:center;
-      padding:24px;
-      background:rgba(1,4,9,0.72);
-      backdrop-filter:blur(10px);
-      z-index:80;
-    }
-
-    .mention-preview-overlay.show{
-      display:flex;
-    }
-
-    .mention-preview-card{
-      width:min(1100px, 100%);
-      max-height:min(86vh, 920px);
-      display:flex;
-      flex-direction:column;
-      overflow:hidden;
-      border:1px solid rgba(255,255,255,0.12);
-      border-radius:16px;
-      background:#ffffff;
-      color:#0f172a;
-      box-shadow:0 28px 72px rgba(0,0,0,0.38);
-    }
-
-    .mention-preview-head{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      padding:14px 16px;
-      border-bottom:1px solid rgba(15,23,42,0.08);
-      background:linear-gradient(180deg, #f8fafc, #eef2f7);
-    }
-
-    .mention-preview-title{
-      min-width:0;
-      font-size:14px;
-      font-weight:700;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-    }
-
-    .mention-preview-close{
-      width:34px;
-      min-width:34px;
-      height:34px;
-      padding:0;
-      border-radius:999px;
-      background:#ffffff;
-      border:1px solid rgba(15,23,42,0.12);
-      color:#0f172a;
-      font-size:20px;
-      line-height:1;
-      cursor:pointer;
-    }
-
-    .mention-preview-body{
-      flex:1;
-      min-height:280px;
-      overflow:auto;
-      background:#ffffff;
-    }
-
-    .mention-preview-frame{
-      display:block;
-      width:100%;
-      min-height:70vh;
-      border:0;
-      background:#ffffff;
-    }
-
-    .mention-preview-image{
-      display:block;
-      max-width:100%;
-      height:auto;
-      margin:0 auto;
-      background:#ffffff;
-    }
-
-    .mention-preview-text{
-      margin:0;
-      padding:20px 22px 28px;
-      white-space:pre-wrap;
-      word-break:break-word;
-      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-      font-size:13px;
-      line-height:1.55;
-      color:#0f172a;
-    }
-
-    .mention-preview-empty{
-      display:grid;
-      place-items:center;
-      min-height:280px;
-      padding:24px;
-      text-align:center;
-      color:#475569;
-      font-size:14px;
-    }
-
     @media (max-width:1020px){
       .workspace{
         grid-template-columns:1fr;
@@ -523,15 +410,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite" aria-hidden="true">
     <span id="toastMessage"></span>
   </div>
-  <div class="mention-preview-overlay" id="mentionPreviewOverlay" aria-hidden="true">
-    <div class="mention-preview-card" role="dialog" aria-modal="true" aria-labelledby="mentionPreviewTitle">
-      <div class="mention-preview-head">
-        <div class="mention-preview-title" id="mentionPreviewTitle">Mention preview</div>
-        <button class="mention-preview-close" id="mentionPreviewClose" type="button" aria-label="Close preview">&times;</button>
-      </div>
-      <div class="mention-preview-body" id="mentionPreviewBody"></div>
-    </div>
-  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
   <script src="CoqRunner.js"></script>
@@ -559,10 +437,6 @@
       const editorMount = document.getElementById('editor');
       const toastEl = document.getElementById('toast');
       const toastMessageEl = document.getElementById('toastMessage');
-      const mentionPreviewOverlay = document.getElementById('mentionPreviewOverlay');
-      const mentionPreviewTitle = document.getElementById('mentionPreviewTitle');
-      const mentionPreviewBody = document.getElementById('mentionPreviewBody');
-      const mentionPreviewClose = document.getElementById('mentionPreviewClose');
       const theoremDraftStore = window.ivucxTheoremDraftStore || null;
 
       const languageConfig = {
@@ -646,11 +520,6 @@
       let keepAliveTimer = null;
       let keepAliveInFlight = false;
       let proofDraftSaveTimer = null;
-      let mentionableFiles = [];
-      let mentionDecorationIds = [];
-      let mentionRanges = [];
-      let mentionRefreshTimer = null;
-      let mentionCompletionDisposable = null;
 
       backBtn.addEventListener('click', ()=>{
         handleBackNavigation();
@@ -672,33 +541,13 @@
           scheduleProofDraftSave('lean-goals-input');
         });
       }
-      if(mentionPreviewClose){
-        mentionPreviewClose.addEventListener('click', closeMentionPreview);
-      }
-      if(mentionPreviewOverlay){
-        mentionPreviewOverlay.addEventListener('click', (e)=>{
-          if(e.target === mentionPreviewOverlay){
-            closeMentionPreview();
-          }
-        });
-      }
       window.addEventListener('paste', handleProofFilePaste, true);
-      window.addEventListener('focus', ()=>{
-        refreshMentionableFiles();
-      });
       window.addEventListener('pagehide', ()=>{
         saveProofDraftSnapshot('pagehide');
       });
       document.addEventListener('visibilitychange', ()=>{
         if(document.visibilityState === 'hidden'){
           saveProofDraftSnapshot('visibility-hidden');
-        } else if(document.visibilityState === 'visible'){
-          refreshMentionableFiles();
-        }
-      });
-      document.addEventListener('keydown', (e)=>{
-        if(e.key === 'Escape' && mentionPreviewOverlay && mentionPreviewOverlay.classList.contains('show')){
-          closeMentionPreview();
         }
       });
 
@@ -783,206 +632,6 @@
           toastEl.classList.remove('show');
           toastEl.setAttribute('aria-hidden', 'true');
         }, 13000);
-      }
-
-      function normalizeMentionSourceName(value){
-        return String(value || '').replace(/\s+/g, ' ').trim();
-      }
-
-      function getMentionPreviewFilesFromDraft(record){
-        const slides = record
-          && record.summarySlide
-          && record.summarySlide.record
-          && Array.isArray(record.summarySlide.record.slides)
-            ? record.summarySlide.record.slides
-            : [];
-
-        return slides
-          .map((slide, index)=>{
-            if(!slide || slide.type !== 'document' || !slide.document) return null;
-            const title = normalizeMentionSourceName(slide.document.title || ('File ' + (index + 1)));
-            if(!title) return null;
-            return {
-              id: 'slide-file-' + index,
-              title,
-              kind: slide.document.kind || '',
-              url: typeof slide.document.url === 'string' ? slide.document.url : '',
-              text: typeof slide.document.text === 'string' ? slide.document.text : '',
-              mime: slide.document.mime || '',
-              hidden: !!slide.hidden,
-              slideIndex: index
-            };
-          })
-          .filter(Boolean);
-      }
-
-      function getMentionModel(){
-        return editorInstance && typeof editorInstance.getModel === 'function'
-          ? editorInstance.getModel()
-          : null;
-      }
-
-      function buildMentionRangesFromText(text, files){
-        const mentions = [];
-        const used = [];
-        const safeText = String(text || '');
-        const sortedFiles = (files || []).slice().sort((a, b)=>b.title.length - a.title.length);
-
-        sortedFiles.forEach(file => {
-          const token = '@' + file.title;
-          if(!token.trim()) return;
-          let searchFrom = 0;
-          while(searchFrom < safeText.length){
-            const index = safeText.indexOf(token, searchFrom);
-            if(index === -1) break;
-            const end = index + token.length;
-            const nextChar = safeText[end] || '';
-            if(nextChar && /[0-9A-Za-z_.-]/.test(nextChar)){
-              searchFrom = end;
-              continue;
-            }
-            const overlaps = used.some(range => !(end <= range.start || index >= range.end));
-            if(!overlaps){
-              used.push({ start: index, end });
-              mentions.push({
-                file,
-                start: index,
-                end
-              });
-            }
-            searchFrom = end;
-          }
-        });
-
-        mentions.sort((a, b)=>a.start - b.start);
-        return mentions;
-      }
-
-      function applyMentionDecorations(){
-        if(!editorInstance || !monacoRef) return;
-        const model = getMentionModel();
-        if(!model) return;
-        const text = model.getValue();
-        const mentions = buildMentionRangesFromText(text, mentionableFiles);
-        mentionRanges = mentions;
-        mentionDecorationIds = editorInstance.deltaDecorations(
-          mentionDecorationIds,
-          mentions.map(mention => ({
-            range: new monacoRef.Range(
-              model.getPositionAt(mention.start).lineNumber,
-              model.getPositionAt(mention.start).column,
-              model.getPositionAt(mention.end).lineNumber,
-              model.getPositionAt(mention.end).column
-            ),
-            options: {
-              inlineClassName: 'file-mention-decoration',
-              hoverMessage: [{ value: 'Preview file: ' + mention.file.title }]
-            }
-          }))
-        );
-      }
-
-      function scheduleMentionDecorationRefresh(){
-        if(mentionRefreshTimer){
-          clearTimeout(mentionRefreshTimer);
-        }
-        mentionRefreshTimer = setTimeout(()=>{
-          mentionRefreshTimer = null;
-          applyMentionDecorations();
-        }, 80);
-      }
-
-      function refreshMentionCompletionProvider(){
-        if(!monacoRef) return;
-        if(mentionCompletionDisposable && typeof mentionCompletionDisposable.dispose === 'function'){
-          mentionCompletionDisposable.dispose();
-          mentionCompletionDisposable = null;
-        }
-        mentionCompletionDisposable = monacoRef.languages.registerCompletionItemProvider(selectedConfig.monacoId, {
-          triggerCharacters: ['@'],
-          provideCompletionItems(model, position){
-            const word = model.getWordUntilPosition(position);
-            const range = {
-              startLineNumber: position.lineNumber,
-              endLineNumber: position.lineNumber,
-              startColumn: word.startColumn,
-              endColumn: position.column
-            };
-            return {
-              suggestions: mentionableFiles.map(file => ({
-                label: '@' + file.title,
-                kind: monacoRef.languages.CompletionItemKind.File,
-                insertText: '@' + file.title,
-                range,
-                detail: file.hidden ? 'Hidden slide file previewable by mention' : 'Slide file preview',
-                documentation: file.title
-              }))
-            };
-          }
-        });
-      }
-
-      async function refreshMentionableFiles(){
-        if(!theoremDraftStore || typeof theoremDraftStore.read !== 'function'){
-          mentionableFiles = [];
-          scheduleMentionDecorationRefresh();
-          return [];
-        }
-        try{
-          const record = await theoremDraftStore.read();
-          mentionableFiles = getMentionPreviewFilesFromDraft(record);
-        }catch(err){
-          mentionableFiles = [];
-        }
-        refreshMentionCompletionProvider();
-        scheduleMentionDecorationRefresh();
-        return mentionableFiles;
-      }
-
-      function findMentionAtEditorOffset(offset){
-        return mentionRanges.find(mention => offset >= mention.start && offset < mention.end) || null;
-      }
-
-      function closeMentionPreview(){
-        if(!mentionPreviewOverlay || !mentionPreviewBody) return;
-        mentionPreviewOverlay.classList.remove('show');
-        mentionPreviewOverlay.setAttribute('aria-hidden', 'true');
-        mentionPreviewBody.innerHTML = '';
-      }
-
-      function openMentionPreview(file){
-        if(!mentionPreviewOverlay || !mentionPreviewBody || !file) return;
-        mentionPreviewBody.innerHTML = '';
-        if(mentionPreviewTitle){
-          mentionPreviewTitle.textContent = file.title;
-        }
-
-        if(file.kind === 'pdf' && file.url){
-          const frame = document.createElement('iframe');
-          frame.className = 'mention-preview-frame';
-          frame.src = file.url;
-          frame.title = file.title;
-          mentionPreviewBody.appendChild(frame);
-        } else if(file.kind === 'image' && file.url){
-          const image = document.createElement('img');
-          image.className = 'mention-preview-image';
-          image.src = file.url;
-          image.alt = file.title;
-          mentionPreviewBody.appendChild(image);
-        } else if(file.kind === 'text'){
-          const pre = document.createElement('pre');
-          pre.className = 'mention-preview-text';
-          pre.textContent = file.text || '';
-          mentionPreviewBody.appendChild(pre);
-        } else {
-          const empty = document.createElement('div');
-          empty.className = 'mention-preview-empty';
-          empty.textContent = 'This mentioned file could not be previewed here.';
-          mentionPreviewBody.appendChild(empty);
-        }
-
-        mentionPreviewOverlay.classList.add('show');
-        mentionPreviewOverlay.setAttribute('aria-hidden', 'false');
       }
 
       function startKeepAlivePings(){
@@ -1126,24 +775,9 @@
           editorInstance.addCommand(monacoRef.KeyMod.CtrlCmd | monacoRef.KeyCode.Enter, function(){
             runProof();
           });
-          editorInstance.onMouseDown(function(e){
-            if(!editorInstance) return;
-            if(!e || !e.target || !e.target.position) return;
-            const model = getMentionModel();
-            if(!model) return;
-            const offset = model.getOffsetAt(e.target.position);
-            const mention = findMentionAtEditorOffset(offset);
-            if(!mention) return;
-            if(e.event && typeof e.event.preventDefault === 'function'){
-              e.event.preventDefault();
-            }
-            openMentionPreview(mention.file);
-          });
           editorInstance.onDidChangeModelContent(function(){
             scheduleProofDraftSave('monaco-edit');
-            scheduleMentionDecorationRefresh();
           });
-          refreshMentionableFiles();
           saveProofDraftSnapshot('editor-ready');
         }, function(){
           activateFallbackEditor(initialText);
@@ -1156,7 +790,6 @@
         editorMount.style.display = 'none';
         fallbackEditor.style.display = 'block';
         fallbackEditor.value = initialText;
-        refreshMentionableFiles();
         saveProofDraftSnapshot('fallback-ready');
         fallbackEditor.addEventListener('input', function(){
           scheduleProofDraftSave('fallback-edit');
