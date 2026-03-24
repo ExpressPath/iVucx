@@ -2902,17 +2902,6 @@
     return animated.length ? Math.min(99, Math.max(...animated) + 1) : 1;
   }
 
-  function getAnimationSequenceSpan(node, config){
-    const resolvedConfig = config || getNodeAnimationConfig(node);
-    const delay = Math.max(0, Number(resolvedConfig && resolvedConfig.delay) || 0);
-    const hasVisualAnimation = !!(resolvedConfig && resolvedConfig.type && resolvedConfig.type !== 'none');
-    const hasMediaCue = hasQueuedMediaCue(node, resolvedConfig);
-    if (!hasVisualAnimation){
-      return hasMediaCue ? delay + 0.04 : 0;
-    }
-    return delay + Math.max(0.1, Number(resolvedConfig.duration) || DEFAULT_NODE_ANIMATION.duration);
-  }
-
   function hideContextMenu(){
     if (!contextMenuEl) return;
     contextMenuEl.hidden = true;
@@ -3864,6 +3853,7 @@
     const nodeLayer = node && node.getLayer ? node.getLayer() : currentLayer;
     if (!node || !nodeLayer || !stage || !hasKonva()) return false;
     const config = getNodeAnimationConfig(node);
+    const onComplete = typeof options.onComplete === 'function' ? options.onComplete : null;
     const hasVisualAnimation = config.type !== 'none';
     const hasMediaCue = hasQueuedMediaCue(node, config);
     if (!hasVisualAnimation && !hasMediaCue) return false;
@@ -3895,7 +3885,10 @@
       cueTriggered = true;
       triggerVideoCue(node, config);
     };
-    const applyFinal = () => {
+    let didFinalize = false;
+    const finalizeAnimation = () => {
+      if (didFinalize) return;
+      didFinalize = true;
       if (standardStates){
         applyNodeAnimationState(node, standardStates.finalState);
         node.setAttr('animPreparedStartState', null);
@@ -3905,6 +3898,13 @@
       }
       if (nodeLayer){
         nodeLayer.batchDraw();
+      }
+      if (onComplete){
+        try{
+          onComplete();
+        }catch(err){
+          // ignore chained animation callback issues
+        }
       }
     };
 
@@ -3924,10 +3924,10 @@
         timeoutId: null,
         cueTimeoutId: hasMediaCue ? setTimeout(() => ensureCue(), delayMs) : null,
         rafId: null,
-        applyFinal
+        applyFinal: finalizeAnimation
       };
       record.timeoutId = setTimeout(() => {
-        applyFinal();
+        finalizeAnimation();
         objectAnimationTweens = objectAnimationTweens.filter(entry => entry !== record);
       }, delayMs + 40);
       objectAnimationTweens.push(record);
@@ -3944,7 +3944,7 @@
         timeoutId: null,
         cueTimeoutId: null,
         rafId: null,
-        applyFinal
+        applyFinal: finalizeAnimation
       };
       const frame = (now) => {
         if (!record) return;
@@ -3960,7 +3960,7 @@
         updateArrowPointerForReveal(node, visiblePoints);
         nodeLayer.batchDraw();
         if (progress >= 1){
-          applyFinal();
+          finalizeAnimation();
           objectAnimationTweens = objectAnimationTweens.filter(entry => entry !== record);
           return;
         }
@@ -3991,14 +3991,14 @@
     const record = {
       node,
       tween,
-      applyFinal,
+      applyFinal: finalizeAnimation,
       timeoutId: null,
       cueTimeoutId: hasMediaCue ? setTimeout(() => ensureCue(), delayMs + 10) : null,
       rafId: null
     };
 
     record.timeoutId = setTimeout(() => {
-      applyFinal();
+      finalizeAnimation();
       objectAnimationTweens = objectAnimationTweens.filter(entry => entry !== record);
     }, Math.round((totalDelay + config.duration) * 1000) + 40);
 
@@ -4030,20 +4030,25 @@
   function playNextPresentationAnimation(){
     if (!isPresentationMode) return false;
     if (presentationAnimationIndex >= presentationAnimationQueue.length) return false;
-    let delayOffset = 0;
-    let played = false;
-
-    while (presentationAnimationIndex < presentationAnimationQueue.length){
-      const entry = presentationAnimationQueue[presentationAnimationIndex];
-      if (played && !entry.config.afterPrevious){
-        break;
+    const playChainedAnimationFrom = (index) => {
+      if (!isPresentationMode || index >= presentationAnimationQueue.length) return;
+      const chainedEntry = presentationAnimationQueue[index];
+      if (!chainedEntry || !chainedEntry.config.afterPrevious) return;
+      presentationAnimationIndex = Math.max(presentationAnimationIndex, index + 1);
+      const chainedStarted = runNodeEntryAnimation(chainedEntry.node, {
+        onComplete: () => playChainedAnimationFrom(index + 1)
+      });
+      if (!chainedStarted){
+        playChainedAnimationFrom(index + 1);
       }
-      presentationAnimationIndex += 1;
-      played = runNodeEntryAnimation(entry.node, { delayOffset }) || played;
-      delayOffset += getAnimationSequenceSpan(entry.node, entry.config);
-    }
+    };
 
-    return played;
+    const entryIndex = presentationAnimationIndex;
+    const entry = presentationAnimationQueue[entryIndex];
+    presentationAnimationIndex += 1;
+    return runNodeEntryAnimation(entry.node, {
+      onComplete: () => playChainedAnimationFrom(entryIndex + 1)
+    });
   }
 
   function setPresentationMode(active){
