@@ -258,6 +258,8 @@
     }
 
     .slide-app-pill{
+      appearance:none;
+      border:0;
       font-size:12px;
       font-weight:700;
       letter-spacing:.04em;
@@ -267,6 +269,135 @@
       background:#111;
       color:#fff;
       white-space:nowrap;
+      font-family:inherit;
+      line-height:1.1;
+      cursor:pointer;
+      transition:transform .18s ease, background-color .18s ease, box-shadow .18s ease;
+    }
+
+    .slide-app-pill:hover{
+      background:#1f2937;
+      transform:translateY(-1px);
+    }
+
+    .slide-app-pill:focus-visible{
+      outline:none;
+      box-shadow:0 0 0 3px rgba(17,85,204,0.22);
+    }
+
+    .slide-title-popup{
+      position:fixed;
+      inset:0;
+      z-index:1295;
+      display:none;
+      pointer-events:none;
+    }
+
+    .slide-title-popup.is-open{
+      display:block;
+      pointer-events:auto;
+    }
+
+    .slide-title-popup-card{
+      position:fixed;
+      width:min(420px, calc(100vw - 24px));
+      border-radius:18px;
+      border:1px solid rgba(15,23,42,0.12);
+      background:rgba(255,255,255,0.98);
+      box-shadow:0 28px 56px rgba(15,23,42,0.24);
+      padding:18px 18px 16px;
+      color:#111827;
+      text-align:left;
+    }
+
+    .slide-title-popup-eyebrow{
+      font-size:11px;
+      font-weight:700;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:#6b7280;
+      margin-bottom:8px;
+    }
+
+    .slide-title-popup-title{
+      margin:0 0 8px;
+      font-size:18px;
+      font-weight:700;
+      letter-spacing:.01em;
+    }
+
+    .slide-title-popup-copy{
+      margin:0 0 14px;
+      font-size:13px;
+      line-height:1.6;
+      color:#536173;
+    }
+
+    .slide-title-popup-label{
+      display:block;
+      font-size:12px;
+      font-weight:700;
+      color:#334155;
+      margin-bottom:8px;
+    }
+
+    .slide-title-popup-input{
+      width:100%;
+      border-radius:12px;
+      border:1px solid rgba(15,23,42,0.14);
+      background:#fff;
+      color:#111827;
+      padding:11px 13px;
+      font-size:14px;
+      outline:none;
+      transition:border-color .18s ease, box-shadow .18s ease;
+      box-sizing:border-box;
+    }
+
+    .slide-title-popup-input:focus{
+      border-color:#1155cc;
+      box-shadow:0 0 0 3px rgba(17,85,204,0.16);
+    }
+
+    .slide-title-popup-status{
+      min-height:18px;
+      margin-top:8px;
+      font-size:12px;
+      color:#64748b;
+    }
+
+    .slide-title-popup-status.is-error{
+      color:#b3261e;
+    }
+
+    .slide-title-popup-actions{
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+      margin-top:14px;
+    }
+
+    .slide-title-popup-btn{
+      appearance:none;
+      border:1px solid rgba(15,23,42,0.12);
+      border-radius:12px;
+      background:#ffffff;
+      color:#111827;
+      font-size:13px;
+      font-weight:700;
+      padding:10px 16px;
+      cursor:pointer;
+      transition:transform .18s ease, background-color .18s ease, color .18s ease, border-color .18s ease;
+    }
+
+    .slide-title-popup-btn:hover{
+      transform:translateY(-1px);
+    }
+
+    .slide-title-popup-btn.confirm{
+      background:#111827;
+      border-color:#111827;
+      color:#ffffff;
     }
 
     .slide-toolbar-group{
@@ -1940,7 +2071,7 @@
     <form class="search-box" id="searchForm">
       <div class="slide-toolbar">
         <div class="slide-toolbar-left">
-          <div class="slide-app-pill">Slides</div>
+          <button class="slide-app-pill" id="slideTitleTrigger" type="button" aria-haspopup="dialog" aria-expanded="false" title="Change the saved title">Slides</button>
           <div class="slide-toolbar-group" data-group="tools">
             <button class="slide-tool is-active" type="button" data-tool="select">Select</button>
             <button class="slide-tool" type="button" data-tool="text">Text</button>
@@ -2158,6 +2289,21 @@
   </div>
 </div>
 
+<div class="slide-title-popup" id="slideTitlePopup" hidden>
+  <div class="slide-title-popup-card" id="slideTitlePopupCard" role="dialog" aria-modal="false" aria-labelledby="slideTitlePopupTitle">
+    <div class="slide-title-popup-eyebrow">Slides</div>
+    <h2 class="slide-title-popup-title" id="slideTitlePopupTitle">Change saved title</h2>
+    <p class="slide-title-popup-copy">This updates the original problem title and overwrites the title saved for restoration, proof handoff, and later preview.</p>
+    <label class="slide-title-popup-label" for="slideTitlePopupInput">Title</label>
+    <input class="slide-title-popup-input" id="slideTitlePopupInput" type="text" maxlength="240" autocomplete="off" spellcheck="false" />
+    <div class="slide-title-popup-status" id="slideTitlePopupStatus">The updated title will be saved in the background immediately.</div>
+    <div class="slide-title-popup-actions">
+      <button class="slide-title-popup-btn" id="slideTitlePopupCancel" type="button">Cancel</button>
+      <button class="slide-title-popup-btn confirm" id="slideTitlePopupSave" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="cookie-consent" id="cookieConsent" hidden>
   <div class="cookie-consent-card" role="dialog" aria-modal="false" aria-labelledby="cookieConsentTitle">
     <h2 class="cookie-consent-title" id="cookieConsentTitle">Cookie を受け入れますか？</h2>
@@ -2266,6 +2412,13 @@
   const titleDecisionMenu = document.getElementById('titleDecisionMenu');
   const titleDecisionNo = document.getElementById('titleDecisionNo');
   const titleDecisionYes = document.getElementById('titleDecisionYes');
+  const slideTitleTrigger = document.getElementById('slideTitleTrigger');
+  const slideTitlePopup = document.getElementById('slideTitlePopup');
+  const slideTitlePopupCard = document.getElementById('slideTitlePopupCard');
+  const slideTitlePopupInput = document.getElementById('slideTitlePopupInput');
+  const slideTitlePopupStatus = document.getElementById('slideTitlePopupStatus');
+  const slideTitlePopupCancel = document.getElementById('slideTitlePopupCancel');
+  const slideTitlePopupSave = document.getElementById('slideTitlePopupSave');
   const cookieConsent = document.getElementById('cookieConsent');
   const cookieConsentAccept = document.getElementById('cookieConsentAccept');
   const cookieConsentDecline = document.getElementById('cookieConsentDecline');
@@ -2455,6 +2608,8 @@
     if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
       window.slideEditorControls.preserveInBackground();
     }
+    wheelAccum = 0;
+    releaseModeScrollGestureLock();
     setModeDraft(1, input.value || compactGrayAcceptedValue, attachedFiles);
     selectionReturnScreen = isExpandedEditorActive() ? 'gray-editor' : 'gray-compact';
     selectionMode = true;
@@ -2695,6 +2850,11 @@
       closeLoginPopup(true);
       return;
     }
+    if(slideTitlePopup && !slideTitlePopup.hidden){
+      e.preventDefault();
+      closeSlideTitlePopup();
+      return;
+    }
     if(titleDecisionMenu && !titleDecisionMenu.hidden){
       e.preventDefault();
       closeTitleDecisionMenu();
@@ -2751,6 +2911,14 @@
     });
   }
 
+  if(slideTitlePopup){
+    slideTitlePopup.addEventListener('click', e=>{
+      if(e.target === slideTitlePopup){
+        closeSlideTitlePopup();
+      }
+    });
+  }
+
   if(titleDecisionNo){
     titleDecisionNo.addEventListener('click', ()=>{
       closeTitleDecisionMenu();
@@ -2763,6 +2931,56 @@
       closeEditorCloseMenu();
     });
   }
+
+  if(slideTitleTrigger){
+    slideTitleTrigger.addEventListener('click', ()=>{
+      if(slideTitlePopup && !slideTitlePopup.hidden){
+        closeSlideTitlePopup({ skipFocusRestore: true });
+        return;
+      }
+      openSlideTitlePopup();
+    });
+  }
+
+  if(slideTitlePopupCancel){
+    slideTitlePopupCancel.addEventListener('click', ()=>{
+      closeSlideTitlePopup();
+    });
+  }
+
+  if(slideTitlePopupSave){
+    slideTitlePopupSave.addEventListener('click', ()=>{
+      saveSlideTitleFromPopup();
+    });
+  }
+
+  if(slideTitlePopupInput){
+    slideTitlePopupInput.addEventListener('keydown', e=>{
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        saveSlideTitleFromPopup();
+        return;
+      }
+      if(e.key === 'Escape'){
+        e.preventDefault();
+        closeSlideTitlePopup();
+      }
+    });
+    slideTitlePopupInput.addEventListener('input', ()=>{
+      if(!slideTitlePopupInput.value.trim()){
+        setSlideTitlePopupStatus('Title cannot be empty.', true);
+      }else{
+        setSlideTitlePopupStatus('The updated title will be saved in the background immediately.');
+      }
+    });
+  }
+
+  window.addEventListener('resize', ()=>{
+    positionSlideTitlePopup();
+  });
+  window.addEventListener('scroll', ()=>{
+    positionSlideTitlePopup();
+  }, true);
 
   if(cookieConsent){
     cookieConsent.addEventListener('click', e=>{
@@ -2976,6 +3194,112 @@
     if(!titleDecisionMenu) return;
     titleDecisionMenu.classList.remove('is-open');
     titleDecisionMenu.hidden = true;
+  }
+
+  function getEditableSlideTitle(){
+    const liveTitle = getTheoremTitleText();
+    if(liveTitle) return liveTitle;
+    if(typeof input.value === 'string' && input.value.trim()){
+      return input.value.trim();
+    }
+    return '';
+  }
+
+  function setSlideTitlePopupStatus(message, isError = false){
+    if(!slideTitlePopupStatus) return;
+    slideTitlePopupStatus.textContent = message || '';
+    slideTitlePopupStatus.classList.toggle('is-error', !!isError);
+  }
+
+  function positionSlideTitlePopup(){
+    if(!slideTitlePopup || slideTitlePopup.hidden || !slideTitlePopupCard || !slideTitleTrigger) return;
+    const triggerRect = slideTitleTrigger.getBoundingClientRect();
+    const margin = 12;
+    const cardWidth = Math.min(420, Math.max(280, window.innerWidth - (margin * 2)));
+    const maxLeft = Math.max(margin, window.innerWidth - cardWidth - margin);
+    const nextLeft = Math.min(Math.max(margin, triggerRect.left), maxLeft);
+    const nextTop = Math.min(
+      Math.max(margin, triggerRect.bottom + 10),
+      Math.max(margin, window.innerHeight - slideTitlePopupCard.offsetHeight - margin)
+    );
+    slideTitlePopupCard.style.left = `${nextLeft}px`;
+    slideTitlePopupCard.style.top = `${nextTop}px`;
+  }
+
+  function closeSlideTitlePopup(options = {}){
+    if(!slideTitlePopup) return;
+    slideTitlePopup.classList.remove('is-open');
+    slideTitlePopup.hidden = true;
+    if(slideTitleTrigger){
+      slideTitleTrigger.setAttribute('aria-expanded', 'false');
+    }
+    if(!options.skipFocusRestore && slideTitleTrigger && isExpandedEditorActive()){
+      requestAnimationFrame(()=>slideTitleTrigger.focus());
+    }
+  }
+
+  function openSlideTitlePopup(){
+    if(!slideTitlePopup || !slideTitlePopupInput || !slideTitleTrigger) return false;
+    if(!isExpandedEditorActive() || selectionMode || document.fullscreenElement) return false;
+    closeTitleDecisionMenu();
+    closeEditorCloseMenu();
+    slideTitlePopupInput.value = getEditableSlideTitle();
+    setSlideTitlePopupStatus('The updated title will be saved in the background immediately.');
+    slideTitlePopup.hidden = false;
+    slideTitlePopup.classList.add('is-open');
+    slideTitleTrigger.setAttribute('aria-expanded', 'true');
+    requestAnimationFrame(()=>{
+      positionSlideTitlePopup();
+      slideTitlePopupInput.focus();
+      slideTitlePopupInput.select();
+    });
+    return true;
+  }
+
+  function syncPendingTitlePayloads(nextTitle){
+    const normalizedTitle = typeof nextTitle === 'string' ? nextTitle : '';
+    const keys = ['ivucxEditorInit', EDITOR_RETURN_KEY];
+    keys.forEach((key)=>{
+      try{
+        const raw = sessionStorage.getItem(key);
+        if(!raw) return;
+        const parsed = JSON.parse(raw);
+        if(!parsed || typeof parsed !== 'object') return;
+        parsed.summary = normalizedTitle;
+        sessionStorage.setItem(key, JSON.stringify(parsed));
+      }catch(err){
+        // ignore storage failure
+      }
+    });
+  }
+
+  async function saveSlideTitleFromPopup(){
+    if(!slideTitlePopupInput) return false;
+    const nextTitle = slideTitlePopupInput.value.trim();
+    if(!nextTitle){
+      setSlideTitlePopupStatus('Title cannot be empty.', true);
+      slideTitlePopupInput.focus();
+      return false;
+    }
+    const previousTitle = getEditableSlideTitle();
+    if(nextTitle === previousTitle){
+      closeSlideTitlePopup();
+      return true;
+    }
+    input.value = nextTitle;
+    compactGrayAcceptedValue = nextTitle;
+    rememberedContent = nextTitle;
+    setModeDraft(1, nextTitle, attachedFiles);
+    syncInputChanges();
+    persistModeState();
+    scheduleCookieHistorySnapshot('slide-title-popup');
+    syncPendingTitlePayloads(nextTitle);
+    await Promise.allSettled([
+      saveTheoremTitleNow('slide-title-popup'),
+      saveSlideDraftSnapshot('slide-title-popup')
+    ]);
+    closeSlideTitlePopup();
+    return true;
   }
 
   function isCompactGrayMode(){
@@ -4973,6 +5297,7 @@
 
     isAnimating = true;
     closeTitleDecisionMenu();
+    closeSlideTitlePopup({ skipFocusRestore: true });
 
     // Exit selection mode if changing states
     if(selectionMode){
@@ -5102,6 +5427,7 @@
   }
 
   function shouldSkipScrollDetection(target, deltaY = 0){
+    if(selectionMode) return true;
     if(!target || typeof target.closest !== 'function') return false;
     const directionalSkip = isExpandedEditorActive();
 
@@ -5202,7 +5528,7 @@
   }
 
   function handleScrollDelta(deltaY, options = {}){
-    if(isAnimating || modeScrollGestureLocked) return false;
+    if(selectionMode || isAnimating || modeScrollGestureLocked) return false;
     if(hasSuggestionResults && state === 0) return false;
     if(Math.abs(deltaY) < MIN_SCROLL_DELTA) return false;
     if(isExpandedEditorActive()){
