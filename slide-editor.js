@@ -581,20 +581,21 @@
     ensureMentionPreview();
     if (!mentionPreviewEl || !mentionPreviewBodyEl || !mentionPreviewTitleEl) return;
 
-    mentionPreviewTitleEl.textContent = documentInfo.title || 'Mentioned file';
+    const displayTitle = getDocumentDisplayTitle(documentInfo);
+    mentionPreviewTitleEl.textContent = displayTitle || 'Mentioned file';
     mentionPreviewBodyEl.innerHTML = '';
 
     if (documentInfo.kind === 'pdf' && documentInfo.url){
       const frame = document.createElement('iframe');
       frame.className = 'slide-mention-preview-frame';
       frame.src = documentInfo.url;
-      frame.title = documentInfo.title || 'Mentioned file preview';
+      frame.title = displayTitle || 'Mentioned file preview';
       mentionPreviewBodyEl.appendChild(frame);
     } else if (documentInfo.kind === 'image' && documentInfo.url){
       const image = document.createElement('img');
       image.className = 'slide-mention-preview-image';
       image.src = documentInfo.url;
-      image.alt = documentInfo.title || 'Mentioned file preview';
+      image.alt = displayTitle || 'Mentioned file preview';
       mentionPreviewBodyEl.appendChild(image);
     } else if (documentInfo.kind === 'text'){
       const pre = document.createElement('pre');
@@ -4228,12 +4229,27 @@
 
   function getDocumentTypeLabel(documentInfo){
     if (!documentInfo) return 'Document';
-    const baseLabel = documentInfo.kind === 'pdf'
+    return documentInfo.kind === 'pdf'
       ? 'PDF slide'
       : documentInfo.kind === 'image'
         ? 'Image document'
         : 'Text document';
-    return documentInfo.checked ? `${baseLabel} - safety checked` : baseLabel;
+  }
+
+  function getDocumentDisplayTitle(documentInfo){
+    const rawTitle = typeof documentInfo === 'string'
+      ? documentInfo
+      : (documentInfo && typeof documentInfo.title === 'string' ? documentInfo.title : '');
+    const normalized = rawTitle.trim();
+    if (!normalized) return 'Attached file';
+
+    const extMatch = normalized.match(/(\.[a-z0-9]{1,12})$/i);
+    const ext = extMatch ? extMatch[1] : '';
+    const stem = ext ? normalized.slice(0, -ext.length) : normalized;
+    if (/^[A-Za-z0-9_-]{28,}$/.test(stem)){
+      return ext ? `Attached file${ext}` : 'Attached file';
+    }
+    return normalized;
   }
 
   async function buildDocumentSlideData(file, verdict){
@@ -4279,7 +4295,8 @@
       return;
     }
 
-    docTitleEl.textContent = slide.document.title;
+    const displayTitle = getDocumentDisplayTitle(slide.document);
+    docTitleEl.textContent = displayTitle;
     docTypeEl.textContent = getDocumentTypeLabel(slide.document);
     docScrollEl.innerHTML = '';
 
@@ -4287,14 +4304,14 @@
       const frame = document.createElement('iframe');
       frame.className = 'slide-doc-frame';
       frame.src = slide.document.url;
-      frame.title = slide.document.title;
+      frame.title = displayTitle;
       frame.tabIndex = -1;
       docScrollEl.appendChild(frame);
     } else if (slide.document.kind === 'image'){
       const image = document.createElement('img');
       image.className = 'slide-doc-image';
       image.src = slide.document.url;
-      image.alt = slide.document.title;
+      image.alt = displayTitle;
       docScrollEl.appendChild(image);
     } else if (slide.document.kind === 'text'){
       const pre = document.createElement('pre');
@@ -5330,7 +5347,7 @@
 
         const name = document.createElement('div');
         name.className = 'slide-thumb-doc-name';
-        name.textContent = slide.document.title;
+        name.textContent = getDocumentDisplayTitle(slide.document);
 
         canvas.append(kind, name);
       } else if (slide.thumbUrl){
