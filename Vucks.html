@@ -2790,6 +2790,7 @@
     editorCloseKeep.addEventListener('click', ()=>{
       resetSearchModeDraft();
       clearSuggestionPane();
+      armSavedGrayEditorResume();
       if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
         window.slideEditorControls.preserveInBackground();
       }
@@ -2800,6 +2801,7 @@
 
   if(editorCloseDiscard){
     editorCloseDiscard.addEventListener('click', ()=>{
+      resumeSavedGrayEditorOnNextEntry = false;
       skipNextGrayDraftSave = true;
       resetSearchModeDraft();
       clearSuggestionPane();
@@ -2848,6 +2850,7 @@
   const COLLAPSE_AT_OR_BELOW_LINES = 5; // Collapse when rendered lines are 5 or fewer
   let previousLineCount = null;
   let forceExpandedEditor = false;
+  let resumeSavedGrayEditorOnNextEntry = false;
   let compactGrayAcceptedValue = input.value;
   let state = 0;
   let blueModeDraft = '';
@@ -3087,6 +3090,12 @@
       || (state === 1 ? input.value : '')
       || ''
     ).trim();
+  }
+
+  function armSavedGrayEditorResume(){
+    if(getTheoremTitleText().length === 0) return false;
+    resumeSavedGrayEditorOnNextEntry = true;
+    return true;
   }
 
   function queueTheoremDraftSave(reason = 'title'){
@@ -4293,6 +4302,7 @@
       clearTimeout(cookieHistoryTimer);
       cookieHistoryTimer = null;
     }
+    resumeSavedGrayEditorOnNextEntry = false;
     pendingCookieHistorySnapshot = null;
     cookieHistoryConsent = '';
     cookieConsentOwnerId = '';
@@ -4451,6 +4461,7 @@
       qaMode: bodyEl.classList.contains('mode-q') ? 'q' : 'a',
       expanded: !!container.classList.contains('expanded'),
       forceExpandedEditor: !!forceExpandedEditor,
+      resumeSavedGrayEditorOnNextEntry: !!resumeSavedGrayEditorOnNextEntry,
       compactGrayAcceptedValue,
       blueModeDraft,
       searchDraft: {
@@ -4496,6 +4507,7 @@
       ? snapshot.compactGrayAcceptedValue
       : compactGrayAcceptedValue;
     forceExpandedEditor = !!snapshot.forceExpandedEditor || !!snapshot.expanded;
+    resumeSavedGrayEditorOnNextEntry = !!snapshot.resumeSavedGrayEditorOnNextEntry;
     setMode(snapshot.qaMode === 'q');
 
     if(snapshot.state === 1){
@@ -4983,7 +4995,21 @@
       input.placeholder = 'Write - Problem name';
       ensureModeDraft(1, previousState === 2 ? blueModeDraft : previousInputValue, previousFiles);
       restoreModeDraft(1, previousState === 2 ? blueModeDraft : previousInputValue, previousFiles);
-      compactGrayAcceptedValue = input.value;
+      if(resumeSavedGrayEditorOnNextEntry){
+        const savedTitle = getTheoremTitleText();
+        if(savedTitle){
+          forceExpandedEditor = true;
+          if(!input.value.trim()){
+            input.value = savedTitle;
+            lastInputValue = input.value;
+            if(!(modeDrafts[1] && typeof modeDrafts[1].text === 'string' && modeDrafts[1].text.trim())){
+              setModeDraft(1, savedTitle, attachedFiles);
+            }
+          }
+        }
+        resumeSavedGrayEditorOnNextEntry = false;
+      }
+      compactGrayAcceptedValue = input.value || compactGrayAcceptedValue;
     }
 
     if(next === 2){
@@ -5046,6 +5072,7 @@
   }
 
   function performAutoSavedEditorTransition(nextState){
+    armSavedGrayEditorResume();
     if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
       window.slideEditorControls.preserveInBackground();
     }
