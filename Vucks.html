@@ -71,7 +71,7 @@
       padding:16px;
       text-align:center;
       pointer-events:auto;
-      transition:max-width .45s cubic-bezier(.4,0,.2,1), height .45s cubic-bezier(.4,0,.2,1), padding .45s cubic-bezier(.4,0,.2,1);
+      transition:max-width .22s cubic-bezier(.22,1,.36,1), height .22s cubic-bezier(.22,1,.36,1), padding .22s cubic-bezier(.22,1,.36,1);
       will-change:max-width,height,padding;
       height:auto;
     }
@@ -98,8 +98,8 @@
       padding:12px 16px;
       background:#111;
       position:relative;
-      transition:all .45s cubic-bezier(.4,0,.2,1);
-      will-change:border-radius,padding,transform,box-shadow,background-color;
+      transition:border-radius .22s cubic-bezier(.22,1,.36,1), padding .22s cubic-bezier(.22,1,.36,1), transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s cubic-bezier(.22,1,.36,1), background-color .22s cubic-bezier(.22,1,.36,1), gap .22s cubic-bezier(.22,1,.36,1);
+      will-change:border-radius,padding,transform,box-shadow,background-color,gap;
       max-height:calc(100vh - 160px);
       max-height:calc(100dvh - 160px);
       flex-direction:row;
@@ -154,7 +154,7 @@
       max-height:calc(100dvh - 300px);
       overflow:auto;
       width:100%;
-      transition:height .45s cubic-bezier(.4,0,.2,1);
+      transition:height .22s cubic-bezier(.22,1,.36,1);
       will-change:height;
     }
 
@@ -2611,7 +2611,7 @@
     wheelAccum = 0;
     releaseModeScrollGestureLock();
     setModeDraft(1, input.value || compactGrayAcceptedValue, attachedFiles);
-    selectionReturnScreen = isExpandedEditorActive() ? 'gray-editor' : 'gray-compact';
+    selectionReturnScreen = 'gray-editor';
     selectionMode = true;
     rememberedContent = input.value || compactGrayAcceptedValue;
     rememberedFiles = [...attachedFiles];
@@ -2621,6 +2621,7 @@
   }
 
   function exitSelectionMode(restore = true){
+    const shouldReturnToSlideEditor = selectionReturnScreen === 'gray-editor';
     selectionMode = false;
     if(restore){
       input.value = rememberedContent;
@@ -2629,10 +2630,15 @@
       setModeDraft(1, input.value, attachedFiles);
       compactGrayAcceptedValue = input.value;
     }
+    if(shouldReturnToSlideEditor){
+      bodyEl.classList.add('scrolled');
+      forceExpandedEditor = true;
+      expandedTransitionHoldUntil = getUiNow() + EXPANDED_ANIMATION_MS + 40;
+    }
     renderAttachments();
     fixedWrapper.style.removeProperty('display');
     selectionModeEl.style.display = 'none';
-    adjustTextarea();
+    adjustTextarea({ immediate: shouldReturnToSlideEditor });
     saveSelectionNavigation(selectionReturnScreen, 'selection');
   }
 
@@ -2672,6 +2678,7 @@
 
   if(selectionCancel){
     selectionCancel.addEventListener('click', ()=>{
+      selectionReturnScreen = 'gray-editor';
       exitSelectionMode(true);
     });
   }
@@ -3063,9 +3070,13 @@
 
   let expandedFixedHeight = null;
   let containerHeightCleanupTimer = null;
+  let containerHeightAnimationFrame = 0;
+  let adjustTextareaFrame = 0;
+  let expandedTransitionHoldUntil = 0;
   const fixedWrapper = document.querySelector('.fixed-wrapper');
   const EXPAND_THRESHOLD = 100; // Expand when height exceeds this (pixels)
   const COLLAPSE_AT_OR_BELOW_LINES = 5; // Collapse when rendered lines are 5 or fewer
+  const EXPANDED_ANIMATION_MS = 220;
   let previousLineCount = null;
   let forceExpandedEditor = false;
   let resumeSavedGrayEditorOnNextEntry = false;
@@ -4930,6 +4941,18 @@
       clearTimeout(containerHeightCleanupTimer);
       containerHeightCleanupTimer = null;
     }
+    if(containerHeightAnimationFrame){
+      cancelAnimationFrame(containerHeightAnimationFrame);
+      containerHeightAnimationFrame = 0;
+    }
+    container.style.willChange = '';
+  }
+
+  function getUiNow(){
+    if(window.performance && typeof window.performance.now === 'function'){
+      return window.performance.now();
+    }
+    return Date.now();
   }
 
   function transitionContainerHeight(startHeight, targetHeight, clearAfterTransition = false){
@@ -4947,18 +4970,24 @@
       return;
     }
 
+    container.style.willChange = 'height';
     container.style.height = from + 'px';
-    requestAnimationFrame(()=>{
+    containerHeightAnimationFrame = requestAnimationFrame(()=>{
       container.style.height = to + 'px';
     });
 
-    if(clearAfterTransition){
-      containerHeightCleanupTimer = setTimeout(()=>{
+    containerHeightCleanupTimer = setTimeout(()=>{
+      containerHeightCleanupTimer = null;
+      containerHeightAnimationFrame = 0;
+      container.style.willChange = '';
+      if(clearAfterTransition){
         if(!container.classList.contains('expanded')){
           container.style.height = '';
         }
-      }, 470);
-    }
+      }else{
+        container.style.height = to + 'px';
+      }
+    }, EXPANDED_ANIMATION_MS + 40);
   }
 
   function measureCurrentInputLayout(){
@@ -5002,9 +5031,10 @@
     closeTitleDecisionMenu();
     compactGrayAcceptedValue = input.value;
     forceExpandedEditor = true;
+    expandedTransitionHoldUntil = getUiNow() + EXPANDED_ANIMATION_MS + 40;
     bodyEl.classList.add('scrolled');
     setModeDraft(1, input.value, attachedFiles);
-    adjustTextarea();
+    adjustTextarea({ immediate: true });
     persistModeState();
     requestAnimationFrame(()=>input.focus());
   }
@@ -5021,6 +5051,7 @@
 
     container.classList.remove('expanded');
     expandedFixedHeight = null;
+    expandedTransitionHoldUntil = 0;
     forceExpandedEditor = false;
 
     if(fixedWrapper){
@@ -5048,7 +5079,7 @@
     }
   }
 
-  function adjustTextarea(){
+  function runAdjustTextarea(){
     const { contentHeight, lineCount, shouldCollapseByLineCount, wouldExpand } = measureCurrentInputLayout();
     updateLineCount(lineCount);
 
@@ -5069,6 +5100,18 @@
       input.style.overflow = 'auto';
       input.style.height = 'auto';
       input.style.height = Math.min(contentHeight, 148) + 'px';
+      return;
+    }
+
+    const keepExpandedStable = bodyEl.classList.contains('scrolled')
+      && forceExpandedEditor
+      && container.classList.contains('expanded')
+      && !!expandedFixedHeight
+      && expandedTransitionHoldUntil > getUiNow();
+    if(keepExpandedStable){
+      container.style.height = expandedFixedHeight + 'px';
+      input.style.height = 'auto';
+      input.style.overflow = 'auto';
       return;
     }
 
@@ -5126,6 +5169,24 @@
     } else {
       collapseToInitialSearchBox(contentHeight);
     }
+  }
+
+  function adjustTextarea(options = {}){
+    const shouldRunImmediately = options === true
+      || (typeof options === 'object' && options && options.immediate === true)
+      || typeof options === 'number';
+    if(adjustTextareaFrame){
+      cancelAnimationFrame(adjustTextareaFrame);
+      adjustTextareaFrame = 0;
+    }
+    if(shouldRunImmediately){
+      runAdjustTextarea();
+      return;
+    }
+    adjustTextareaFrame = requestAnimationFrame(()=>{
+      adjustTextareaFrame = 0;
+      runAdjustTextarea();
+    });
   }
 
   adjustTextarea();
@@ -5306,6 +5367,7 @@
 
     if(next !== 1){
       forceExpandedEditor = false;
+      expandedTransitionHoldUntil = 0;
     }
 
     bodyEl.classList.remove('scrolled','login-check');
