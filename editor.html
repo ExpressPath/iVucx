@@ -405,6 +405,78 @@
       border-color:rgba(63,185,80,0.7);
     }
 
+    .preview-confirm{
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      background:rgba(1,4,9,0.58);
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .2s ease;
+      z-index:70;
+    }
+
+    .preview-confirm.is-open{
+      opacity:1;
+      pointer-events:auto;
+    }
+
+    .preview-confirm-card{
+      width:min(560px, calc(100vw - 32px));
+      background:#11161c;
+      border:1px solid rgba(63,185,80,0.45);
+      border-radius:18px;
+      box-shadow:0 28px 60px rgba(0,0,0,0.4);
+      padding:28px 24px 24px;
+    }
+
+    .preview-confirm-title{
+      margin:0;
+      color:#f0f6fc;
+      font-size:28px;
+      line-height:1.28;
+      font-weight:700;
+      letter-spacing:.01em;
+    }
+
+    .preview-confirm-actions{
+      display:flex;
+      justify-content:flex-end;
+      gap:12px;
+      margin-top:24px;
+    }
+
+    .preview-confirm-btn{
+      border:1px solid rgba(255,255,255,0.16);
+      background:#161b22;
+      color:#e6edf3;
+      border-radius:999px;
+      min-width:116px;
+      height:44px;
+      padding:0 18px;
+      font-size:15px;
+      font-weight:700;
+      cursor:pointer;
+      transition:background-color .2s ease,border-color .2s ease,transform .12s ease;
+    }
+
+    .preview-confirm-btn:hover{
+      transform:translateY(-1px);
+      background:#1c232d;
+    }
+
+    .preview-confirm-btn:active{
+      transform:translateY(0);
+    }
+
+    .preview-confirm-btn.confirm{
+      border-color:rgba(63,185,80,0.7);
+      background:rgba(63,185,80,0.16);
+    }
+
     @media (max-width:1020px){
       .workspace{
         grid-template-columns:1fr;
@@ -430,6 +502,22 @@
 
       .right-cluster{
         justify-content:space-between;
+      }
+
+      .preview-confirm-card{
+        padding:24px 18px 20px;
+      }
+
+      .preview-confirm-title{
+        font-size:22px;
+      }
+
+      .preview-confirm-actions{
+        flex-direction:column-reverse;
+      }
+
+      .preview-confirm-btn{
+        width:100%;
       }
 
     }
@@ -493,6 +581,15 @@
       <span class="toast-subtitle" id="toastSubtitle"></span>
     </div>
   </div>
+  <div class="preview-confirm" id="previewConfirm" aria-hidden="true" hidden>
+    <div class="preview-confirm-card" role="dialog" aria-modal="true" aria-labelledby="previewConfirmTitle">
+      <h2 class="preview-confirm-title" id="previewConfirmTitle">Go to the preview for your post.</h2>
+      <div class="preview-confirm-actions">
+        <button class="preview-confirm-btn" id="previewConfirmCancelBtn" type="button">Cansel</button>
+        <button class="preview-confirm-btn confirm" id="previewConfirmYesBtn" type="button">yes</button>
+      </div>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
   <script src="CoqRunner.js"></script>
@@ -523,6 +620,9 @@
       const toastSubtitleEl = document.getElementById('toastSubtitle');
       const toastPinBtn = document.getElementById('toastPinBtn');
       const toastCloseBtn = document.getElementById('toastCloseBtn');
+      const previewConfirmEl = document.getElementById('previewConfirm');
+      const previewConfirmYesBtn = document.getElementById('previewConfirmYesBtn');
+      const previewConfirmCancelBtn = document.getElementById('previewConfirmCancelBtn');
       const theoremDraftStore = window.ivucxTheoremDraftStore || null;
 
       const languageConfig = {
@@ -741,6 +841,45 @@
         }, 13000);
       }
 
+      function openPreviewConfirm(){
+        if(!previewConfirmEl) return;
+        previewConfirmEl.hidden = false;
+        previewConfirmEl.setAttribute('aria-hidden', 'false');
+        requestAnimationFrame(() => {
+          previewConfirmEl.classList.add('is-open');
+        });
+      }
+
+      function closePreviewConfirm(){
+        if(!previewConfirmEl) return;
+        previewConfirmEl.classList.remove('is-open');
+        previewConfirmEl.setAttribute('aria-hidden', 'true');
+        setTimeout(() => {
+          if(previewConfirmEl && !previewConfirmEl.classList.contains('is-open')){
+            previewConfirmEl.hidden = true;
+          }
+        }, 200);
+      }
+
+      function resolvePostPreviewUrl(){
+        const fromPayload = initPayload && typeof initPayload.previewUrl === 'string'
+          ? initPayload.previewUrl.trim()
+          : '';
+        if(fromPayload) return fromPayload;
+        const fromParams = params.get('previewUrl');
+        return typeof fromParams === 'string' ? fromParams.trim() : '';
+      }
+
+      async function goToPostPreview(){
+        const target = resolvePostPreviewUrl();
+        if(target){
+          await saveProofDraftSnapshot('preview-navigation');
+          window.location.href = target;
+          return;
+        }
+        closePreviewConfirm();
+      }
+
       function showToast(message, variant){
         if(!toastEl || !toastMessageEl) return;
         const text = String(message || '').trim();
@@ -767,8 +906,17 @@
         scheduleToastHide();
       }
 
+      if(toastEl){
+        toastEl.addEventListener('click', (event)=>{
+          if(!toastEl.classList.contains('show')) return;
+          if(event.target && event.target.closest('.toast-action')) return;
+          openPreviewConfirm();
+        });
+      }
+
       if(toastPinBtn){
-        toastPinBtn.addEventListener('click', ()=>{
+        toastPinBtn.addEventListener('click', (event)=>{
+          event.stopPropagation();
           toastPinned = !toastPinned;
           syncToastPinUi();
           if(toastPinned){
@@ -784,10 +932,37 @@
       }
 
       if(toastCloseBtn){
-        toastCloseBtn.addEventListener('click', ()=>{
+        toastCloseBtn.addEventListener('click', (event)=>{
+          event.stopPropagation();
           hideToast(true);
         });
       }
+
+      if(previewConfirmCancelBtn){
+        previewConfirmCancelBtn.addEventListener('click', ()=>{
+          closePreviewConfirm();
+        });
+      }
+
+      if(previewConfirmYesBtn){
+        previewConfirmYesBtn.addEventListener('click', ()=>{
+          goToPostPreview();
+        });
+      }
+
+      if(previewConfirmEl){
+        previewConfirmEl.addEventListener('click', (event)=>{
+          if(event.target === previewConfirmEl){
+            closePreviewConfirm();
+          }
+        });
+      }
+
+      document.addEventListener('keydown', (event)=>{
+        if(event.key === 'Escape' && previewConfirmEl && previewConfirmEl.classList.contains('is-open')){
+          closePreviewConfirm();
+        }
+      });
 
       function startKeepAlivePings(){
         if(keepAliveTimer) return;
