@@ -307,7 +307,8 @@
       color:#e6edf3;
       border:1px solid rgba(63,185,80,0.7);
       border-radius:14px;
-      padding:18px 20px;
+      min-height:150px;
+      padding:16px 18px 18px;
       font-size:15px;
       line-height:1.45;
       font-weight:600;
@@ -322,6 +323,62 @@
     .toast.show{
       opacity:1;
       transform:translateY(0);
+      pointer-events:auto;
+    }
+
+    .toast-head{
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:8px;
+    }
+
+    .toast-body{
+      display:flex;
+      align-items:center;
+      min-height:92px;
+      padding-top:10px;
+    }
+
+    .toast-message{
+      display:block;
+      font-size:17px;
+      letter-spacing:.01em;
+    }
+
+    .toast-action{
+      border:1px solid rgba(255,255,255,0.16);
+      background:#161b22;
+      color:#e6edf3;
+      border-radius:999px;
+      min-width:42px;
+      height:34px;
+      padding:0 12px;
+      font-size:13px;
+      font-weight:700;
+      cursor:pointer;
+      transition:background-color .2s ease,border-color .2s ease,transform .12s ease;
+    }
+
+    .toast-action:hover{
+      transform:translateY(-1px);
+      background:#1c232d;
+    }
+
+    .toast-action:active{
+      transform:translateY(0);
+    }
+
+    .toast-action.pinned{
+      border-color:rgba(63,185,80,0.7);
+      background:rgba(63,185,80,0.12);
+    }
+
+    .toast-close{
+      min-width:34px;
+      padding:0;
+      font-size:18px;
+      line-height:1;
     }
 
     .toast.ok{
@@ -409,7 +466,13 @@
     </section>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite" aria-hidden="true">
-    <span id="toastMessage"></span>
+    <div class="toast-head">
+      <button class="toast-action" id="toastPinBtn" type="button" aria-pressed="false">Pin</button>
+      <button class="toast-action toast-close" id="toastCloseBtn" type="button" aria-label="Close toast">&times;</button>
+    </div>
+    <div class="toast-body">
+      <span class="toast-message" id="toastMessage"></span>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
@@ -438,6 +501,8 @@
       const editorMount = document.getElementById('editor');
       const toastEl = document.getElementById('toast');
       const toastMessageEl = document.getElementById('toastMessage');
+      const toastPinBtn = document.getElementById('toastPinBtn');
+      const toastCloseBtn = document.getElementById('toastCloseBtn');
       const theoremDraftStore = window.ivucxTheoremDraftStore || null;
 
       const languageConfig = {
@@ -518,6 +583,7 @@
       let running = false;
       let leanSeed = '';
       let toastTimer = null;
+      let toastPinned = false;
       let keepAliveTimer = null;
       let keepAliveInFlight = false;
       let proofDraftSaveTimer = null;
@@ -616,23 +682,77 @@
         statusEl.classList.toggle('error', !!isError);
       }
 
+      function syncToastPinUi(){
+        if(!toastPinBtn) return;
+        toastPinBtn.classList.toggle('pinned', toastPinned);
+        toastPinBtn.setAttribute('aria-pressed', toastPinned ? 'true' : 'false');
+        toastPinBtn.textContent = toastPinned ? 'Pinned' : 'Pin';
+      }
+
+      function hideToast(force){
+        if(!toastEl) return;
+        if(toastPinned && !force) return;
+        if(toastTimer){
+          clearTimeout(toastTimer);
+          toastTimer = null;
+        }
+        toastEl.classList.remove('show');
+        toastEl.setAttribute('aria-hidden', 'true');
+        if(force){
+          toastPinned = false;
+          syncToastPinUi();
+        }
+      }
+
+      function scheduleToastHide(){
+        if(toastPinned) return;
+        if(toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          hideToast(false);
+        }, 13000);
+      }
+
       function showToast(message, variant){
         if(!toastEl || !toastMessageEl) return;
         const text = String(message || '').trim();
         if(!text) return;
+        toastPinned = false;
+        syncToastPinUi();
         toastMessageEl.textContent = text;
         toastEl.classList.remove('ok', 'warn', 'show');
         if(variant === 'ok') toastEl.classList.add('ok');
         if(variant === 'warn') toastEl.classList.add('warn');
         toastEl.setAttribute('aria-hidden', 'false');
-        if(toastTimer) clearTimeout(toastTimer);
+        if(toastTimer){
+          clearTimeout(toastTimer);
+          toastTimer = null;
+        }
         requestAnimationFrame(() => {
           toastEl.classList.add('show');
         });
-        toastTimer = setTimeout(() => {
-          toastEl.classList.remove('show');
-          toastEl.setAttribute('aria-hidden', 'true');
-        }, 13000);
+        scheduleToastHide();
+      }
+
+      if(toastPinBtn){
+        toastPinBtn.addEventListener('click', ()=>{
+          toastPinned = !toastPinned;
+          syncToastPinUi();
+          if(toastPinned){
+            if(toastTimer){
+              clearTimeout(toastTimer);
+              toastTimer = null;
+            }
+            return;
+          }
+          scheduleToastHide();
+        });
+        syncToastPinUi();
+      }
+
+      if(toastCloseBtn){
+        toastCloseBtn.addEventListener('click', ()=>{
+          hideToast(true);
+        });
       }
 
       function startKeepAlivePings(){
