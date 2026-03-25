@@ -326,24 +326,40 @@
       pointer-events:auto;
     }
 
-    .toast-head{
-      display:flex;
-      align-items:center;
-      justify-content:flex-end;
-      gap:8px;
-    }
-
     .toast-body{
       display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      min-height:112px;
+      gap:14px;
+    }
+
+    .toast-top{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:14px;
+    }
+
+    .toast-actions{
+      display:flex;
       align-items:center;
-      min-height:92px;
-      padding-top:10px;
+      gap:8px;
+      flex-shrink:0;
     }
 
     .toast-message{
       display:block;
       font-size:17px;
       letter-spacing:.01em;
+    }
+
+    .toast-subtitle{
+      display:block;
+      color:rgba(230,237,243,0.62);
+      font-size:14px;
+      font-weight:500;
+      word-break:break-word;
     }
 
     .toast-action{
@@ -466,12 +482,15 @@
     </section>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite" aria-hidden="true">
-    <div class="toast-head">
-      <button class="toast-action" id="toastPinBtn" type="button" aria-pressed="false">Pin</button>
-      <button class="toast-action toast-close" id="toastCloseBtn" type="button" aria-label="Close toast">&times;</button>
-    </div>
     <div class="toast-body">
-      <span class="toast-message" id="toastMessage"></span>
+      <div class="toast-top">
+        <span class="toast-message" id="toastMessage"></span>
+        <div class="toast-actions">
+          <button class="toast-action" id="toastPinBtn" type="button" aria-pressed="false">Pin</button>
+          <button class="toast-action toast-close" id="toastCloseBtn" type="button" aria-label="Close toast">&times;</button>
+        </div>
+      </div>
+      <span class="toast-subtitle" id="toastSubtitle"></span>
     </div>
   </div>
 
@@ -501,6 +520,7 @@
       const editorMount = document.getElementById('editor');
       const toastEl = document.getElementById('toast');
       const toastMessageEl = document.getElementById('toastMessage');
+      const toastSubtitleEl = document.getElementById('toastSubtitle');
       const toastPinBtn = document.getElementById('toastPinBtn');
       const toastCloseBtn = document.getElementById('toastCloseBtn');
       const theoremDraftStore = window.ivucxTheoremDraftStore || null;
@@ -682,6 +702,15 @@
         statusEl.classList.toggle('error', !!isError);
       }
 
+      function getToastSubtitle(){
+        const title = typeof summaryText === 'string' ? summaryText.trim() : '';
+        if(title) return title;
+        const fallback = initPayload && typeof initPayload.summary === 'string'
+          ? initPayload.summary.trim()
+          : '';
+        return fallback;
+      }
+
       function syncToastPinUi(){
         if(!toastPinBtn) return;
         toastPinBtn.classList.toggle('pinned', toastPinned);
@@ -719,6 +748,11 @@
         toastPinned = false;
         syncToastPinUi();
         toastMessageEl.textContent = text;
+        if(toastSubtitleEl){
+          const subtitle = getToastSubtitle();
+          toastSubtitleEl.textContent = subtitle;
+          toastSubtitleEl.hidden = !subtitle;
+        }
         toastEl.classList.remove('ok', 'warn', 'show');
         if(variant === 'ok') toastEl.classList.add('ok');
         if(variant === 'warn') toastEl.classList.add('warn');
