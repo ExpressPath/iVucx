@@ -3605,6 +3605,57 @@
     return layer.getChildren(node => node.getAttr && node.getAttr('isBackground'))[0] || null;
   }
 
+  function normalizeLayerRect(rect, fallback = {}){
+    const fallbackX = Number.isFinite(fallback.x) ? fallback.x : 0;
+    const fallbackY = Number.isFinite(fallback.y) ? fallback.y : 0;
+    const fallbackWidth = Number.isFinite(fallback.width) ? fallback.width : SLIDE_WIDTH;
+    const fallbackHeight = Number.isFinite(fallback.height) ? fallback.height : SLIDE_HEIGHT;
+    return {
+      x: Number.isFinite(rect && rect.x) ? rect.x : fallbackX,
+      y: Number.isFinite(rect && rect.y) ? rect.y : fallbackY,
+      width: Math.max(0, Number.isFinite(rect && rect.width) ? rect.width : fallbackWidth),
+      height: Math.max(0, Number.isFinite(rect && rect.height) ? rect.height : fallbackHeight)
+    };
+  }
+
+  function getNodeRectInLayerSpace(node, layer = currentLayer){
+    if (!node){
+      return normalizeLayerRect(null);
+    }
+    let box = null;
+    try{
+      box = node.getClientRect({
+        relativeTo: layer || currentLayer || undefined,
+        skipShadow: true,
+        skipStroke: true
+      });
+    }catch(err){
+      box = null;
+    }
+    const scaleX = typeof node.scaleX === 'function' ? Math.abs(Number(node.scaleX()) || 1) : 1;
+    const scaleY = typeof node.scaleY === 'function' ? Math.abs(Number(node.scaleY()) || 1) : 1;
+    const fallback = {
+      x: typeof node.x === 'function' ? Number(node.x()) || 0 : 0,
+      y: typeof node.y === 'function' ? Number(node.y()) || 0 : 0,
+      width: (typeof node.width === 'function' ? Number(node.width()) || 0 : 0) * scaleX,
+      height: (typeof node.height === 'function' ? Number(node.height()) || 0 : 0) * scaleY
+    };
+    return normalizeLayerRect(box, fallback);
+  }
+
+  function isPointInsideRect(point, rect, tolerance = 0){
+    if (!point || !rect) return false;
+    const inset = Math.max(0, Number(tolerance) || 0);
+    return point.x >= rect.x - inset
+      && point.x <= rect.x + rect.width + inset
+      && point.y >= rect.y - inset
+      && point.y <= rect.y + rect.height + inset;
+  }
+
+  function isPointInsideSlideSheet(point, layer = currentLayer, tolerance = 0){
+    return isPointInsideRect(point, getSlideFrameRect(layer), tolerance);
+  }
+
   function ensureSelectionMarquee(){
     if (selectionMarquee || !uiLayer || !hasKonva()) return selectionMarquee;
     selectionMarquee = new Konva.Rect({
@@ -3801,30 +3852,14 @@
   }
 
   function getSlideFrameRect(layer = currentLayer){
-    if (!layer) return {
-      x: 0,
-      y: 0,
-      width: SLIDE_WIDTH,
-      height: SLIDE_HEIGHT
-    };
-
-    const backgroundNode = layer.getChildren(node => node.getAttr && node.getAttr('isBackground'))[0];
-    if (!backgroundNode){
-      return {
-        x: 0,
-        y: 0,
-        width: SLIDE_WIDTH,
-        height: SLIDE_HEIGHT
-      };
+    if (!layer){
+      return normalizeLayerRect(null);
     }
-
-    const box = backgroundNode.getClientRect({ relativeTo: layer });
-    return {
-      x: box.x,
-      y: box.y,
-      width: box.width,
-      height: box.height
-    };
+    const backgroundNode = getBackgroundNode(layer);
+    if (!backgroundNode){
+      return normalizeLayerRect(null);
+    }
+    return getNodeRectInLayerSpace(backgroundNode, layer);
   }
 
   function collectSnapGuides(node){
@@ -5550,10 +5585,12 @@
       if (!isEditorActive || isPresentationMode) return;
       hideContextMenu();
       const pos = getStagePointer();
+      const isInsideSheet = isPointInsideSlideSheet(pos, currentLayer, 0.5);
 
       if (currentTool === 'line' && pos){
         if (isCurvedLineKind(currentLineKind)){
           if (!lineDraft){
+            if (!isInsideSheet) return;
             lineCurvePoints = [pos.x, pos.y];
             lineDraft = createLineNode(pos.x, pos.y, pos.x, pos.y, currentLineKind, {
               points: [pos.x, pos.y, pos.x, pos.y],
@@ -5569,6 +5606,7 @@
           return;
         }
 
+        if (!isInsideSheet) return;
         lineStart = pos;
         lineDraft = createLineNode(pos.x, pos.y, pos.x, pos.y, currentLineKind);
         addNode(lineDraft, true);
@@ -5586,6 +5624,10 @@
       }
 
       if (currentTool === 'select' && pos){
+        if (!isInsideSheet){
+          selectNode(null);
+          return;
+        }
         selectionMarqueeStart = pos;
         const marquee = ensureSelectionMarquee();
         marquee.position(pos);
@@ -5597,7 +5639,7 @@
       }
 
       if (currentTool === 'text'){
-        if (!pos) return;
+        if (!pos || !isInsideSheet) return;
         const textNode = createTextNode(pos.x, pos.y);
         addNode(textNode);
         editText(textNode);
@@ -5606,7 +5648,7 @@
       }
 
       if (currentTool === 'equation'){
-        if (!pos) return;
+        if (!pos || !isInsideSheet) return;
         const equationNode = createEquationNode(pos.x, pos.y);
         addNode(equationNode);
         editText(equationNode);
@@ -5615,7 +5657,7 @@
       }
 
       if (currentTool === 'shape'){
-        if (!pos) return;
+        if (!pos || !isInsideSheet) return;
         const shapeNode = currentShapeKind === 'ellipse'
           ? createEllipseNode(pos.x, pos.y)
           : createRectNode(pos.x, pos.y);
@@ -5690,6 +5732,7 @@
 
       const point = getStagePointer();
       const target = resolveContextMenuTarget(e.target, point);
+      const isInsideSheet = isPointInsideSlideSheet(point, currentLayer, 0.5);
 
       if (target){
         if (!isNodeSelected(target)){
@@ -5755,7 +5798,7 @@
           action: () => deleteSelected(),
           danger: true
         });
-      } else if (point){
+      } else if (point && isInsideSheet){
         items.push({
           label: 'Edit background color',
           action: () => openBackgroundColorPicker()
