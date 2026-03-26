@@ -3656,6 +3656,46 @@
     return isPointInsideRect(point, getSlideFrameRect(layer), tolerance);
   }
 
+  function getSlideFrameViewportRect(layer = currentLayer){
+    if (!stage || typeof stage.container !== 'function'){
+      return null;
+    }
+    const hostRect = stage.container().getBoundingClientRect();
+    const frameRect = getSlideFrameRect(layer);
+    const stagePosition = typeof stage.position === 'function'
+      ? stage.position()
+      : { x: 0, y: 0 };
+    const stageScale = typeof stage.scale === 'function'
+      ? stage.scale()
+      : { x: 1, y: 1 };
+    const scaleX = Number.isFinite(stageScale && stageScale.x) ? stageScale.x : 1;
+    const scaleY = Number.isFinite(stageScale && stageScale.y) ? stageScale.y : 1;
+    const offsetX = Number.isFinite(stagePosition && stagePosition.x) ? stagePosition.x : 0;
+    const offsetY = Number.isFinite(stagePosition && stagePosition.y) ? stagePosition.y : 0;
+    return {
+      x: hostRect.left + offsetX + (frameRect.x * scaleX),
+      y: hostRect.top + offsetY + (frameRect.y * scaleY),
+      width: frameRect.width * scaleX,
+      height: frameRect.height * scaleY
+    };
+  }
+
+  function isClientPointInsideSlideSheet(clientPoint, layer = currentLayer, tolerance = 0){
+    return isPointInsideRect(clientPoint, getSlideFrameViewportRect(layer), tolerance);
+  }
+
+  function getClientPointFromEvent(event){
+    const source = event && event.evt ? event.evt : event;
+    if (!source) return null;
+    const touch = source.touches && source.touches[0]
+      ? source.touches[0]
+      : (source.changedTouches && source.changedTouches[0] ? source.changedTouches[0] : source);
+    if (!touch || !Number.isFinite(touch.clientX) || !Number.isFinite(touch.clientY)){
+      return null;
+    }
+    return { x: touch.clientX, y: touch.clientY };
+  }
+
   function ensureSelectionMarquee(){
     if (selectionMarquee || !uiLayer || !hasKonva()) return selectionMarquee;
     selectionMarquee = new Konva.Rect({
@@ -5585,7 +5625,10 @@
       if (!isEditorActive || isPresentationMode) return;
       hideContextMenu();
       const pos = getStagePointer();
-      const isInsideSheet = isPointInsideSlideSheet(pos, currentLayer, 0.5);
+      const clientPoint = getClientPointFromEvent(e);
+      const isInsideSheet = clientPoint
+        ? isClientPointInsideSlideSheet(clientPoint, currentLayer, 1.5)
+        : isPointInsideSlideSheet(pos, currentLayer, 0.5);
 
       if (currentTool === 'line' && pos){
         if (isCurvedLineKind(currentLineKind)){
@@ -5732,7 +5775,10 @@
 
       const point = getStagePointer();
       const target = resolveContextMenuTarget(e.target, point);
-      const isInsideSheet = isPointInsideSlideSheet(point, currentLayer, 0.5);
+      const clientPoint = getClientPointFromEvent(e);
+      const isInsideSheet = clientPoint
+        ? isClientPointInsideSlideSheet(clientPoint, currentLayer, 1.5)
+        : isPointInsideSlideSheet(point, currentLayer, 0.5);
 
       if (target){
         if (!isNodeSelected(target)){
