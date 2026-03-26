@@ -2717,6 +2717,24 @@
     }
   }
 
+  function purgeLegacySeedNodes(layer = currentLayer){
+    if (MIRROR_SEARCH_INPUT_TO_SLIDES) return false;
+    if (!layer) return false;
+    const seedNodes = getContentNodes(layer).filter(node => node.getAttr && node.getAttr('seedSource'));
+    if (!seedNodes.length) return false;
+    const hadSelectedSeed = seedNodes.includes(selectedNode) || seedNodes.some(node => selectedNodes.includes(node));
+    seedNodes.forEach(node => node.destroy());
+    if (hadSelectedSeed && layer === currentLayer){
+      selectNode(null);
+    }
+    if (layer === currentLayer){
+      layer.batchDraw();
+      refreshHasContent();
+      scheduleThumbUpdate();
+    }
+    return true;
+  }
+
   function roundMetric(value){
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return 0;
@@ -2905,6 +2923,9 @@
 
   function serializeNode(node){
     if (!node) return null;
+    if (!MIRROR_SEARCH_INPUT_TO_SLIDES && node.getAttr && node.getAttr('seedSource')){
+      return null;
+    }
     const common = {
       className: node.className || '',
       x: roundMetric(node.x ? node.x() : 0),
@@ -3013,7 +3034,7 @@
         return {
           type: 'canvas',
           hidden: !!slide.hidden,
-          nodes: getContentNodes(slide.layer).map(serializeNode)
+          nodes: getContentNodes(slide.layer).map(serializeNode).filter(Boolean)
         };
       })
     };
@@ -3251,6 +3272,9 @@
 
   async function createNodeFromSnapshot(data){
     if (!data || typeof data !== 'object') return null;
+    if (!MIRROR_SEARCH_INPUT_TO_SLIDES && data.seedSource){
+      return null;
+    }
     let node = null;
     switch (data.className){
       case 'Equation':
@@ -3341,6 +3365,12 @@
         }
       }
 
+      slides.forEach(slide => {
+        if (slide && slide.type === 'canvas' && slide.layer){
+          purgeLegacySeedNodes(slide.layer);
+        }
+      });
+
       renderThumbs();
 
       if (typeof record.zoom === 'number'){
@@ -3413,6 +3443,7 @@
   }
 
   function seedFirstSlideFromText(seedText){
+    if (!MIRROR_SEARCH_INPUT_TO_SLIDES) return;
     if (!slides[0] || slides[0].type !== 'canvas') return;
     const text = typeof seedText === 'string' ? seedText.trim() : '';
     if (!text) return;
@@ -3459,7 +3490,7 @@
     showSlide(0, { syncSeedFromInput: updateInput });
     if (updateInput){
       syncSeedTextFromInput();
-    } else {
+    } else if (MIRROR_SEARCH_INPUT_TO_SLIDES){
       seedFirstSlideFromText(normalizedSeedText);
     }
     renderThumbs();
@@ -3605,6 +3636,16 @@
     return layer.getChildren(node => node.getAttr && node.getAttr('isBackground'))[0] || null;
   }
 
+  function getEditorSheetViewportRect(){
+    if (isPresentationMode) return null;
+    if (!isEditorActive) return null;
+    if (!container.classList.contains('expanded')) return null;
+    if (!searchInput) return null;
+    const rect = searchInput.getBoundingClientRect();
+    if (!(rect.width > 1) || !(rect.height > 1)) return null;
+    return rect;
+  }
+
   function normalizeLayerRect(rect, fallback = {}){
     const fallbackX = Number.isFinite(fallback.x) ? fallback.x : 0;
     const fallbackY = Number.isFinite(fallback.y) ? fallback.y : 0;
@@ -3657,6 +3698,15 @@
   }
 
   function getSlideFrameViewportRect(layer = currentLayer){
+    const editorSheetRect = getEditorSheetViewportRect();
+    if (editorSheetRect){
+      return {
+        x: editorSheetRect.left,
+        y: editorSheetRect.top,
+        width: editorSheetRect.width,
+        height: editorSheetRect.height
+      };
+    }
     if (!stage || typeof stage.container !== 'function'){
       return null;
     }
@@ -5115,7 +5165,6 @@
       init();
     }
     if (active){
-      syncSeedTextFromInput();
       startEditorSession();
       resizeStage();
     }
@@ -5169,13 +5218,12 @@
 
     stage.add(uiLayer);
     createSlide();
-    showSlide(0);
+    showSlide(0, { syncSeedFromInput: false });
 
     updateShapeToolButton();
     updateLineToolButton();
     bindStageEvents();
     bindUiEvents();
-    syncSeedTextFromInput();
     resizeStage();
     renderThumbs();
 
@@ -5256,6 +5304,7 @@
       hideDocumentSlide();
       stageHost.style.display = '';
       stage.add(currentLayer);
+      purgeLegacySeedNodes(currentLayer);
       normalizeLayerOrdering(currentLayer);
       normalizeEquationNodesInLayer(currentLayer);
       if (uiLayer && uiLayer.getParent()){
@@ -5293,7 +5342,7 @@
     if (!slides[index]) return;
 
     if (slides.length === 1){
-      resetSlidesToSeedState(searchInput ? searchInput.value : '');
+      resetSlidesToSeedState('', { updateInput: false });
       return;
     }
 
@@ -5971,7 +6020,6 @@
       ['input', 'change'].forEach(eventName => {
         searchInput.addEventListener(eventName, () => {
           if (isEditorActive){
-            syncSeedTextFromInput();
             schedulePersistentSave();
           }
         });
@@ -6073,6 +6121,9 @@
 
     const resizeObserver = new ResizeObserver(() => resizeStage());
     resizeObserver.observe(stageHost);
+    if (searchInput){
+      resizeObserver.observe(searchInput);
+    }
     window.addEventListener('resize', () => {
       resizeStage();
       positionMentionSuggest();
@@ -6515,12 +6566,26 @@
     const h = hostHeight;
     if (w < 2 || h < 2) return;
     stage.size({ width: w, height: h });
-    fitScale = Math.min(w / SLIDE_WIDTH, h / SLIDE_HEIGHT);
+    const editorSheetRect = getEditorSheetViewportRect();
+    const fitRect = editorSheetRect && !isPresentationMode
+      ? {
+        width: editorSheetRect.width,
+        height: editorSheetRect.height,
+        offsetX: editorSheetRect.left - hostRect.left,
+        offsetY: editorSheetRect.top - hostRect.top
+      }
+      : {
+        width: w,
+        height: h,
+        offsetX: 0,
+        offsetY: 0
+      };
+    fitScale = Math.min(fitRect.width / SLIDE_WIDTH, fitRect.height / SLIDE_HEIGHT);
     const effectiveZoom = isPresentationMode ? 1 : zoom;
     const scale = fitScale * effectiveZoom;
     stage.scale({ x: scale, y: scale });
-    const x = (w - SLIDE_WIDTH * scale) / 2;
-    const y = (h - SLIDE_HEIGHT * scale) / 2;
+    const x = fitRect.offsetX + (fitRect.width - SLIDE_WIDTH * scale) / 2;
+    const y = fitRect.offsetY + (fitRect.height - SLIDE_HEIGHT * scale) / 2;
     stage.position({ x, y });
     stage.batchDraw();
     scheduleTextEditorPosition(true);
