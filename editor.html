@@ -1817,9 +1817,11 @@
         if(serverResult.ok){
           if(closure.proofState === 'NY'){
             setStatus('Lean proof accepted (NY)');
+            showToast('Post as a problem?', 'warn');
             return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
           }
           setStatus('Lean validated');
+          showToast('Post as a proof?', 'ok');
           return { status: 'allowed', proof_state: 'YY', reason: 'Lean server ok' };
         }
 
