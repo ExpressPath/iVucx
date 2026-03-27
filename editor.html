@@ -630,10 +630,7 @@
           monacoId: 'ivucx-lean',
           fileName: 'Main.lean',
           extension: '.lean',
-          starter: [
-            'theorem hello : True := by',
-            '  trivial'
-          ].join('\n')
+          starter: ''
         },
         Coq: {
           monacoId: 'ivucx-coq',
@@ -1616,12 +1613,7 @@
         startKeepAlivePings();
 
         if(selectedLanguage === 'Lean'){
-          leanSeed = initialDraft && initialDraft.trim()
-            ? initialDraft
-            : (selectedConfig && selectedConfig.starter ? selectedConfig.starter : '');
-          if(!leanSeed && selectedConfig && selectedConfig.starter){
-            leanSeed = selectedConfig.starter;
-          }
+          leanSeed = typeof initialDraft === 'string' ? initialDraft : '';
           initializeEditor(leanSeed, selectedLanguage);
         } else {
           initializeEditor(initialDraft, selectedLanguage);
