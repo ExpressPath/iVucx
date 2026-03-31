@@ -1,6 +1,12 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "outputDirectory": ".",
+  "functions": {
+    "api/*.js": {
+      "excludeFiles": "jscoq/**"
+    }
+  },
   "routes": [
     {
       "src": "/api/jscoq/(.*)",
