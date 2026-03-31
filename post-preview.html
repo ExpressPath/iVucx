@@ -34,11 +34,19 @@
     .topbar{
       display:flex;
       align-items:center;
-      gap:12px;
+      justify-content:space-between;
+      gap:16px;
       padding:12px 16px;
       border-bottom:1px solid var(--line);
       background:rgba(8,12,18,0.9);
-      backdrop-filter:blur(8px);
+      backdrop-filter:blur(10px);
+    }
+    .topbar-main{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width:0;
+      flex:1 1 auto;
     }
     .btn-back{
       border:1px solid rgba(255,255,255,0.18);
@@ -69,21 +77,102 @@
       overflow:hidden;
       text-overflow:ellipsis;
     }
+    .topbar-actions{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      flex:0 0 auto;
+    }
+    .view-switch{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:6px 10px;
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:999px;
+      background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    .view-switch:hover .view-divider{
+      background:rgba(63,185,80,0.55);
+      box-shadow:0 0 10px rgba(63,185,80,0.22);
+    }
+    .view-tab{
+      border:none;
+      background:transparent;
+      color:rgba(230,237,243,0.68);
+      padding:8px 12px;
+      border-radius:999px;
+      font-size:13px;
+      font-weight:700;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+      cursor:pointer;
+      transition:color .18s ease, background-color .18s ease, transform .12s ease;
+    }
+    .view-tab:hover{
+      color:#f0f6fc;
+      background:rgba(255,255,255,0.06);
+      transform:translateY(-1px);
+    }
+    .view-tab[aria-selected="true"]{
+      color:#08110c;
+      background:linear-gradient(180deg, rgba(111,255,154,0.96), rgba(63,185,80,0.92));
+      box-shadow:0 10px 24px rgba(63,185,80,0.18);
+    }
+    .view-divider{
+      width:1px;
+      height:24px;
+      border-radius:999px;
+      background:rgba(255,255,255,0.14);
+      transition:background-color .18s ease, box-shadow .18s ease;
+    }
+    .future-btn{
+      border:1px solid rgba(255,255,255,0.1);
+      background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      color:rgba(230,237,243,0.72);
+      width:42px;
+      height:42px;
+      border-radius:999px;
+      font-size:22px;
+      line-height:1;
+      cursor:default;
+      transition:border-color .18s ease, background-color .18s ease, color .18s ease;
+    }
+    .future-btn:hover{
+      border-color:rgba(255,255,255,0.16);
+      background:rgba(255,255,255,0.06);
+      color:#f0f6fc;
+    }
     .layout{
       flex:1;
       min-height:0;
-      display:grid;
-      grid-template-columns:minmax(0,1fr) 124px;
-      gap:16px;
       padding:16px;
+    }
+    .view-shell{
+      width:100%;
+      height:100%;
+      min-height:0;
+      position:relative;
+    }
+    .view-pane{
+      width:100%;
+      height:100%;
+      min-height:0;
+    }
+    .view-pane[hidden]{
+      display:none !important;
     }
     .stage-panel{
       position:relative;
+      width:100%;
+      height:100%;
       min-height:0;
       overflow:hidden;
       border-radius:18px;
       border:1px solid var(--line);
       background:linear-gradient(180deg, rgba(15,20,28,0.96), rgba(9,12,17,0.98));
+      box-shadow:0 28px 70px rgba(0,0,0,0.22);
     }
     .stage-viewport{
       position:relative;
@@ -119,50 +208,117 @@
         linear-gradient(135deg, rgba(63,185,80,0.08), transparent 35%),
         #f8fafc;
     }
-    .menu{
+    .stage-counter{
+      position:absolute;
+      right:18px;
+      bottom:18px;
+      padding:10px 14px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.1);
+      background:rgba(8,12,18,0.78);
+      color:#d0d7de;
+      font-size:12px;
+      font-weight:700;
+      line-height:1;
+      letter-spacing:.03em;
+      backdrop-filter:blur(8px);
+      z-index:2;
+    }
+    .source-panel{
+      display:flex;
+      align-items:stretch;
+      justify-content:center;
+    }
+    .source-shell{
+      width:100%;
+      height:100%;
+      min-height:0;
+      border-radius:18px;
+      border:1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(16,22,29,0.98), rgba(10,14,19,0.98));
+      box-shadow:0 28px 70px rgba(0,0,0,0.22);
+      overflow:hidden;
       display:flex;
       flex-direction:column;
-      gap:10px;
     }
-    .menu-btn{
-      border:1px solid rgba(255,255,255,0.1);
-      background:rgba(17,22,28,0.9);
-      color:var(--ink);
-      border-radius:16px;
-      min-height:72px;
-      padding:14px 10px;
-      font-size:13px;
+    .source-meta{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      padding:18px 20px 16px;
+      border-bottom:1px solid rgba(255,255,255,0.06);
+      background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+    }
+    .source-kicker{
+      font-size:11px;
       font-weight:700;
-      letter-spacing:.02em;
-      cursor:pointer;
-      transition:transform .12s ease, background-color .2s ease, border-color .2s ease;
+      letter-spacing:.09em;
+      text-transform:uppercase;
+      color:#8b949e;
     }
-    .menu-btn:hover{
-      transform:translateY(-1px);
-      background:rgba(24,31,41,0.98);
-      border-color:rgba(63,185,80,0.3);
+    .source-file-row{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
     }
-    .menu-btn:disabled{
-      opacity:.45;
-      cursor:not-allowed;
-      transform:none;
+    .source-file{
+      color:#f0f6fc;
+      font-size:15px;
+      font-weight:700;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
     }
-    .menu-continue{
-      min-height:58px;
-      font-size:28px;
-      line-height:1;
-      letter-spacing:0;
+    .source-language{
+      padding:5px 10px;
+      border-radius:999px;
+      border:1px solid rgba(63,185,80,0.26);
+      background:rgba(63,185,80,0.1);
+      color:#9be9a8;
+      font-size:11px;
+      font-weight:700;
+      letter-spacing:.05em;
+      text-transform:uppercase;
     }
-    .counter{
-      margin-top:auto;
-      padding:16px 12px;
-      border-radius:16px;
-      border:1px solid var(--line);
-      background:rgba(9,12,17,0.72);
-      color:#9aa7b6;
-      font-size:12px;
-      line-height:1.45;
-      text-align:center;
+    .source-editor{
+      flex:1;
+      min-height:0;
+      display:grid;
+      grid-template-columns:auto minmax(0,1fr);
+      background:#0d1117;
+    }
+    .source-gutter{
+      min-width:56px;
+      margin:0;
+      padding:18px 12px 18px 18px;
+      border-right:1px solid rgba(255,255,255,0.06);
+      color:rgba(139,148,158,0.72);
+      font-size:13px;
+      line-height:1.75;
+      text-align:right;
+      white-space:pre;
+      user-select:none;
+      background:rgba(255,255,255,0.015);
+      overflow:hidden;
+    }
+    .source-code{
+      margin:0;
+      padding:18px 20px;
+      overflow:auto;
+      white-space:pre;
+      word-break:normal;
+      font-size:13px;
+      line-height:1.75;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      color:#e6edf3;
+      background:#0d1117;
+    }
+    .source-code.is-empty{
+      color:#8b949e;
+      font-style:italic;
     }
     .slide-node{
       position:absolute;
@@ -267,26 +423,29 @@
       text-align:center;
     }
     @media (max-width:1020px){
-      .layout{
-        grid-template-columns:1fr;
-        grid-template-rows:minmax(0,1fr) auto;
+      .topbar{
+        padding:10px 12px;
       }
-      .menu{
-        flex-direction:row;
-        flex-wrap:wrap;
+      .topbar-actions{
+        gap:10px;
       }
-      .menu-btn{
-        flex:1 1 180px;
-        min-height:56px;
-      }
-      .counter{
-        width:100%;
-        margin-top:0;
+      .source-meta{
+        flex-direction:column;
+        align-items:flex-start;
       }
     }
     @media (max-width:760px){
       .topbar{
-        padding:10px 12px;
+        flex-direction:column;
+        align-items:stretch;
+        gap:12px;
+      }
+      .topbar-main,
+      .topbar-actions{
+        width:100%;
+      }
+      .topbar-actions{
+        justify-content:space-between;
       }
       .title{
         font-size:16px;
@@ -295,47 +454,89 @@
         gap:12px;
         padding:12px;
       }
+      .view-switch{
+        flex:1 1 auto;
+        justify-content:center;
+      }
+      .source-editor{
+        grid-template-columns:46px minmax(0,1fr);
+      }
+      .source-gutter{
+        min-width:46px;
+        padding-left:10px;
+      }
     }
   </style>
 </head>
 <body>
   <header class="topbar">
-    <button class="btn-back" id="backBtn" type="button" aria-label="Back">&larr;</button>
-    <div class="title-wrap">
-      <div class="kicker">Post Preview</div>
-      <div class="title" id="title">Untitled</div>
+    <div class="topbar-main">
+      <button class="btn-back" id="backBtn" type="button" aria-label="Back">&larr;</button>
+      <div class="title-wrap">
+        <div class="kicker">Post Preview</div>
+        <div class="title" id="title">Untitled</div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <div class="view-switch" role="tablist" aria-label="Preview mode">
+        <button class="view-tab" id="slideTab" type="button" role="tab" aria-selected="true">Slide</button>
+        <span class="view-divider" aria-hidden="true"></span>
+        <button class="view-tab" id="sourceTab" type="button" role="tab" aria-selected="false">Source</button>
+      </div>
+      <button class="future-btn" id="futureBtn" type="button" aria-label="Coming soon" title="Coming soon">→</button>
     </div>
   </header>
   <main class="layout">
-    <section class="stage-panel">
-      <div class="stage-viewport" id="stageViewport">
-        <div class="stage" id="stage"></div>
-      </div>
-    </section>
-    <aside class="menu">
-      <button class="menu-btn" id="runnerBtn" type="button">Source Code</button>
-      <button class="menu-btn" id="closeBtn" type="button">Close</button>
-      <button class="menu-btn menu-continue" id="continueBtn" type="button" aria-label="Continue">&rarr;</button>
-      <div class="counter" id="counter">No slides</div>
-    </aside>
+    <div class="view-shell">
+      <section class="stage-panel view-pane" id="slideView">
+        <div class="stage-viewport" id="stageViewport">
+          <div class="stage" id="stage"></div>
+        </div>
+        <div class="stage-counter" id="counter">No slides</div>
+      </section>
+      <section class="source-panel view-pane" id="sourceView" hidden>
+        <div class="source-shell">
+          <div class="source-meta">
+            <div>
+              <div class="source-kicker">Read-only source snapshot</div>
+              <div class="source-file-row">
+                <div class="source-file" id="sourceFile">Main.lean</div>
+                <div class="source-language" id="sourceLanguage">Lean</div>
+              </div>
+            </div>
+          </div>
+          <div class="source-editor">
+            <pre class="source-gutter" id="sourceGutter"></pre>
+            <pre class="source-code" id="sourceCode"></pre>
+          </div>
+        </div>
+      </section>
+    </div>
   </main>
 
   <script src="theorem-draft-store.js"></script>
   <script>
     (function(){
       const titleEl = document.getElementById('title');
+      const slideViewEl = document.getElementById('slideView');
+      const sourceViewEl = document.getElementById('sourceView');
       const stageViewport = document.getElementById('stageViewport');
       const stageEl = document.getElementById('stage');
       const counterEl = document.getElementById('counter');
-      const runnerBtn = document.getElementById('runnerBtn');
-      const closeBtn = document.getElementById('closeBtn');
-      const continueBtn = document.getElementById('continueBtn');
       const backBtn = document.getElementById('backBtn');
+      const slideTabEl = document.getElementById('slideTab');
+      const sourceTabEl = document.getElementById('sourceTab');
+      const sourceFileEl = document.getElementById('sourceFile');
+      const sourceLanguageEl = document.getElementById('sourceLanguage');
+      const sourceGutterEl = document.getElementById('sourceGutter');
+      const sourceCodeEl = document.getElementById('sourceCode');
       const store = window.ivucxTheoremDraftStore || null;
 
       let slides = [];
       let slideIndex = 0;
+      let currentView = 'slide';
       let currentLanguage = 'Lean';
+      let currentFileName = 'Main.lean';
       let touchStartX = 0;
       let touchStartY = 0;
 
@@ -357,6 +558,28 @@
 
       function goToProofEditor(){
         window.location.href = 'editor.html?lang=' + encodeURIComponent(currentLanguage.toLowerCase());
+      }
+
+      function setView(view){
+        currentView = view === 'source' ? 'source' : 'slide';
+        const isSlide = currentView === 'slide';
+        slideViewEl.hidden = !isSlide;
+        sourceViewEl.hidden = isSlide;
+        slideTabEl.setAttribute('aria-selected', isSlide ? 'true' : 'false');
+        sourceTabEl.setAttribute('aria-selected', isSlide ? 'false' : 'true');
+        if(isSlide){
+          syncStageScale();
+        }
+      }
+
+      function renderSourceSnapshot(code){
+        const text = typeof code === 'string' ? code.replace(/\r\n/g, '\n') : '';
+        const lines = text ? text.split('\n') : [''];
+        sourceGutterEl.textContent = lines.map((_, index)=>String(index + 1)).join('\n');
+        sourceCodeEl.textContent = text || 'No saved proof code yet.';
+        sourceCodeEl.classList.toggle('is-empty', !text.trim());
+        sourceFileEl.textContent = currentFileName;
+        sourceLanguageEl.textContent = currentLanguage;
       }
 
       function normalizeSlides(record){
@@ -602,7 +825,6 @@
         counterEl.textContent = visible.length
           ? 'Slide ' + (slideIndex + 1) + ' / ' + visible.length
           : 'No slides';
-        continueBtn.disabled = visible.length === 0 || slideIndex >= visible.length - 1;
 
         if(visible.length === 0){
           const empty = document.createElement('div');
@@ -648,27 +870,38 @@
         currentLanguage = resolveLanguage(
           draft && draft.proof && typeof draft.proof === 'object' ? draft.proof.language : 'Lean'
         );
+        currentFileName = draft
+          && draft.proof
+          && typeof draft.proof === 'object'
+          && typeof draft.proof.fileName === 'string'
+          && draft.proof.fileName.trim()
+          ? draft.proof.fileName.trim()
+          : (currentLanguage === 'Coq' ? 'Main.v' : 'Main.lean');
+        renderSourceSnapshot(
+          draft && draft.proof && typeof draft.proof === 'object' && typeof draft.proof.code === 'string'
+            ? draft.proof.code
+            : ''
+        );
         const record = draft && draft.summarySlide && draft.summarySlide.record && typeof draft.summarySlide.record === 'object'
           ? draft.summarySlide.record
           : null;
         slides = normalizeSlides(record);
         slideIndex = resolveInitialSlideIndex(record, slides);
         renderCurrentSlide();
+        setView('slide');
       }
 
-      runnerBtn.addEventListener('click', ()=>{
-        window.location.href = 'post-runner.html';
-      });
-      continueBtn.addEventListener('click', ()=>{
-        goToNextSlide();
-      });
-      closeBtn.addEventListener('click', ()=>{
-        goToProofEditor();
-      });
       backBtn.addEventListener('click', ()=>{
         goToProofEditor();
       });
+      slideTabEl.addEventListener('click', ()=>{
+        setView('slide');
+      });
+      sourceTabEl.addEventListener('click', ()=>{
+        setView('source');
+      });
       document.addEventListener('keydown', (event)=>{
+        if(currentView !== 'slide') return;
         if(event.key === 'ArrowLeft'){
           event.preventDefault();
           goToPreviousSlide();
@@ -681,12 +914,14 @@
       });
       if(isMobileLikeDevice()){
         stageViewport.addEventListener('touchstart', (event)=>{
+          if(currentView !== 'slide') return;
           const touch = event.touches && event.touches[0];
           if(!touch) return;
           touchStartX = touch.clientX;
           touchStartY = touch.clientY;
         }, { passive: true });
         stageViewport.addEventListener('touchend', (event)=>{
+          if(currentView !== 'slide') return;
           const touch = event.changedTouches && event.changedTouches[0];
           if(!touch) return;
           const deltaX = touch.clientX - touchStartX;
