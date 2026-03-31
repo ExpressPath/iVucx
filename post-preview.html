@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
@@ -146,6 +146,12 @@
       opacity:.45;
       cursor:not-allowed;
       transform:none;
+    }
+    .menu-continue{
+      min-height:58px;
+      font-size:28px;
+      line-height:1;
+      letter-spacing:0;
     }
     .counter{
       margin-top:auto;
@@ -307,10 +313,9 @@
       </div>
     </section>
     <aside class="menu">
-      <button class="menu-btn" id="runnerBtn" type="button">Open Runner</button>
-      <button class="menu-btn" id="prevBtn" type="button">Prev Slide</button>
-      <button class="menu-btn" id="nextBtn" type="button">Next Slide</button>
+      <button class="menu-btn" id="runnerBtn" type="button">Source Code</button>
       <button class="menu-btn" id="closeBtn" type="button">Close</button>
+      <button class="menu-btn menu-continue" id="continueBtn" type="button" aria-label="Continue">&rarr;</button>
       <div class="counter" id="counter">No slides</div>
     </aside>
   </main>
@@ -323,14 +328,36 @@
       const stageEl = document.getElementById('stage');
       const counterEl = document.getElementById('counter');
       const runnerBtn = document.getElementById('runnerBtn');
-      const prevBtn = document.getElementById('prevBtn');
-      const nextBtn = document.getElementById('nextBtn');
       const closeBtn = document.getElementById('closeBtn');
+      const continueBtn = document.getElementById('continueBtn');
       const backBtn = document.getElementById('backBtn');
       const store = window.ivucxTheoremDraftStore || null;
 
       let slides = [];
       let slideIndex = 0;
+      let currentLanguage = 'Lean';
+      let touchStartX = 0;
+      let touchStartY = 0;
+
+      function resolveLanguage(value){
+        const input = String(value || '').trim().toLowerCase();
+        if(input === 'coq') return 'Coq';
+        if(input === 'isabelle') return 'Isabelle';
+        if(input === 'agda') return 'Agda';
+        return 'Lean';
+      }
+
+      function isMobileLikeDevice(){
+        return !!(
+          (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+          || (navigator && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0)
+          || ('ontouchstart' in window)
+        );
+      }
+
+      function goToProofEditor(){
+        window.location.href = 'editor.html?lang=' + encodeURIComponent(currentLanguage.toLowerCase());
+      }
 
       function normalizeSlides(record){
         const editorState = record && record.editorState && typeof record.editorState === 'object'
@@ -575,8 +602,7 @@
         counterEl.textContent = visible.length
           ? 'Slide ' + (slideIndex + 1) + ' / ' + visible.length
           : 'No slides';
-        prevBtn.disabled = slideIndex <= 0;
-        nextBtn.disabled = visible.length === 0 || slideIndex >= visible.length - 1;
+        continueBtn.disabled = visible.length === 0 || slideIndex >= visible.length - 1;
 
         if(visible.length === 0){
           const empty = document.createElement('div');
@@ -596,6 +622,20 @@
         syncStageScale();
       }
 
+      function goToPreviousSlide(){
+        const visible = getVisibleSlides();
+        if(visible.length === 0 || slideIndex <= 0) return;
+        slideIndex = Math.max(0, slideIndex - 1);
+        renderCurrentSlide();
+      }
+
+      function goToNextSlide(){
+        const visible = getVisibleSlides();
+        if(visible.length === 0 || slideIndex >= visible.length - 1) return;
+        slideIndex += 1;
+        renderCurrentSlide();
+      }
+
       async function boot(){
         let draft = null;
         if(store && typeof store.read === 'function'){
@@ -605,6 +645,9 @@
           ? draft.title.text.trim()
           : '';
         titleEl.textContent = title || 'Untitled';
+        currentLanguage = resolveLanguage(
+          draft && draft.proof && typeof draft.proof === 'object' ? draft.proof.language : 'Lean'
+        );
         const record = draft && draft.summarySlide && draft.summarySlide.record && typeof draft.summarySlide.record === 'object'
           ? draft.summarySlide.record
           : null;
@@ -616,19 +659,45 @@
       runnerBtn.addEventListener('click', ()=>{
         window.location.href = 'post-runner.html';
       });
-      prevBtn.addEventListener('click', ()=>{
-        slideIndex = Math.max(0, slideIndex - 1);
-        renderCurrentSlide();
-      });
-      nextBtn.addEventListener('click', ()=>{
-        slideIndex += 1;
-        renderCurrentSlide();
+      continueBtn.addEventListener('click', ()=>{
+        goToNextSlide();
       });
       closeBtn.addEventListener('click', ()=>{
-        window.history.back();
+        goToProofEditor();
       });
       backBtn.addEventListener('click', ()=>{
-        window.history.back();
+        goToProofEditor();
+      });
+      document.addEventListener('keydown', (event)=>{
+        if(event.key === 'ArrowLeft'){
+          event.preventDefault();
+          goToPreviousSlide();
+          return;
+        }
+        if(event.key === 'ArrowRight'){
+          event.preventDefault();
+          goToNextSlide();
+        }
+      });
+      if(isMobileLikeDevice()){
+        stageViewport.addEventListener('touchstart', (event)=>{
+          const touch = event.touches && event.touches[0];
+          if(!touch) return;
+          touchStartX = touch.clientX;
+          touchStartY = touch.clientY;
+        }, { passive: true });
+        stageViewport.addEventListener('touchend', (event)=>{
+          const touch = event.changedTouches && event.changedTouches[0];
+          if(!touch) return;
+          const deltaX = touch.clientX - touchStartX;
+          const deltaY = touch.clientY - touchStartY;
+          if(Math.abs(deltaX) < 36 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+          if(deltaX < 0){
+            goToNextSlide();
+          }else{
+            goToPreviousSlide();
+          }
+        }, { passive: true });
       });
       window.addEventListener('resize', syncStageScale);
 
@@ -637,3 +706,4 @@
   </script>
 </body>
 </html>
+
