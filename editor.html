@@ -2921,18 +2921,27 @@
         setStatus('Running...');
 
         const code = getEditorCode();
+        let validationResult = null;
 
         let shouldResetCoq = false;
         try {
           if(selectedLanguage === 'Coq'){
             shouldResetCoq = true;
-            await validateCoqProof(code);
+            validationResult = await validateCoqProof(code);
           } else if(selectedLanguage === 'Lean'){
-            await validateLeanProof(code);
+            validationResult = await validateLeanProof(code);
           } else {
             setStatus('Runner disabled', true);
             outputEl.textContent = '[Configuration]\nOnly Coq and Lean validation are supported in this editor.';
             return;
+          }
+
+          if(validationResult && validationResult.status === 'allowed'){
+            const shouldShowToast = !toastEl || toastEl.getAttribute('aria-hidden') !== 'false';
+            if(shouldShowToast){
+              const isProblemPost = validationResult.proof_state === 'NY';
+              showToast(isProblemPost ? 'Post as a problem?' : 'Post as a proof?', isProblemPost ? 'warn' : 'ok');
+            }
           }
         } finally {
           if(shouldResetCoq){
