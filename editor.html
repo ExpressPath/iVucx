@@ -477,273 +477,6 @@
       background:rgba(63,185,80,0.16);
     }
 
-    .preview-shell{
-      display:none;
-      flex:1;
-      min-height:0;
-      background:
-        radial-gradient(circle at top left, rgba(63,185,80,0.12), transparent 28%),
-        radial-gradient(circle at bottom right, rgba(47,129,247,0.12), transparent 24%),
-        #070b11;
-      color:#e6edf3;
-    }
-
-    .preview-shell.active{
-      display:flex;
-      flex-direction:column;
-    }
-
-    .preview-topbar{
-      display:flex;
-      align-items:center;
-      gap:12px;
-      padding:12px 16px;
-      border-bottom:1px solid rgba(255,255,255,0.08);
-      background:rgba(8,12,18,0.88);
-      backdrop-filter:blur(8px);
-    }
-
-    .preview-title-wrap{
-      min-width:0;
-    }
-
-    .preview-kicker{
-      font-size:11px;
-      font-weight:700;
-      letter-spacing:.08em;
-      text-transform:uppercase;
-      color:#8b949e;
-    }
-
-    .preview-title{
-      font-size:18px;
-      font-weight:700;
-      color:#f0f6fc;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-    }
-
-    .preview-layout{
-      flex:1;
-      min-height:0;
-      display:grid;
-      grid-template-columns:minmax(0,1fr) 118px;
-      gap:16px;
-      padding:16px;
-    }
-
-    .preview-stage-panel{
-      min-height:0;
-      position:relative;
-      border:1px solid rgba(255,255,255,0.08);
-      border-radius:18px;
-      background:linear-gradient(180deg, rgba(15,20,28,0.96), rgba(9,12,17,0.98));
-      overflow:hidden;
-    }
-
-    .preview-stage-viewport{
-      position:relative;
-      width:100%;
-      height:100%;
-      min-height:0;
-    }
-
-    .preview-stage{
-      position:absolute;
-      left:50%;
-      top:50%;
-      width:1280px;
-      height:720px;
-      background:#f8fafc;
-      color:#111111;
-      overflow:hidden;
-      transform:translate(-50%, -50%) scale(1);
-      transform-origin:center center;
-      box-shadow:0 28px 70px rgba(0,0,0,0.35);
-    }
-
-    .preview-empty{
-      position:absolute;
-      inset:0;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:36px;
-      text-align:center;
-      font-size:24px;
-      line-height:1.5;
-      color:#3d4856;
-      background:
-        linear-gradient(135deg, rgba(63,185,80,0.08), transparent 35%),
-        #f8fafc;
-    }
-
-    .preview-slide-node{
-      position:absolute;
-      box-sizing:border-box;
-      transform-origin:top left;
-    }
-
-    .preview-slide-text{
-      white-space:pre-wrap;
-      word-break:break-word;
-      overflow-wrap:anywhere;
-    }
-
-    .preview-slide-equation{
-      font-family:"Times New Roman", Georgia, serif;
-      font-style:italic;
-      white-space:pre-wrap;
-    }
-
-    .preview-slide-css{
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:18px;
-      border:1px dashed rgba(17,17,17,0.24);
-      background:rgba(17,24,39,0.06);
-      color:#334155;
-      font-size:22px;
-      line-height:1.45;
-      text-align:center;
-    }
-
-    .preview-slide-image{
-      width:100%;
-      height:100%;
-      object-fit:contain;
-      display:block;
-    }
-
-    .preview-slide-svg{
-      position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
-      overflow:visible;
-      pointer-events:none;
-    }
-
-    .preview-doc{
-      position:absolute;
-      inset:0;
-      display:flex;
-      flex-direction:column;
-      background:#ffffff;
-    }
-
-    .preview-doc-meta{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      padding:18px 22px;
-      border-bottom:1px solid rgba(15,23,42,0.08);
-      background:#f8fafc;
-      color:#0f172a;
-    }
-
-    .preview-doc-title{
-      font-size:20px;
-      font-weight:700;
-    }
-
-    .preview-doc-kind{
-      font-size:13px;
-      color:#64748b;
-    }
-
-    .preview-doc-body{
-      flex:1;
-      min-height:0;
-      background:#ffffff;
-    }
-
-    .preview-doc-frame,
-    .preview-doc-image,
-    .preview-doc-text,
-    .preview-doc-empty{
-      width:100%;
-      height:100%;
-      border:none;
-      display:block;
-    }
-
-    .preview-doc-image{
-      object-fit:contain;
-      background:#ffffff;
-    }
-
-    .preview-doc-text{
-      margin:0;
-      padding:22px;
-      overflow:auto;
-      white-space:pre-wrap;
-      word-break:break-word;
-      font-size:20px;
-      line-height:1.55;
-      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-      color:#0f172a;
-      background:#ffffff;
-    }
-
-    .preview-doc-empty{
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:28px;
-      font-size:24px;
-      color:#475569;
-      text-align:center;
-      background:#ffffff;
-    }
-
-    .preview-menu{
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    }
-
-    .preview-menu-btn{
-      border:1px solid rgba(255,255,255,0.1);
-      background:rgba(17,22,28,0.9);
-      color:#e6edf3;
-      border-radius:16px;
-      min-height:72px;
-      padding:14px 10px;
-      font-size:13px;
-      font-weight:700;
-      letter-spacing:.02em;
-      cursor:pointer;
-      transition:transform .12s ease, background-color .2s ease, border-color .2s ease;
-    }
-
-    .preview-menu-btn:hover{
-      transform:translateY(-1px);
-      background:rgba(24,31,41,0.98);
-      border-color:rgba(63,185,80,0.3);
-    }
-
-    .preview-menu-btn:disabled{
-      opacity:.45;
-      cursor:not-allowed;
-      transform:none;
-    }
-
-    .preview-counter{
-      margin-top:auto;
-      padding:16px 12px;
-      border-radius:16px;
-      border:1px solid rgba(255,255,255,0.08);
-      background:rgba(9,12,17,0.72);
-      color:#9aa7b6;
-      font-size:12px;
-      line-height:1.45;
-      text-align:center;
-    }
-
     @media (max-width:1020px){
       .workspace{
         grid-template-columns:1fr;
@@ -755,25 +488,6 @@
         justify-content:flex-end;
       }
 
-      .preview-layout{
-        grid-template-columns:1fr;
-        grid-template-rows:minmax(0,1fr) auto;
-      }
-
-      .preview-menu{
-        flex-direction:row;
-        flex-wrap:wrap;
-      }
-
-      .preview-menu-btn{
-        flex:1 1 180px;
-        min-height:56px;
-      }
-
-      .preview-counter{
-        width:100%;
-        margin-top:0;
-      }
     }
 
     @media (max-width:760px){
@@ -805,19 +519,6 @@
 
       .preview-confirm-btn{
         width:100%;
-      }
-
-      .preview-topbar{
-        padding:10px 12px;
-      }
-
-      .preview-title{
-        font-size:16px;
-      }
-
-      .preview-layout{
-        gap:12px;
-        padding:12px;
       }
 
     }
@@ -869,29 +570,6 @@
       </div>
     </section>
   </main>
-  <section class="preview-shell" id="previewShell" hidden>
-    <div class="preview-topbar">
-      <button class="btn btn-back" id="previewBackBtn" type="button" aria-label="Back to selection">&larr;</button>
-      <div class="preview-title-wrap">
-        <div class="preview-kicker">Post Preview</div>
-        <div class="preview-title" id="previewTitle">Untitled</div>
-      </div>
-    </div>
-    <div class="preview-layout">
-      <div class="preview-stage-panel">
-        <div class="preview-stage-viewport" id="previewStageViewport">
-          <div class="preview-stage" id="previewStage"></div>
-        </div>
-      </div>
-      <aside class="preview-menu">
-        <button class="preview-menu-btn" id="previewRunnerBtn" type="button">Runner</button>
-        <button class="preview-menu-btn" id="previewPrevBtn" type="button">Prev Slide</button>
-        <button class="preview-menu-btn" id="previewNextBtn" type="button">Next Slide</button>
-        <button class="preview-menu-btn" id="previewSelectionBtn" type="button">Selection</button>
-        <div class="preview-counter" id="previewCounter">No slides</div>
-      </aside>
-    </div>
-  </section>
   <div class="toast" id="toast" role="status" aria-live="polite" aria-hidden="true">
     <div class="toast-body">
       <div class="toast-top">
@@ -936,20 +614,8 @@
       const statusEl = document.getElementById('statusText');
       const runBtn = document.getElementById('runBtn');
       const backBtn = document.getElementById('backBtn');
-      const editorTopbar = document.getElementById('editorTopbar');
-      const editorWorkspace = document.getElementById('editorWorkspace');
       const fallbackEditor = document.getElementById('fallbackEditor');
       const editorMount = document.getElementById('editor');
-      const previewShell = document.getElementById('previewShell');
-      const previewBackBtn = document.getElementById('previewBackBtn');
-      const previewTitleEl = document.getElementById('previewTitle');
-      const previewStageViewport = document.getElementById('previewStageViewport');
-      const previewStageEl = document.getElementById('previewStage');
-      const previewRunnerBtn = document.getElementById('previewRunnerBtn');
-      const previewPrevBtn = document.getElementById('previewPrevBtn');
-      const previewNextBtn = document.getElementById('previewNextBtn');
-      const previewSelectionBtn = document.getElementById('previewSelectionBtn');
-      const previewCounterEl = document.getElementById('previewCounter');
       const toastEl = document.getElementById('toast');
       const toastMessageEl = document.getElementById('toastMessage');
       const toastSubtitleEl = document.getElementById('toastSubtitle');
@@ -1013,10 +679,6 @@
       const params = new URLSearchParams(window.location.search);
       const selectedLanguage = resolveLanguage(params.get('lang') || initPayload.proofAssistant || 'Lean');
       const selectedConfig = languageConfig[selectedLanguage];
-      const APP_MODE_EDITOR = 'editor';
-      const APP_MODE_PREVIEW = 'preview';
-      const APP_MODE_RUNNER = 'runner';
-
       langBadgeEl.textContent = selectedLanguage;
       fileNameEl.textContent = selectedConfig.fileName;
 
@@ -1037,9 +699,6 @@
       let monacoRef = null;
       let running = false;
       let leanSeed = '';
-      let appMode = APP_MODE_EDITOR;
-      let previewSlides = [];
-      let previewSlideIndex = 0;
       let toastTimer = null;
       let toastPinned = false;
       let keepAliveTimer = null;
@@ -1153,34 +812,6 @@
         }
       }
 
-      function refreshEditorChromeForMode(){
-        if(appMode === APP_MODE_RUNNER){
-          if(outputTitleEl) outputTitleEl.textContent = selectedLanguage + ' Runner';
-          if(outputHintEl) outputHintEl.textContent = 'Read-only + Ctrl/Cmd + Enter to run';
-          if(runBtn) runBtn.style.display = '';
-          setLeanPanelActive(selectedLanguage === 'Lean');
-          return;
-        }
-        setLeanMode(selectedLanguage === 'Lean');
-      }
-
-      function setAppMode(mode){
-        appMode = mode;
-        const showPreview = mode === APP_MODE_PREVIEW;
-        if(editorTopbar) editorTopbar.hidden = showPreview;
-        if(editorWorkspace) editorWorkspace.hidden = showPreview;
-        if(previewShell){
-          previewShell.hidden = !showPreview;
-          previewShell.classList.toggle('active', showPreview);
-        }
-        setEditorReadOnly(mode === APP_MODE_RUNNER);
-        refreshEditorChromeForMode();
-        if(showPreview){
-          hideToast(true);
-          renderPreviewStage();
-        }
-      }
-
       function getToastSubtitle(){
         const title = typeof summaryText === 'string' ? summaryText.trim() : '';
         if(title) return title;
@@ -1188,291 +819,6 @@
           ? initPayload.summary.trim()
           : '';
         return fallback;
-      }
-
-      function normalizePreviewSlides(record){
-        const editorState = record && typeof record === 'object' && record.editorState && typeof record.editorState === 'object'
-          ? record.editorState
-          : null;
-        const slides = editorState && Array.isArray(editorState.slides)
-          ? editorState.slides
-          : [];
-        return slides
-          .map((slide, index)=>slide && typeof slide === 'object' ? { ...slide, __index: index } : null)
-          .filter(Boolean);
-      }
-
-      function resolveInitialPreviewSlideIndex(record, slides){
-        const visible = slides.filter(slide=>!slide.hidden);
-        if(visible.length === 0) return 0;
-        const rawIndex = Number(record && record.currentSlideIndex);
-        if(!Number.isInteger(rawIndex) || rawIndex < 0){
-          return 0;
-        }
-        const direct = visible.findIndex(slide=>slide.__index === rawIndex);
-        if(direct >= 0) return direct;
-        const next = visible.findIndex(slide=>slide.__index > rawIndex);
-        if(next >= 0) return next;
-        return visible.length - 1;
-      }
-
-      function setPreviewDataFromRecord(record){
-        previewSlides = normalizePreviewSlides(record);
-        previewSlideIndex = resolveInitialPreviewSlideIndex(record, previewSlides);
-        renderPreviewStage();
-      }
-
-      function getVisiblePreviewSlides(){
-        return previewSlides.filter(slide=>slide && !slide.hidden);
-      }
-
-      function clampPreviewSlideIndex(){
-        const visible = getVisiblePreviewSlides();
-        if(visible.length === 0){
-          previewSlideIndex = 0;
-          return visible;
-        }
-        previewSlideIndex = Math.max(0, Math.min(visible.length - 1, previewSlideIndex));
-        return visible;
-      }
-
-      function createPreviewNodeEl(className){
-        const el = document.createElement('div');
-        el.className = 'preview-slide-node ' + className;
-        return el;
-      }
-
-      function applyPreviewNodeBox(el, node, left, top, width, height){
-        const opacity = Number.isFinite(Number(node && node.opacity)) ? Number(node.opacity) : 1;
-        const rotation = Number(node && node.rotation) || 0;
-        el.style.left = Math.round(left) + 'px';
-        el.style.top = Math.round(top) + 'px';
-        if(Number.isFinite(width)) el.style.width = Math.max(1, Math.round(width)) + 'px';
-        if(Number.isFinite(height)) el.style.height = Math.max(1, Math.round(height)) + 'px';
-        el.style.opacity = String(opacity);
-        el.style.transform = rotation ? 'rotate(' + rotation + 'deg)' : '';
-      }
-
-      function buildPreviewSvgLayer(){
-        const ns = 'http://www.w3.org/2000/svg';
-        const svg = document.createElementNS(ns, 'svg');
-        svg.setAttribute('class', 'preview-slide-svg');
-        svg.setAttribute('viewBox', '0 0 1280 720');
-        const defs = document.createElementNS(ns, 'defs');
-        const marker = document.createElementNS(ns, 'marker');
-        marker.setAttribute('id', 'previewArrowHead');
-        marker.setAttribute('markerWidth', '14');
-        marker.setAttribute('markerHeight', '14');
-        marker.setAttribute('refX', '10');
-        marker.setAttribute('refY', '5');
-        marker.setAttribute('orient', 'auto');
-        const path = document.createElementNS(ns, 'path');
-        path.setAttribute('d', 'M0,0 L10,5 L0,10 z');
-        path.setAttribute('fill', '#111111');
-        marker.appendChild(path);
-        defs.appendChild(marker);
-        svg.appendChild(defs);
-        return svg;
-      }
-
-      function renderPreviewLine(svg, node){
-        if(!svg || !node || !Array.isArray(node.points) || node.points.length < 4) return;
-        const ns = 'http://www.w3.org/2000/svg';
-        const polyline = document.createElementNS(ns, 'polyline');
-        const offsetX = Number(node.x) || 0;
-        const offsetY = Number(node.y) || 0;
-        const points = [];
-        for(let i = 0; i < node.points.length; i += 2){
-          const px = offsetX + (Number(node.points[i]) || 0);
-          const py = offsetY + (Number(node.points[i + 1]) || 0);
-          points.push(px + ',' + py);
-        }
-        polyline.setAttribute('points', points.join(' '));
-        polyline.setAttribute('fill', 'none');
-        polyline.setAttribute('stroke', node.stroke || '#111111');
-        polyline.setAttribute('stroke-width', String(Math.max(1, Number(node.strokeWidth) || 2)));
-        polyline.setAttribute('stroke-linecap', 'round');
-        polyline.setAttribute('stroke-linejoin', 'round');
-        polyline.setAttribute('opacity', String(Number.isFinite(Number(node.opacity)) ? Number(node.opacity) : 1));
-        if(node.lineKind === 'arrow' || node.className === 'Arrow'){
-          polyline.setAttribute('marker-end', 'url(#previewArrowHead)');
-        }
-        svg.appendChild(polyline);
-      }
-
-      function renderPreviewCanvasSlide(container, slide){
-        const stage = document.createElement('div');
-        stage.className = 'preview-dom-stage';
-        stage.style.position = 'absolute';
-        stage.style.inset = '0';
-        stage.style.background = '#ffffff';
-        const svg = buildPreviewSvgLayer();
-        const nodes = Array.isArray(slide && slide.nodes) ? slide.nodes : [];
-        nodes.forEach((node)=>{
-          if(!node || typeof node !== 'object') return;
-          if(node.className === 'Text'){
-            const el = createPreviewNodeEl('preview-slide-text');
-            applyPreviewNodeBox(el, node, Number(node.x) || 0, Number(node.y) || 0, Number(node.width) || 420);
-            el.style.fontSize = Math.max(12, Number(node.fontSize) || 28) + 'px';
-            el.style.fontFamily = node.fontFamily || 'Arial, sans-serif';
-            el.style.color = node.fill || '#111111';
-            el.style.lineHeight = String(Number(node.lineHeight) || 1.2);
-            el.style.textAlign = node.align || 'left';
-            el.textContent = typeof node.text === 'string' ? node.text : '';
-            stage.appendChild(el);
-            return;
-          }
-          if(node.className === 'Equation' || node.isEquation){
-            const el = createPreviewNodeEl('preview-slide-equation');
-            applyPreviewNodeBox(el, node, Number(node.x) || 0, Number(node.y) || 0, Number(node.width) || 360, Number(node.height) || 60);
-            el.style.fontSize = Math.max(18, Number(node.fontSize) || 32) + 'px';
-            el.style.color = node.fill || '#111111';
-            el.style.lineHeight = String(Number(node.lineHeight) || 1.2);
-            el.style.textAlign = node.align || 'left';
-            el.textContent = node.equationSource || node.text || '';
-            stage.appendChild(el);
-            return;
-          }
-          if(node.className === 'Group' && node.isCssObject){
-            const el = createPreviewNodeEl('preview-slide-css');
-            applyPreviewNodeBox(el, node, Number(node.x) || 0, Number(node.y) || 0, 320, 180);
-            el.textContent = node.cssObjectSource || 'CSS Object';
-            stage.appendChild(el);
-            return;
-          }
-          if(node.className === 'Rect'){
-            const el = createPreviewNodeEl('preview-slide-shape');
-            applyPreviewNodeBox(el, node, Number(node.x) || 0, Number(node.y) || 0, Number(node.width) || 120, Number(node.height) || 120);
-            el.style.background = node.fill || 'transparent';
-            el.style.border = (Number(node.strokeWidth) || 0) > 0
-              ? (Math.max(1, Number(node.strokeWidth) || 0) + 'px solid ' + (node.stroke || '#111111'))
-              : 'none';
-            el.style.borderRadius = (Number(node.cornerRadius) || 0) + 'px';
-            stage.appendChild(el);
-            return;
-          }
-          if(node.className === 'Ellipse'){
-            const radiusX = Math.max(2, Number(node.radiusX) || 40);
-            const radiusY = Math.max(2, Number(node.radiusY) || 40);
-            const el = createPreviewNodeEl('preview-slide-shape');
-            applyPreviewNodeBox(el, node, (Number(node.x) || 0) - radiusX, (Number(node.y) || 0) - radiusY, radiusX * 2, radiusY * 2);
-            el.style.background = node.fill || 'transparent';
-            el.style.border = (Number(node.strokeWidth) || 0) > 0
-              ? (Math.max(1, Number(node.strokeWidth) || 0) + 'px solid ' + (node.stroke || '#111111'))
-              : 'none';
-            el.style.borderRadius = '999px';
-            stage.appendChild(el);
-            return;
-          }
-          if(node.className === 'Image' && node.assetSrc){
-            const el = createPreviewNodeEl('preview-slide-media');
-            applyPreviewNodeBox(el, node, Number(node.x) || 0, Number(node.y) || 0, Number(node.width) || 240, Number(node.height) || 180);
-            const image = document.createElement('img');
-            image.className = 'preview-slide-image';
-            image.src = node.assetSrc;
-            image.alt = '';
-            el.appendChild(image);
-            stage.appendChild(el);
-            return;
-          }
-          if(node.className === 'Line' || node.className === 'Arrow' || node.lineKind){
-            renderPreviewLine(svg, node);
-          }
-        });
-        stage.appendChild(svg);
-        container.appendChild(stage);
-      }
-
-      function renderPreviewDocumentSlide(container, slide){
-        const shell = document.createElement('div');
-        shell.className = 'preview-doc';
-
-        const meta = document.createElement('div');
-        meta.className = 'preview-doc-meta';
-        const title = document.createElement('div');
-        title.className = 'preview-doc-title';
-        title.textContent = slide && slide.document && slide.document.title ? slide.document.title : 'Document slide';
-        const kind = document.createElement('div');
-        kind.className = 'preview-doc-kind';
-        kind.textContent = slide && slide.document && slide.document.kind ? slide.document.kind : 'document';
-        meta.appendChild(title);
-        meta.appendChild(kind);
-        shell.appendChild(meta);
-
-        const body = document.createElement('div');
-        body.className = 'preview-doc-body';
-        const documentInfo = slide && slide.document ? slide.document : null;
-        if(documentInfo && documentInfo.kind === 'pdf' && documentInfo.url){
-          const frame = document.createElement('iframe');
-          frame.className = 'preview-doc-frame';
-          frame.src = documentInfo.url;
-          frame.title = documentInfo.title || 'Document preview';
-          body.appendChild(frame);
-        }else if(documentInfo && documentInfo.kind === 'image' && documentInfo.url){
-          const image = document.createElement('img');
-          image.className = 'preview-doc-image';
-          image.src = documentInfo.url;
-          image.alt = documentInfo.title || 'Document preview';
-          body.appendChild(image);
-        }else if(documentInfo && documentInfo.kind === 'text'){
-          const pre = document.createElement('pre');
-          pre.className = 'preview-doc-text';
-          pre.textContent = documentInfo.text || '';
-          body.appendChild(pre);
-        }else{
-          const empty = document.createElement('div');
-          empty.className = 'preview-doc-empty';
-          empty.textContent = 'No previewable document is saved for this slide.';
-          body.appendChild(empty);
-        }
-        shell.appendChild(body);
-        container.appendChild(shell);
-      }
-
-      function syncPreviewStageScale(){
-        if(!previewStageViewport || !previewStageEl) return;
-        const width = Math.max(1, previewStageViewport.clientWidth - 24);
-        const height = Math.max(1, previewStageViewport.clientHeight - 24);
-        const scale = Math.max(0.1, Math.min(width / 1280, height / 720));
-        previewStageEl.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
-      }
-
-      function renderPreviewStage(){
-        if(!previewStageEl) return;
-        if(previewTitleEl){
-          previewTitleEl.textContent = getToastSubtitle() || 'Untitled';
-        }
-        previewStageEl.innerHTML = '';
-        const visibleSlides = clampPreviewSlideIndex();
-        if(previewCounterEl){
-          previewCounterEl.textContent = visibleSlides.length
-            ? 'Slide ' + (previewSlideIndex + 1) + ' / ' + visibleSlides.length
-            : 'No slides';
-        }
-        if(previewPrevBtn) previewPrevBtn.disabled = previewSlideIndex <= 0;
-        if(previewNextBtn) previewNextBtn.disabled = visibleSlides.length === 0 || previewSlideIndex >= visibleSlides.length - 1;
-
-        if(visibleSlides.length === 0){
-          const empty = document.createElement('div');
-          empty.className = 'preview-empty';
-          empty.textContent = 'No finished slides are saved yet.';
-          previewStageEl.appendChild(empty);
-          syncPreviewStageScale();
-          return;
-        }
-
-        const current = visibleSlides[previewSlideIndex];
-        if(current && current.type === 'document'){
-          renderPreviewDocumentSlide(previewStageEl, current);
-        }else{
-          renderPreviewCanvasSlide(previewStageEl, current || {});
-        }
-        syncPreviewStageScale();
-      }
-
-      function enterPreviewMode(){
-        closePreviewConfirm();
-        setAppMode(APP_MODE_PREVIEW);
       }
 
       function syncToastPinUi(){
@@ -1527,7 +873,7 @@
 
       async function goToPostPreview(){
         await saveProofDraftSnapshot('preview-navigation');
-        enterPreviewMode();
+        window.location.href = 'post-preview.html';
       }
 
       function showToast(message, variant){
@@ -1611,44 +957,6 @@
       document.addEventListener('keydown', (event)=>{
         if(event.key === 'Escape' && previewConfirmEl && previewConfirmEl.classList.contains('is-open')){
           closePreviewConfirm();
-        }
-      });
-
-      if(previewBackBtn){
-        previewBackBtn.addEventListener('click', ()=>{
-          navigateBackToSelection();
-        });
-      }
-
-      if(previewRunnerBtn){
-        previewRunnerBtn.addEventListener('click', ()=>{
-          setAppMode(APP_MODE_RUNNER);
-        });
-      }
-
-      if(previewPrevBtn){
-        previewPrevBtn.addEventListener('click', ()=>{
-          previewSlideIndex = Math.max(0, previewSlideIndex - 1);
-          renderPreviewStage();
-        });
-      }
-
-      if(previewNextBtn){
-        previewNextBtn.addEventListener('click', ()=>{
-          previewSlideIndex += 1;
-          renderPreviewStage();
-        });
-      }
-
-      if(previewSelectionBtn){
-        previewSelectionBtn.addEventListener('click', ()=>{
-          navigateBackToSelection();
-        });
-      }
-
-      window.addEventListener('resize', ()=>{
-        if(appMode === APP_MODE_PREVIEW){
-          syncPreviewStageScale();
         }
       });
 
@@ -1789,7 +1097,7 @@
             lineNumbersMinChars: 3,
             tabSize: 2
           });
-          setEditorReadOnly(appMode === APP_MODE_RUNNER);
+          setEditorReadOnly(false);
 
           editorInstance.addCommand(monacoRef.KeyMod.CtrlCmd | monacoRef.KeyCode.Enter, function(){
             runProof();
@@ -1809,7 +1117,7 @@
         editorMount.style.display = 'none';
         fallbackEditor.style.display = 'block';
         fallbackEditor.value = initialText;
-        fallbackEditor.readOnly = appMode === APP_MODE_RUNNER;
+        fallbackEditor.readOnly = false;
         saveProofDraftSnapshot('fallback-ready');
         fallbackEditor.addEventListener('input', function(){
           scheduleProofDraftSave('fallback-edit');
@@ -1873,14 +1181,6 @@
       }
 
       async function handleBackNavigation(){
-        if(appMode === APP_MODE_RUNNER){
-          enterPreviewMode();
-          return;
-        }
-        if(appMode === APP_MODE_EDITOR){
-          enterPreviewMode();
-          return;
-        }
         await navigateBackToSelection();
       }
 
@@ -1924,7 +1224,6 @@
       }
 
       async function handleProofFilePaste(e){
-        if(appMode === APP_MODE_RUNNER) return;
         if(!isEditorFocused()) return;
 
         const clipboard = e.clipboardData;
@@ -2270,12 +1569,12 @@
 
       async function restoreProofDraftFromBackground(){
         if(!theoremDraftStore || typeof theoremDraftStore.read !== 'function'){
-          return { summary: summaryText, draft: initialDraft, goalsText: '', slideRecord: null };
+          return { summary: summaryText, draft: initialDraft, goalsText: '' };
         }
         try{
           const record = await theoremDraftStore.read();
           if(!record || typeof record !== 'object'){
-            return { summary: summaryText, draft: initialDraft, goalsText: '', slideRecord: null };
+            return { summary: summaryText, draft: initialDraft, goalsText: '' };
           }
 
           const storedTitle = record.title && typeof record.title.text === 'string'
@@ -2295,21 +1594,14 @@
             && typeof storedProof.goalsText === 'string'
             ? storedProof.goalsText
             : '';
-          const nextSlideRecord = record.summarySlide
-            && typeof record.summarySlide === 'object'
-            && record.summarySlide.record
-            && typeof record.summarySlide.record === 'object'
-            ? record.summarySlide.record
-            : null;
 
           return {
             summary: nextSummary,
             draft: nextDraft,
-            goalsText: nextGoalsText,
-            slideRecord: nextSlideRecord
+            goalsText: nextGoalsText
           };
         }catch(err){
-          return { summary: summaryText, draft: initialDraft, goalsText: '', slideRecord: null };
+          return { summary: summaryText, draft: initialDraft, goalsText: '' };
         }
       }
 
@@ -2320,7 +1612,6 @@
         summaryText = typeof restored.summary === 'string' ? restored.summary : summaryText;
         initialDraft = typeof restored.draft === 'string' ? restored.draft : initialDraft;
         const restoredGoalsText = typeof restored.goalsText === 'string' ? restored.goalsText : '';
-        setPreviewDataFromRecord(restored.slideRecord);
 
         setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, summaryText);
         setLeanMode(selectedLanguage === 'Lean');

@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Post Runner</title>
+  <style>
+    :root{
+      --bg:#0d1117;
+      --panel:#11161c;
+      --ink:#e6edf3;
+      --muted:#9aa7b6;
+      --line:#2d333b;
+      --accent:#2f81f7;
+      --accent-dark:#0f4aa6;
+      --ok:#3fb950;
+      --warn:#ff7b72;
+      --header:#010409;
+      --header-ink:#e6edf3;
+    }
+    *{ box-sizing:border-box; }
+    html,body{
+      width:100%;
+      height:100%;
+      margin:0;
+      overflow:hidden;
+      font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+      background:var(--bg);
+      color:var(--ink);
+    }
+    body{
+      display:flex;
+      flex-direction:column;
+      background:
+        radial-gradient(circle at top left, rgba(63,185,80,0.08), transparent 22%),
+        radial-gradient(circle at bottom right, rgba(47,129,247,0.10), transparent 20%),
+        var(--bg);
+    }
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      min-height:56px;
+      padding:10px 14px;
+      background:var(--header);
+      color:var(--header-ink);
+      border-bottom:1px solid #1b1f24;
+    }
+    .left-cluster,
+    .right-cluster{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+    }
+    .product{
+      font-size:14px;
+      font-weight:650;
+      white-space:nowrap;
+    }
+    .lang-badge{
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.28);
+      font-size:12px;
+      font-weight:650;
+      letter-spacing:.02em;
+      white-space:nowrap;
+    }
+    .file-name{
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:12px;
+      color:#d0d7de;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:220px;
+    }
+    .btn{
+      border:1px solid transparent;
+      background:#1f2937;
+      border-color:#374151;
+      color:#e6edf3;
+      border-radius:8px;
+      height:34px;
+      padding:0 12px;
+      font-size:13px;
+      font-weight:600;
+      cursor:pointer;
+      transition:background-color .2s ease,color .2s ease,border-color .2s ease,transform .12s ease;
+    }
+    .btn:hover{ transform:translateY(-1px); }
+    .btn:active{ transform:translateY(0); }
+    .btn:disabled{ opacity:.6; cursor:not-allowed; transform:none; }
+    .btn-back{
+      background:transparent;
+      border-color:rgba(255,255,255,0.25);
+      color:#f6f8fa;
+      width:34px;
+      min-width:34px;
+      padding:0;
+      border-radius:999px;
+      font-size:24px;
+      line-height:1;
+    }
+    .btn-back:hover{
+      background:rgba(255,255,255,0.08);
+    }
+    .btn-run{
+      background:var(--accent);
+      border-color:var(--accent);
+      color:#fff;
+    }
+    .btn-run:hover{
+      background:var(--accent-dark);
+      border-color:var(--accent-dark);
+    }
+    .workspace{
+      flex:1;
+      min-height:0;
+      display:grid;
+      grid-template-columns:minmax(360px, 1fr) minmax(280px, 36%);
+      gap:10px;
+      padding:10px;
+    }
+    .pane{
+      min-height:0;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:var(--panel);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+    }
+    .pane-head{
+      flex:0 0 38px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      padding:0 12px;
+      border-bottom:1px solid var(--line);
+      font-size:12px;
+      color:var(--muted);
+      background:linear-gradient(to bottom, #141b23, #10161d);
+    }
+    .status{
+      font-weight:650;
+      color:var(--ok);
+    }
+    .status.error{
+      color:var(--warn);
+    }
+    .editor-frame{
+      flex:1;
+      min-height:0;
+      position:relative;
+      background:#0d1117;
+    }
+    .runner-code{
+      width:100%;
+      height:100%;
+      border:none;
+      outline:none;
+      resize:none;
+      padding:16px;
+      font-size:14px;
+      line-height:1.5;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      background:#0d1117;
+      color:#e6edf3;
+      caret-color:transparent;
+    }
+    .runner-code[readonly]{
+      cursor:default;
+    }
+    .title-strip{
+      padding:10px 14px;
+      border-bottom:1px solid rgba(255,255,255,0.04);
+      background:rgba(255,255,255,0.02);
+      color:rgba(230,237,243,0.72);
+      font-size:12px;
+      letter-spacing:.01em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .output-panel{
+      flex:1;
+      margin:0;
+      min-height:0;
+      overflow:auto;
+      white-space:pre-wrap;
+      word-break:break-word;
+      padding:14px;
+      font-size:13px;
+      line-height:1.45;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      color:#c9d1d9;
+      background:#0d1117;
+    }
+    .lean-panel{
+      border-top:1px solid var(--line);
+      background:#0f1520;
+      display:none;
+      flex-direction:column;
+      min-height:0;
+    }
+    .lean-panel.active{
+      display:flex;
+    }
+    .lean-panel-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      padding:6px 12px;
+      font-size:11px;
+      color:var(--muted);
+      border-bottom:1px solid var(--line);
+      background:linear-gradient(to bottom, #141b23, #10161d);
+    }
+    .lean-goals{
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+    .lean-goals-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 12px 6px;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .lean-goals-text{
+      min-height:110px;
+      max-height:180px;
+      margin:0 12px 10px;
+      border:1px solid #283241;
+      border-radius:8px;
+      background:#0b1018;
+      color:#d0d7de;
+      padding:10px 12px;
+      font-size:12px;
+      line-height:1.45;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      white-space:pre-wrap;
+      overflow:auto;
+    }
+    .lean-goals-summary{
+      padding:0 12px 12px;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.45;
+    }
+    .lean-goals-summary.error{
+      color:var(--warn);
+    }
+    @media (max-width:1020px){
+      .workspace{
+        grid-template-columns:1fr;
+        grid-template-rows:minmax(300px, 1fr) minmax(180px, 42%);
+      }
+      .right-cluster{
+        width:100%;
+        justify-content:flex-end;
+      }
+    }
+    @media (max-width:760px){
+      .topbar{
+        flex-direction:column;
+        align-items:stretch;
+      }
+      .left-cluster,
+      .right-cluster{
+        width:100%;
+      }
+      .right-cluster{
+        justify-content:space-between;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="left-cluster">
+      <button class="btn btn-back" id="backBtn" type="button" aria-label="Back to preview">&larr;</button>
+      <div class="product">iVucx Runner</div>
+      <div class="lang-badge" id="langBadge">Lean</div>
+      <div class="file-name" id="fileName">Main.lean</div>
+    </div>
+    <div class="right-cluster">
+      <button class="btn btn-run" id="runBtn" type="button">Run</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="pane">
+      <div class="pane-head">
+        <span>Execution Snapshot</span>
+        <span class="status" id="statusText">Ready</span>
+      </div>
+      <div class="title-strip" id="titleStrip">Untitled</div>
+      <div class="editor-frame">
+        <textarea class="runner-code" id="runnerCode" spellcheck="false" readonly></textarea>
+      </div>
+    </section>
+
+    <section class="pane">
+      <div class="pane-head">
+        <span id="outputTitle">Server Output</span>
+        <span id="outputHint">Read-only + Ctrl/Cmd + Enter to run</span>
+      </div>
+      <pre class="output-panel" id="outputPanel"></pre>
+      <div class="lean-panel" id="leanPanel">
+        <div class="lean-panel-head">
+          <span>Lean Goals Snapshot</span>
+        </div>
+        <div class="lean-goals">
+          <div class="lean-goals-row">
+            <span>Saved infoview / goals text</span>
+          </div>
+          <pre class="lean-goals-text" id="leanGoalsText"></pre>
+          <div class="lean-goals-summary" id="leanGoalsSummary">No goals text provided.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="theorem-draft-store.js"></script>
+  <script>
+    (function(){
+      const langBadgeEl = document.getElementById('langBadge');
+      const fileNameEl = document.getElementById('fileName');
+      const titleStripEl = document.getElementById('titleStrip');
+      const statusEl = document.getElementById('statusText');
+      const runBtn = document.getElementById('runBtn');
+      const backBtn = document.getElementById('backBtn');
+      const codeEl = document.getElementById('runnerCode');
+      const outputEl = document.getElementById('outputPanel');
+      const outputTitleEl = document.getElementById('outputTitle');
+      const outputHintEl = document.getElementById('outputHint');
+      const leanPanelEl = document.getElementById('leanPanel');
+      const leanGoalsTextEl = document.getElementById('leanGoalsText');
+      const leanGoalsSummaryEl = document.getElementById('leanGoalsSummary');
+      const theoremDraftStore = window.ivucxTheoremDraftStore || null;
+
+      const languageConfig = {
+        Lean: { fileName: 'Main.lean' },
+        Coq: { fileName: 'Main.v' },
+        Isabelle: { fileName: 'Main.thy' },
+        Agda: { fileName: 'Main.agda' }
+      };
+
+      let currentLanguage = 'Lean';
+      let running = false;
+
+      function resolveLanguage(value){
+        const input = String(value || '').trim().toLowerCase();
+        if(input === 'coq') return 'Coq';
+        if(input === 'isabelle') return 'Isabelle';
+        if(input === 'agda') return 'Agda';
+        return 'Lean';
+      }
+
+      function tryParseJson(text){
+        if(typeof text !== 'string') return null;
+        const trimmed = text.trim();
+        if(!trimmed) return null;
+        if(!/^[\[{]/.test(trimmed)) return null;
+        try{
+          return JSON.parse(trimmed);
+        }catch(err){
+          return null;
+        }
+      }
+
+      function setStatus(text, isError){
+        statusEl.textContent = text;
+        statusEl.classList.toggle('error', !!isError);
+      }
+
+      function setLeanPanelActive(active){
+        leanPanelEl.classList.toggle('active', !!active);
+      }
+
+      function summarizeLeanGoals(text){
+        const trimmed = String(text || '').trim();
+        if(!trimmed){
+          return { ok: false, summary: 'No goals text provided.' };
+        }
+        const lower = trimmed.toLowerCase();
+        if(lower.includes('no goals') || lower.includes('no goal')){
+          return { ok: true, summary: 'Goals: 0 (Lean reports no goals).' };
+        }
+        const goalMarks = (trimmed.match(/⊢/g) || []).length;
+        const lines = trimmed.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+        const head = lines.slice(0, 4).join(' | ');
+        const countNote = goalMarks ? 'Goals detected: ' + goalMarks : 'Goals detected: unknown';
+        return { ok: true, summary: head ? countNote + ' | Summary: ' + head : countNote };
+      }
+
+      function renderLeanGoals(text){
+        leanGoalsTextEl.textContent = text || '';
+        const result = summarizeLeanGoals(text);
+        leanGoalsSummaryEl.textContent = result.summary;
+        leanGoalsSummaryEl.classList.toggle('error', !result.ok);
+      }
+
+      async function loadDraft(){
+        const fallback = {
+          title: '',
+          language: 'Lean',
+          fileName: 'Main.lean',
+          code: '',
+          goalsText: ''
+        };
+        if(!theoremDraftStore || typeof theoremDraftStore.read !== 'function'){
+          return fallback;
+        }
+        try{
+          const record = await theoremDraftStore.read();
+          if(!record || typeof record !== 'object'){
+            return fallback;
+          }
+          const proof = record.proof && typeof record.proof === 'object' ? record.proof : null;
+          const language = resolveLanguage(proof && proof.language ? proof.language : 'Lean');
+          const config = languageConfig[language] || languageConfig.Lean;
+          return {
+            title: record.title && typeof record.title.text === 'string' ? record.title.text.trim() : '',
+            language,
+            fileName: proof && typeof proof.fileName === 'string' && proof.fileName.trim()
+              ? proof.fileName.trim()
+              : config.fileName,
+            code: proof && typeof proof.code === 'string' ? proof.code : '',
+            goalsText: proof && typeof proof.goalsText === 'string' ? proof.goalsText : ''
+          };
+        }catch(err){
+          return fallback;
+        }
+      }
+
+      function setInitialOutputMessage(draft){
+        const lines = [
+          'Runner initialized.',
+          'Language: ' + draft.language,
+          'File: ' + draft.fileName,
+          'Mode: read-only execution snapshot'
+        ];
+        if(draft.title){
+          lines.push('Post title: ' + draft.title);
+        }
+        if(draft.language === 'Coq'){
+          lines.push('Run sends code to /api/coq-check.');
+        }else if(draft.language === 'Lean'){
+          lines.push('Run sends code to /api/lean-check.');
+        }else{
+          lines.push('Runner is disabled for this language.');
+        }
+        lines.push('Shortcut: Ctrl/Cmd + Enter');
+        outputEl.textContent = lines.join('\n');
+      }
+
+      async function requestLeanServer(code){
+        let response = null;
+        try{
+          response = await fetch('/api/lean-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+          });
+        }catch(err){
+          return {
+            ok: false,
+            status: 'network',
+            error: err && err.message ? err.message : String(err),
+            httpStatus: 0
+          };
+        }
+
+        let raw = '';
+        try{
+          raw = await response.text();
+        }catch(err){
+          raw = '';
+        }
+
+        const parsed = tryParseJson(raw);
+        if(!parsed || typeof parsed !== 'object'){
+          return {
+            ok: false,
+            status: 'error',
+            error: raw || 'Invalid response from server.',
+            httpStatus: response.status
+          };
+        }
+
+        return {
+          ...parsed,
+          httpStatus: response.status,
+          httpOk: response.ok
+        };
+      }
+
+      async function requestCoqServer(code){
+        let response = null;
+        try{
+          response = await fetch('/api/coq-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+          });
+        }catch(err){
+          return {
+            ok: false,
+            status: 'network',
+            error: err && err.message ? err.message : String(err),
+            httpStatus: 0
+          };
+        }
+
+        let raw = '';
+        try{
+          raw = await response.text();
+        }catch(err){
+          raw = '';
+        }
+
+        const parsed = tryParseJson(raw);
+        if(!parsed || typeof parsed !== 'object'){
+          return {
+            ok: false,
+            status: 'error',
+            error: raw || 'Invalid response from server.',
+            httpStatus: response.status
+          };
+        }
+
+        return {
+          ...parsed,
+          httpStatus: response.status,
+          httpOk: response.ok
+        };
+      }
+
+      function formatLeanServerResult(result, closure){
+        const lines = ['[Lean Server]'];
+        if(result.status){
+          lines.push('Status: ' + (result.ok ? result.status + ' (ok)' : result.status));
+        }
+        if(typeof result.httpStatus === 'number' && result.httpStatus > 0 && result.httpStatus !== 200){
+          lines.push('HTTP: ' + result.httpStatus);
+        }
+        if(typeof result.exitCode === 'number'){
+          lines.push('Exit code: ' + result.exitCode);
+        }
+        if(typeof result.durationMs === 'number'){
+          lines.push('Duration: ' + result.durationMs + 'ms');
+        }
+        if(result.error){
+          lines.push('Error: ' + result.error);
+        }
+        if(closure && closure.proofState === 'NY'){
+          lines.push('Local check: contains ' + closure.closer + ' (NY).');
+        }else if(closure){
+          lines.push('Local check: no sorry/admit/axiom/constant detected.');
+        }
+        if(result.stdout){
+          lines.push('stdout:\n' + result.stdout);
+        }
+        if(result.stderr){
+          lines.push('stderr:\n' + result.stderr);
+        }
+        return lines.join('\n');
+      }
+
+      function formatCoqServerResult(result, closure){
+        const lines = ['[Coq Server]'];
+        if(result.status){
+          lines.push('Status: ' + (result.ok ? result.status + ' (ok)' : result.status));
+        }
+        if(typeof result.httpStatus === 'number' && result.httpStatus > 0 && result.httpStatus !== 200){
+          lines.push('HTTP: ' + result.httpStatus);
+        }
+        if(typeof result.exitCode === 'number'){
+          lines.push('Exit code: ' + result.exitCode);
+        }
+        if(typeof result.durationMs === 'number'){
+          lines.push('Duration: ' + result.durationMs + 'ms');
+        }
+        if(result.error){
+          lines.push('Error: ' + result.error);
+        }
+        if(closure && closure.proofState === 'NY'){
+          lines.push('Local check: contains ' + closure.closer + ' (NY).');
+        }else if(closure){
+          lines.push('Local check: no Admitted/Conjecture detected.');
+        }
+        if(result.stdout){
+          lines.push('stdout:\n' + result.stdout);
+        }
+        if(result.stderr){
+          lines.push('stderr:\n' + result.stderr);
+        }
+        return lines.join('\n');
+      }
+
+      function stripLeanCommentsAndStrings(input){
+        let output = '';
+        let i = 0;
+        let blockCommentDepth = 0;
+        let inString = false;
+        let inLineComment = false;
+
+        while(i < input.length){
+          const ch = input[i];
+          const next = input[i + 1];
+
+          if(inString){
+            if(ch === '\\'){
+              i += 2;
+              continue;
+            }
+            if(ch === '"'){
+              inString = false;
+            }
+            i += 1;
+            continue;
+          }
+
+          if(inLineComment){
+            if(ch === '\n' || ch === '\r'){
+              inLineComment = false;
+              output += ch;
+            }
+            i += 1;
+            continue;
+          }
+
+          if(blockCommentDepth > 0){
+            if(ch === '/' && next === '-'){
+              blockCommentDepth += 1;
+              i += 2;
+              continue;
+            }
+            if(ch === '-' && next === '/'){
+              blockCommentDepth -= 1;
+              i += 2;
+              continue;
+            }
+            i += 1;
+            continue;
+          }
+
+          if(ch === '"'){
+            inString = true;
+            i += 1;
+            continue;
+          }
+          if(ch === '-' && next === '-'){
+            inLineComment = true;
+            i += 2;
+            continue;
+          }
+          if(ch === '/' && next === '-'){
+            blockCommentDepth = 1;
+            i += 2;
+            continue;
+          }
+
+          output += ch;
+          i += 1;
+        }
+
+        return output;
+      }
+
+      function analyzeLeanClosure(code){
+        if(!code || typeof code !== 'string'){
+          return { proofState: 'NN', closer: '', reason: 'Code is empty' };
+        }
+        const normalized = stripLeanCommentsAndStrings(code).trim();
+        if(!normalized){
+          return { proofState: 'NN', closer: '', reason: 'Code is empty' };
+        }
+        if(/\b(sorry|admit)\b/.test(normalized)){
+          return { proofState: 'NY', closer: 'sorry/admit' };
+        }
+        if(/(^|\n)\s*(axiom|constant)\b/.test(normalized)){
+          return { proofState: 'NY', closer: 'axiom/constant' };
+        }
+        return { proofState: 'YY', closer: 'Lean checked' };
+      }
+
+      function stripCoqCommentsAndStrings(input){
+        let output = '';
+        let i = 0;
+        let commentDepth = 0;
+        let inString = false;
+
+        while(i < input.length){
+          const ch = input[i];
+          const next = input[i + 1];
+
+          if(inString){
+            if(ch === '\\'){
+              i += 2;
+              continue;
+            }
+            if(ch === '"'){
+              inString = false;
+            }
+            i += 1;
+            continue;
+          }
+
+          if(commentDepth > 0){
+            if(ch === '(' && next === '*'){
+              commentDepth += 1;
+              i += 2;
+              continue;
+            }
+            if(ch === '*' && next === ')'){
+              commentDepth -= 1;
+              i += 2;
+              continue;
+            }
+            i += 1;
+            continue;
+          }
+
+          if(ch === '"'){
+            inString = true;
+            i += 1;
+            continue;
+          }
+          if(ch === '(' && next === '*'){
+            commentDepth = 1;
+            i += 2;
+            continue;
+          }
+
+          output += ch;
+          i += 1;
+        }
+
+        return output;
+      }
+
+      function isConjectureTail(normalized){
+        const matches = Array.from(normalized.matchAll(/\bConjecture\b/g));
+        if(matches.length === 0) return false;
+        const last = matches[matches.length - 1];
+        const idx = typeof last.index === 'number' ? last.index : -1;
+        if(idx < 0) return false;
+        const tail = normalized.slice(idx).trim();
+        if(!tail.endsWith('.')) return false;
+        const dotCount = (tail.match(/\./g) || []).length;
+        return dotCount === 1;
+      }
+
+      function analyzeCoqClosure(code){
+        if(!code || typeof code !== 'string'){
+          return { proofState: 'NN', reason: 'The proof must end with Qed. / Defined. / Admitted. / Conjecture.' };
+        }
+        const normalized = stripCoqCommentsAndStrings(code).trim();
+        if(!normalized){
+          return { proofState: 'NN', reason: 'The proof must end with Qed. / Defined. / Admitted. / Conjecture.' };
+        }
+        if(/Admitted\.\s*$/.test(normalized)){
+          return { proofState: 'NY', closer: 'Admitted.' };
+        }
+        if(isConjectureTail(normalized)){
+          return { proofState: 'NY', closer: 'Conjecture.' };
+        }
+        if(/Defined\.\s*$/.test(normalized)){
+          return { proofState: 'YY', closer: 'Defined.' };
+        }
+        if(/Qed\.\s*$/.test(normalized)){
+          return { proofState: 'YY', closer: 'Qed.' };
+        }
+        return { proofState: 'NN', reason: 'The proof must end with Qed. / Defined. / Admitted. / Conjecture.' };
+      }
+
+      async function runLeanProof(code){
+        const closure = analyzeLeanClosure(code);
+        if(closure.proofState === 'NN'){
+          setStatus('Lean validation failed', true);
+          outputEl.textContent = '[Lean Validation]\n' + (closure.reason || 'Lean code is empty');
+          return;
+        }
+
+        setStatus('Validating Lean proof...');
+        outputEl.textContent = '[Lean Server]\nSending code to server...';
+        const serverResult = await requestLeanServer(code);
+        outputEl.textContent = formatLeanServerResult(serverResult, closure);
+
+        if(serverResult.ok){
+          if(closure.proofState === 'NY'){
+            setStatus('Lean proof accepted (NY)');
+          }else{
+            setStatus('Lean validated');
+          }
+          return;
+        }
+
+        setStatus('Lean validation failed', true);
+      }
+
+      async function runCoqProof(code){
+        const closure = analyzeCoqClosure(code);
+        if(closure.proofState === 'NN'){
+          setStatus('Coq validation failed', true);
+          outputEl.textContent = '[Coq Validation]\n' + closure.reason;
+          return;
+        }
+
+        setStatus('Validating Coq proof...');
+        outputEl.textContent = '[Coq Server]\nSending code to server...';
+        const serverResult = await requestCoqServer(code);
+        const serverText = formatCoqServerResult(serverResult, closure);
+
+        if(!serverResult.ok){
+          setStatus('Coq validation failed', true);
+          outputEl.textContent = serverText;
+          return;
+        }
+
+        if(closure.proofState === 'NY'){
+          setStatus('Coq proof accepted (NY)');
+          outputEl.textContent = serverText + '\n\n[Coq Validation]\nProof ends with ' + closure.closer + ' (NY).';
+          return;
+        }
+
+        setStatus('Coq proof verified (YY)');
+        outputEl.textContent = serverText + '\n\n[Coq Validation]\nProof ends with ' + closure.closer + ' (YY).';
+      }
+
+      async function runProof(){
+        if(running) return;
+        const code = codeEl.value || '';
+        if(!code.trim()){
+          setStatus('No proof code', true);
+          outputEl.textContent = '[Runner]\nNo saved proof code was found.';
+          return;
+        }
+
+        if(currentLanguage !== 'Lean' && currentLanguage !== 'Coq'){
+          setStatus('Runner unavailable', true);
+          outputEl.textContent = '[Runner]\nThis language is not supported in the read-only runner yet.';
+          return;
+        }
+
+        running = true;
+        runBtn.disabled = true;
+        try{
+          if(currentLanguage === 'Lean'){
+            await runLeanProof(code);
+          }else{
+            await runCoqProof(code);
+          }
+        }finally{
+          running = false;
+          runBtn.disabled = false;
+        }
+      }
+
+      async function boot(){
+        const draft = await loadDraft();
+        currentLanguage = draft.language;
+        const config = languageConfig[currentLanguage] || languageConfig.Lean;
+
+        langBadgeEl.textContent = currentLanguage;
+        fileNameEl.textContent = draft.fileName || config.fileName;
+        titleStripEl.textContent = draft.title || 'Untitled';
+        codeEl.value = draft.code || '';
+
+        if(currentLanguage === 'Lean'){
+          outputTitleEl.textContent = 'Lean 4';
+          outputHintEl.textContent = 'Read-only + Ctrl/Cmd + Enter to run';
+          setLeanPanelActive(true);
+          renderLeanGoals(draft.goalsText || '');
+        }else{
+          outputTitleEl.textContent = 'Server Output';
+          outputHintEl.textContent = 'Read-only + Ctrl/Cmd + Enter to run';
+          setLeanPanelActive(false);
+        }
+
+        setInitialOutputMessage(draft);
+        setStatus('Ready');
+      }
+
+      runBtn.addEventListener('click', ()=>{
+        runProof();
+      });
+
+      backBtn.addEventListener('click', ()=>{
+        window.location.href = 'post-preview.html';
+      });
+
+      codeEl.addEventListener('keydown', (event)=>{
+        const isRunShortcut = (event.ctrlKey || event.metaKey) && event.key === 'Enter';
+        if(!isRunShortcut) return;
+        event.preventDefault();
+        runProof();
+      });
+
+      boot();
+    })();
+  </script>
+</body>
+</html>
