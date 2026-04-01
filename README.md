@@ -85,3 +85,35 @@ API routes used by BlueMode:
 - `POST /api/blue-auth-signup`
 - `POST /api/blue-auth-login`
 - `POST /api/blue-auth-logout`
+
+## Helper API
+
+The main app can proxy helper routes to a dedicated service.
+
+Required environment variables on the main app:
+
+- `HELPER_API_BASE_URL`
+- `HELPER_API_KEY` (optional)
+- `HELPER_API_TIMEOUT_MS` (optional)
+
+Proxy routes:
+
+- `GET /api/helper/info`
+- `POST /api/helper/check`
+- `POST /api/helper/submit`
+- `POST /api/helper/convert`
+- `GET /api/helper/jobs`
+- `GET /api/helper/jobs/:id`
+- `GET /api/helper/jobs/:id/result`
+- `DELETE /api/helper/jobs/:id`
+
+Railway helper service files:
+
+- `services/railway-helper/package.json`
+- `services/railway-helper/Dockerfile`
+- `services/railway-helper/index.js`
+- `services/railway-helper/README.md`
+- `services/railway-helper/.env.example`
+- `services/railway-helper/ADAPTER_PROTOCOL.md`
+- `services/railway-helper/EXACT_EXPORT_SOURCES.md`
+- `supabase/proof_helper.sql`

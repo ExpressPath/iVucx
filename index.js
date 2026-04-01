@@ -38,6 +38,11 @@ const COQ_ARGS = splitArgs(process.env.COQ_ARGS || '');
 const COQ_WORKDIR = process.env.COQ_WORKDIR
   ? path.resolve(process.env.COQ_WORKDIR)
   : '';
+const HELPER_API_BASE_URL = String(process.env.HELPER_API_BASE_URL || '')
+  .trim()
+  .replace(/\/+$/, '');
+const HELPER_API_KEY = String(process.env.HELPER_API_KEY || '').trim();
+const HELPER_API_TIMEOUT_MS = Number(process.env.HELPER_API_TIMEOUT_MS || 180000);
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '512kb' }));
@@ -187,6 +192,66 @@ function truncateOutput(text, limit = MAX_OUTPUT_CHARS) {
     (value.length - limit) +
     ' chars]'
   );
+}
+
+function isHelperConfigured() {
+  return !!HELPER_API_BASE_URL;
+}
+
+async function proxyHelperRequest(req, res) {
+  if (!isHelperConfigured()) {
+    res.status(503).json({
+      ok: false,
+      status: 'unconfigured',
+      error: 'Helper API is not configured on this server.'
+    });
+    return;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, HELPER_API_TIMEOUT_MS);
+
+  const headers = {
+    Accept: 'application/json'
+  };
+  if (HELPER_API_KEY) {
+    headers.Authorization = `Bearer ${HELPER_API_KEY}`;
+  }
+
+  let body;
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify(req.body || {});
+  }
+
+  try {
+    const response = await fetch(HELPER_API_BASE_URL + req.originalUrl, {
+      method: req.method,
+      headers,
+      body,
+      signal: controller.signal
+    });
+    const text = await response.text();
+    const contentType = response.headers.get('content-type') || 'application/json; charset=utf-8';
+    clearTimeout(timer);
+
+    res.status(response.status);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', contentType);
+    res.send(text);
+  } catch (err) {
+    clearTimeout(timer);
+    const timedOut = err && (err.name === 'AbortError' || err.code === 'ABORT_ERR');
+    res.status(timedOut ? 504 : 502).json({
+      ok: false,
+      status: timedOut ? 'timeout' : 'error',
+      error: timedOut
+        ? 'Helper API request timed out.'
+        : (err && err.message ? err.message : String(err))
+    });
+  }
 }
 
 function runLeanProcess(cmd, args, options) {
@@ -376,6 +441,16 @@ app.post('/api/coq-check', async (req, res) => {
     });
   }
 });
+
+app.get('/api/helper/info', wrap(proxyHelperRequest));
+app.post('/api/helper/check', wrap(proxyHelperRequest));
+app.post('/api/helper/submit', wrap(proxyHelperRequest));
+app.post('/api/helper/convert', wrap(proxyHelperRequest));
+app.post('/api/helper/jobs', wrap(proxyHelperRequest));
+app.get('/api/helper/jobs', wrap(proxyHelperRequest));
+app.get('/api/helper/jobs/:id', wrap(proxyHelperRequest));
+app.get('/api/helper/jobs/:id/result', wrap(proxyHelperRequest));
+app.delete('/api/helper/jobs/:id', wrap(proxyHelperRequest));
 
 app.get('/api/jscoq/*', wrap((req, res) => {
   req.query = req.query || {};

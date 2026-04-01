@@ -136,13 +136,48 @@
       border-radius:999px;
       font-size:22px;
       line-height:1;
-      cursor:default;
-      transition:border-color .18s ease, background-color .18s ease, color .18s ease;
+      cursor:pointer;
+      transition:border-color .18s ease, background-color .18s ease, color .18s ease, transform .12s ease, opacity .18s ease;
     }
     .future-btn:hover{
       border-color:rgba(255,255,255,0.16);
       background:rgba(255,255,255,0.06);
       color:#f0f6fc;
+      transform:translateY(-1px);
+    }
+    .future-btn:disabled{
+      cursor:progress;
+      opacity:.72;
+      transform:none;
+    }
+    .helper-status{
+      min-width:180px;
+      max-width:320px;
+      padding:9px 12px;
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:14px;
+      background:rgba(255,255,255,0.04);
+      color:rgba(230,237,243,0.82);
+      font-size:12px;
+      line-height:1.35;
+      letter-spacing:.01em;
+    }
+    .helper-status[hidden]{
+      display:none;
+    }
+    .helper-status.pending{
+      border-color:rgba(255,255,255,0.14);
+      color:#f8fafc;
+    }
+    .helper-status.success{
+      border-color:rgba(63,185,80,0.45);
+      color:#8ef0a4;
+      background:rgba(63,185,80,0.08);
+    }
+    .helper-status.error{
+      border-color:rgba(248,81,73,0.42);
+      color:#ffb4ad;
+      background:rgba(248,81,73,0.08);
     }
     .layout{
       flex:1;
@@ -428,6 +463,8 @@
       }
       .topbar-actions{
         gap:10px;
+        flex-wrap:wrap;
+        justify-content:flex-end;
       }
       .source-meta{
         flex-direction:column;
@@ -446,6 +483,11 @@
       }
       .topbar-actions{
         justify-content:space-between;
+      }
+      .helper-status{
+        min-width:0;
+        width:100%;
+        order:3;
       }
       .title{
         font-size:16px;
@@ -483,7 +525,8 @@
         <span class="view-divider" aria-hidden="true"></span>
         <button class="view-tab" id="sourceTab" type="button" role="tab" aria-selected="false">Source</button>
       </div>
-      <button class="future-btn" id="futureBtn" type="button" aria-label="Coming soon" title="Coming soon">→</button>
+      <button class="future-btn" id="futureBtn" type="button" aria-label="Continue" title="Submit proof to helper server">→</button>
+      <div class="helper-status" id="helperStatus" hidden></div>
     </div>
   </header>
   <main class="layout">
@@ -526,6 +569,8 @@
       const backBtn = document.getElementById('backBtn');
       const slideTabEl = document.getElementById('slideTab');
       const sourceTabEl = document.getElementById('sourceTab');
+      const futureBtn = document.getElementById('futureBtn');
+      const helperStatusEl = document.getElementById('helperStatus');
       const sourceFileEl = document.getElementById('sourceFile');
       const sourceLanguageEl = document.getElementById('sourceLanguage');
       const sourceGutterEl = document.getElementById('sourceGutter');
@@ -539,6 +584,7 @@
       let currentFileName = 'Main.lean';
       let touchStartX = 0;
       let touchStartY = 0;
+      let helperBusy = false;
 
       function resolveLanguage(value){
         const input = String(value || '').trim().toLowerCase();
@@ -558,6 +604,218 @@
 
       function goToProofEditor(){
         window.location.href = 'editor.html?lang=' + encodeURIComponent(currentLanguage.toLowerCase());
+      }
+
+      function tryParseJson(text){
+        if(typeof text !== 'string') return null;
+        const trimmed = text.trim();
+        if(!trimmed || !/^[\\[{]/.test(trimmed)) return null;
+        try{
+          return JSON.parse(trimmed);
+        }catch(err){
+          return null;
+        }
+      }
+
+      function delay(ms){
+        return new Promise((resolve)=>setTimeout(resolve, ms));
+      }
+
+      function setFutureBusy(busy){
+        helperBusy = !!busy;
+        if(!futureBtn) return;
+        futureBtn.disabled = helperBusy;
+        futureBtn.setAttribute('aria-busy', helperBusy ? 'true' : 'false');
+        futureBtn.textContent = helperBusy ? '...' : '→';
+      }
+
+      function setHelperStatus(message, tone){
+        if(!helperStatusEl) return;
+        const text = String(message || '').trim();
+        helperStatusEl.hidden = !text;
+        helperStatusEl.classList.remove('pending', 'success', 'error');
+        if(!text){
+          helperStatusEl.textContent = '';
+          return;
+        }
+        helperStatusEl.textContent = text;
+        if(tone === 'success' || tone === 'error'){
+          helperStatusEl.classList.add(tone);
+        }else{
+          helperStatusEl.classList.add('pending');
+        }
+      }
+
+      function extractHelperError(payload, fallback){
+        if(payload && typeof payload.error === 'string' && payload.error.trim()){
+          return payload.error.trim();
+        }
+        if(payload && payload.job && payload.job.error && typeof payload.job.error.message === 'string'){
+          return payload.job.error.message;
+        }
+        if(payload && payload.details && typeof payload.details.error === 'string'){
+          return payload.details.error;
+        }
+        return fallback || 'Helper request failed.';
+      }
+
+      async function persistHelperResult(patch){
+        if(!store || typeof store.patch !== 'function'){
+          return;
+        }
+        await store.patch({
+          helper: {
+            lambdaConversion: patch
+          }
+        });
+      }
+
+      async function fetchHelperJob(jobId){
+        const response = await fetch('/api/helper/jobs/' + encodeURIComponent(jobId), {
+          method: 'GET',
+          cache: 'no-store',
+          credentials: 'same-origin'
+        });
+        const raw = await response.text();
+        const payload = tryParseJson(raw);
+        if(!payload || typeof payload !== 'object'){
+          throw new Error(raw || 'Invalid job response from helper proxy.');
+        }
+        if(!response.ok){
+          throw new Error(extractHelperError(payload, 'Failed to load helper job.'));
+        }
+        return payload;
+      }
+
+      async function waitForHelperJob(jobId){
+        const startedAt = Date.now();
+        while(Date.now() - startedAt < 180000){
+          const payload = await fetchHelperJob(jobId);
+          const job = payload && payload.job && typeof payload.job === 'object' ? payload.job : null;
+          if(!job){
+            throw new Error('Helper job payload is missing.');
+          }
+          if(job.status === 'succeeded'){
+            return job.result || null;
+          }
+          if(job.status === 'failed'){
+            throw new Error(extractHelperError(payload, 'Helper job failed.'));
+          }
+          await delay(1200);
+        }
+        throw new Error('Timed out while waiting for helper conversion.');
+      }
+
+      function getProofPayload(draft){
+        const proof = draft && draft.proof && typeof draft.proof === 'object'
+          ? draft.proof
+          : null;
+        if(!proof || typeof proof.code !== 'string' || !proof.code.trim()){
+          return null;
+        }
+        const title = draft && draft.title && typeof draft.title.text === 'string'
+          ? draft.title.text.trim()
+          : '';
+        return {
+          title,
+          language: resolveLanguage(proof.language || currentLanguage),
+          fileName: typeof proof.fileName === 'string' && proof.fileName.trim()
+            ? proof.fileName.trim()
+            : currentFileName,
+          code: proof.code
+        };
+      }
+
+      async function runHelperConversion(){
+        if(helperBusy) return;
+
+        const draft = store && typeof store.read === 'function'
+          ? await store.read()
+          : null;
+        const proofPayload = getProofPayload(draft);
+
+        if(!proofPayload){
+          setHelperStatus('No proof code is saved yet.', 'error');
+          return;
+        }
+
+        const requestedAt = new Date().toISOString();
+        setFutureBusy(true);
+        setHelperStatus('Loading...', 'pending');
+
+        try{
+          const response = await fetch('/api/helper/submit', {
+            method: 'POST',
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              title: proofPayload.title,
+              language: proofPayload.language,
+              fileName: proofPayload.fileName,
+              code: proofPayload.code,
+              verify: true,
+              async: true,
+              format: 'typed-lambda-v1'
+            })
+          });
+          const raw = await response.text();
+          const payload = tryParseJson(raw);
+          if(!payload || typeof payload !== 'object'){
+            throw new Error(raw || 'Invalid response from helper proxy.');
+          }
+
+          if(response.status === 202 && payload.job && payload.job.id){
+            setHelperStatus('Submitting on helper server...', 'pending');
+            const result = await waitForHelperJob(payload.job.id);
+            await persistHelperResult({
+              status: 'succeeded',
+              requestedAt,
+              completedAt: new Date().toISOString(),
+              jobId: payload.job.id,
+              language: proofPayload.language,
+              fileName: proofPayload.fileName,
+              title: proofPayload.title,
+              result
+            });
+            setHelperStatus('Problem saved on helper server.', 'success');
+            return;
+          }
+
+          if(response.ok && payload.result){
+            await persistHelperResult({
+              status: 'succeeded',
+              requestedAt,
+              completedAt: new Date().toISOString(),
+              jobId: null,
+              language: proofPayload.language,
+              fileName: proofPayload.fileName,
+              title: proofPayload.title,
+              result: payload.result
+            });
+            setHelperStatus('Problem saved on helper server.', 'success');
+            return;
+          }
+
+          throw new Error(extractHelperError(payload, 'Helper conversion failed.'));
+        }catch(err){
+          const message = err && err.message ? err.message : String(err);
+          await persistHelperResult({
+            status: 'failed',
+            requestedAt,
+            completedAt: new Date().toISOString(),
+            jobId: null,
+            language: proofPayload.language,
+            fileName: proofPayload.fileName,
+            title: proofPayload.title,
+            error: message
+          });
+          setHelperStatus(message, 'error');
+        }finally{
+          setFutureBusy(false);
+        }
       }
 
       function setView(view){
@@ -885,10 +1143,23 @@
         const record = draft && draft.summarySlide && draft.summarySlide.record && typeof draft.summarySlide.record === 'object'
           ? draft.summarySlide.record
           : null;
+        const helperResult = draft
+          && draft.helper
+          && draft.helper.lambdaConversion
+          && typeof draft.helper.lambdaConversion === 'object'
+          ? draft.helper.lambdaConversion
+          : null;
         slides = normalizeSlides(record);
         slideIndex = resolveInitialSlideIndex(record, slides);
         renderCurrentSlide();
         setView('slide');
+        if(helperResult){
+          if(helperResult.status === 'succeeded'){
+            setHelperStatus('Saved helper result is available.', 'success');
+          }else if(helperResult.status === 'failed' && helperResult.error){
+            setHelperStatus(helperResult.error, 'error');
+          }
+        }
       }
 
       backBtn.addEventListener('click', ()=>{
@@ -900,6 +1171,11 @@
       sourceTabEl.addEventListener('click', ()=>{
         setView('source');
       });
+      if(futureBtn){
+        futureBtn.addEventListener('click', ()=>{
+          runHelperConversion();
+        });
+      }
       document.addEventListener('keydown', (event)=>{
         if(currentView !== 'slide') return;
         if(event.key === 'ArrowLeft'){
