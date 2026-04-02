@@ -1,8 +1,4 @@
 import express from 'express';
-import { spawn } from 'child_process';
-import fs from 'fs/promises';
-import fsSync from 'fs';
-import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -13,446 +9,65 @@ import checkLogin from './api/check-login.js';
 import cookieConsent from './api/cookie-consent.js';
 import jscoqProxy from './api/jscoq-proxy.js';
 import suggest from './api/suggest.js';
+import {
+  isExecutionConfigured as isRemoteExecutionConfigured,
+  proxyCompositeHelperInfo,
+  proxyDistributedCheck,
+  proxyDistributedHelperOperation,
+  proxyExecutionApiRequest,
+  proxyHelperRequest as proxyHelperRouteRequest
+} from './lib/helper-proxy.js';
+import { sendProofCheckResponse } from './lib/proof-check.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-
 const PORT = Number(process.env.PORT || 3000);
-const MAX_CODE_BYTES = Number(process.env.LEAN_MAX_CODE_BYTES || 200000);
-const MAX_OUTPUT_CHARS = Number(process.env.LEAN_MAX_OUTPUT_CHARS || 200000);
-const LEAN_TIMEOUT_MS = Number(process.env.LEAN_TIMEOUT_MS || 15000);
-const LEAN_CMD_RAW = process.env.LEAN_CMD || 'lean';
-const LEAN_CMD = resolveLeanCommand(LEAN_CMD_RAW);
-const LEAN_ARGS = splitArgs(process.env.LEAN_ARGS || '');
-const LEAN_WORKDIR = process.env.LEAN_WORKDIR
-  ? path.resolve(process.env.LEAN_WORKDIR)
-  : '';
-const COQ_MAX_CODE_BYTES = Number(process.env.COQ_MAX_CODE_BYTES || 200000);
-const COQ_MAX_OUTPUT_CHARS = Number(process.env.COQ_MAX_OUTPUT_CHARS || 200000);
-const COQ_TIMEOUT_MS = Number(process.env.COQ_TIMEOUT_MS || 15000);
-const COQ_CMD_RAW = process.env.COQ_CMD || 'coqc';
-const COQ_CMD = resolveCoqCommand(COQ_CMD_RAW);
-const COQ_ARGS = splitArgs(process.env.COQ_ARGS || '');
-const COQ_WORKDIR = process.env.COQ_WORKDIR
-  ? path.resolve(process.env.COQ_WORKDIR)
-  : '';
-const HELPER_API_BASE_URL = String(
-  process.env.HELPER_API_BASE_URL || 'https://nodejs-production-e71bc.up.railway.app/'
-)
-  .trim()
-  .replace(/\/+$/, '');
-const HELPER_API_KEY = String(process.env.HELPER_API_KEY || '').trim();
-const HELPER_API_TIMEOUT_MS = Number(process.env.HELPER_API_TIMEOUT_MS || 180000);
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '512kb' }));
 app.use(express.urlencoded({ extended: true }));
 
-function resolveLeanCommand(cmd) {
-  if (!cmd) return 'lean';
-  if (path.isAbsolute(cmd)) return cmd;
-  const elanHome = process.env.ELAN_HOME;
-  if (elanHome) {
-    const candidate = path.join(elanHome, 'bin', cmd);
-    if (fsSync.existsSync(candidate)) return candidate;
-  }
-  return cmd;
-}
-
-function resolveCoqCommand(cmd) {
-  if (!cmd) return 'coqc';
-  if (path.isAbsolute(cmd)) return cmd;
-  const coqBin = process.env.COQBIN;
-  if (coqBin) {
-    const candidate = path.join(coqBin, cmd);
-    if (fsSync.existsSync(candidate)) return candidate;
-  }
-  const opamPrefix = process.env.OPAM_SWITCH_PREFIX;
-  if (opamPrefix) {
-    const candidate = path.join(opamPrefix, 'bin', cmd);
-    if (fsSync.existsSync(candidate)) return candidate;
-  }
-  return cmd;
-}
-
-function splitArgs(value) {
-  if (!value) return [];
-  return value
-    .split(' ')
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
 function wrap(handler) {
   return async (req, res) => {
     try {
       await handler(req, res);
-    } catch (err) {
+    } catch (error) {
       if (res.headersSent) return;
       res.status(500).json({
         error: 'Server error',
-        detail: err && err.message ? err.message : String(err)
+        detail: error && error.message ? error.message : String(error)
       });
     }
   };
 }
 
-async function prepareLeanFile(code) {
-  const baseDir = LEAN_WORKDIR
-    ? LEAN_WORKDIR
-    : await fs.mkdtemp(path.join(os.tmpdir(), 'ivucx-lean-'));
-  const tmpDir = LEAN_WORKDIR ? path.join(baseDir, '.ivucx_tmp') : baseDir;
-  await fs.mkdir(tmpDir, { recursive: true });
-  const fileName =
-    'Main_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10) + '.lean';
-  const filePath = path.join(tmpDir, fileName);
-  await fs.writeFile(filePath, code, 'utf8');
-  return {
-    baseDir,
-    tmpDir,
-    filePath,
-    cleanupBase: !LEAN_WORKDIR
-  };
-}
-
-async function prepareCoqFile(code) {
-  const baseDir = COQ_WORKDIR
-    ? COQ_WORKDIR
-    : await fs.mkdtemp(path.join(os.tmpdir(), 'ivucx-coq-'));
-  const tmpDir = COQ_WORKDIR ? path.join(baseDir, '.ivucx_tmp') : baseDir;
-  await fs.mkdir(tmpDir, { recursive: true });
-  const fileName =
-    'Main_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10) + '.v';
-  const filePath = path.join(tmpDir, fileName);
-  await fs.writeFile(filePath, code, 'utf8');
-  return {
-    baseDir,
-    tmpDir,
-    filePath,
-    cleanupBase: !COQ_WORKDIR
-  };
-}
-
-async function cleanupLeanFile(info) {
-  if (!info) return;
-  try {
-    await fs.unlink(info.filePath);
-  } catch (err) {
-    // ignore
-  }
-  if (info.cleanupBase) {
-    try {
-      await fs.rm(info.baseDir, { recursive: true, force: true });
-    } catch (err) {
-      // ignore
-    }
-  }
-}
-
-async function cleanupCoqFile(info) {
-  if (!info) return;
-  if (!info.cleanupBase && info.tmpDir && info.tmpDir !== info.baseDir) {
-    try {
-      await fs.rm(info.tmpDir, { recursive: true, force: true });
-      return;
-    } catch (err) {
-      // ignore
-    }
-  }
-  const outputs = [];
-  if (info.filePath) {
-    outputs.push(info.filePath);
-    const stem = info.filePath.replace(/\.v$/i, '');
-    if (stem) {
-      outputs.push(stem + '.vo', stem + '.glob', stem + '.vos', stem + '.vok', stem + '.aux');
-    }
-  }
-  for (const filePath of outputs) {
-    try {
-      await fs.unlink(filePath);
-    } catch (err) {
-      // ignore
-    }
-  }
-  if (info.cleanupBase) {
-    try {
-      await fs.rm(info.baseDir, { recursive: true, force: true });
-    } catch (err) {
-      // ignore
-    }
-  }
-}
-
-function truncateOutput(text, limit = MAX_OUTPUT_CHARS) {
-  const value = String(text || '');
-  if (value.length <= limit) return value;
-  return (
-    value.slice(0, limit) +
-    '\n...[output truncated ' +
-    (value.length - limit) +
-    ' chars]'
-  );
-}
-
-function isHelperConfigured() {
-  return !!HELPER_API_BASE_URL;
-}
-
-async function proxyHelperRequest(req, res) {
-  if (!isHelperConfigured()) {
-    res.status(503).json({
-      ok: false,
-      status: 'unconfigured',
-      error: 'Helper API is not configured on this server.'
-    });
+app.post('/api/lean-check', wrap(async (req, res) => {
+  if (isRemoteExecutionConfigured()) {
+    await proxyExecutionApiRequest(req, res, '/api/lean-check');
     return;
   }
+  await sendProofCheckResponse('lean', req, res);
+}));
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, HELPER_API_TIMEOUT_MS);
-
-  const headers = {
-    Accept: 'application/json'
-  };
-  if (HELPER_API_KEY) {
-    headers.Authorization = `Bearer ${HELPER_API_KEY}`;
-  }
-
-  let body;
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    headers['Content-Type'] = 'application/json';
-    body = JSON.stringify(req.body || {});
-  }
-
-  try {
-    const response = await fetch(HELPER_API_BASE_URL + req.originalUrl, {
-      method: req.method,
-      headers,
-      body,
-      signal: controller.signal
-    });
-    const text = await response.text();
-    const contentType = response.headers.get('content-type') || 'application/json; charset=utf-8';
-    clearTimeout(timer);
-
-    res.status(response.status);
-    res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Content-Type', contentType);
-    res.send(text);
-  } catch (err) {
-    clearTimeout(timer);
-    const timedOut = err && (err.name === 'AbortError' || err.code === 'ABORT_ERR');
-    res.status(timedOut ? 504 : 502).json({
-      ok: false,
-      status: timedOut ? 'timeout' : 'error',
-      error: timedOut
-        ? 'Helper API request timed out.'
-        : (err && err.message ? err.message : String(err))
-    });
-  }
-}
-
-function runLeanProcess(cmd, args, options) {
-  return new Promise((resolve) => {
-    let resolved = false;
-    const finalize = (payload) => {
-      if (resolved) return;
-      resolved = true;
-      resolve(payload);
-    };
-
-    const child = spawn(cmd, args, {
-      cwd: options.cwd,
-      env: options.env || process.env
-    });
-
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-    const timeoutMs = options.timeoutMs || LEAN_TIMEOUT_MS;
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill('SIGKILL');
-    }, timeoutMs);
-
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      finalize({ error: err, stdout, stderr, timedOut });
-    });
-
-    child.on('close', (exitCode, signal) => {
-      clearTimeout(timer);
-      finalize({ exitCode, signal, stdout, stderr, timedOut });
-    });
-  });
-}
-
-app.post('/api/lean-check', async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-
-  const code = req && req.body && typeof req.body.code === 'string' ? req.body.code : '';
-  if (!code || !code.trim()) {
-    res.status(400).json({ ok: false, status: 'invalid', error: 'Lean code is required.' });
+app.post('/api/coq-check', wrap(async (req, res) => {
+  if (isRemoteExecutionConfigured()) {
+    await proxyExecutionApiRequest(req, res, '/api/coq-check');
     return;
   }
+  await sendProofCheckResponse('coq', req, res);
+}));
 
-  const size = Buffer.byteLength(code, 'utf8');
-  if (size > MAX_CODE_BYTES) {
-    res.status(413).json({
-      ok: false,
-      status: 'too_large',
-      error: 'Lean code exceeds size limit.',
-      limit: MAX_CODE_BYTES
-    });
-    return;
-  }
-
-  let info = null;
-  const startedAt = Date.now();
-
-  try {
-    info = await prepareLeanFile(code);
-    const args = [...LEAN_ARGS, info.filePath];
-    const result = await runLeanProcess(LEAN_CMD, args, {
-      cwd: LEAN_WORKDIR || info.baseDir,
-      timeoutMs: LEAN_TIMEOUT_MS
-    });
-
-    const durationMs = Date.now() - startedAt;
-    await cleanupLeanFile(info);
-
-    if (result.error) {
-      const isMissing = result.error && result.error.code === 'ENOENT';
-      const errorMessage = isMissing
-        ? 'Lean executable not found. Install Lean or set LEAN_CMD/ELAN_HOME so the server can find it.'
-        : (result.error.message || String(result.error));
-      res.status(500).json({
-        ok: false,
-        status: 'error',
-        error: errorMessage,
-        durationMs,
-        stdout: truncateOutput(result.stdout),
-        stderr: truncateOutput(result.stderr)
-      });
-      return;
-    }
-
-    const ok = !result.timedOut && result.exitCode === 0;
-    const status = result.timedOut ? 'timeout' : ok ? 'ok' : 'error';
-
-    res.status(200).json({
-      ok,
-      status,
-      exitCode: typeof result.exitCode === 'number' ? result.exitCode : null,
-      signal: result.signal || null,
-      durationMs,
-      stdout: truncateOutput(result.stdout),
-      stderr: truncateOutput(result.stderr)
-    });
-  } catch (err) {
-    await cleanupLeanFile(info);
-    res.status(500).json({
-      ok: false,
-      status: 'error',
-      error: err && err.message ? err.message : String(err)
-    });
-  }
-});
-
-app.post('/api/coq-check', async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-
-  const code = req && req.body && typeof req.body.code === 'string' ? req.body.code : '';
-  if (!code || !code.trim()) {
-    res.status(400).json({ ok: false, status: 'invalid', error: 'Coq code is required.' });
-    return;
-  }
-
-  const size = Buffer.byteLength(code, 'utf8');
-  if (size > COQ_MAX_CODE_BYTES) {
-    res.status(413).json({
-      ok: false,
-      status: 'too_large',
-      error: 'Coq code exceeds size limit.',
-      limit: COQ_MAX_CODE_BYTES
-    });
-    return;
-  }
-
-  let info = null;
-  const startedAt = Date.now();
-
-  try {
-    info = await prepareCoqFile(code);
-    const args = [...COQ_ARGS, info.filePath];
-    const result = await runLeanProcess(COQ_CMD, args, {
-      cwd: COQ_WORKDIR || info.baseDir,
-      timeoutMs: COQ_TIMEOUT_MS
-    });
-
-    const durationMs = Date.now() - startedAt;
-    await cleanupCoqFile(info);
-
-    if (result.error) {
-      const isMissing = result.error && result.error.code === 'ENOENT';
-      const errorMessage = isMissing
-        ? 'Coq executable not found. Install Coq or set COQ_CMD so the server can find it.'
-        : (result.error.message || String(result.error));
-      res.status(500).json({
-        ok: false,
-        status: 'error',
-        error: errorMessage,
-        durationMs,
-        stdout: truncateOutput(result.stdout, COQ_MAX_OUTPUT_CHARS),
-        stderr: truncateOutput(result.stderr, COQ_MAX_OUTPUT_CHARS)
-      });
-      return;
-    }
-
-    const ok = !result.timedOut && result.exitCode === 0;
-    const status = result.timedOut ? 'timeout' : ok ? 'ok' : 'error';
-
-    res.status(200).json({
-      ok,
-      status,
-      exitCode: typeof result.exitCode === 'number' ? result.exitCode : null,
-      signal: result.signal || null,
-      durationMs,
-      stdout: truncateOutput(result.stdout, COQ_MAX_OUTPUT_CHARS),
-      stderr: truncateOutput(result.stderr, COQ_MAX_OUTPUT_CHARS)
-    });
-  } catch (err) {
-    await cleanupCoqFile(info);
-    res.status(500).json({
-      ok: false,
-      status: 'error',
-      error: err && err.message ? err.message : String(err)
-    });
-  }
-});
-
-app.get('/api/helper/info', wrap(proxyHelperRequest));
-app.post('/api/helper/check', wrap(proxyHelperRequest));
-app.post('/api/helper/submit', wrap(proxyHelperRequest));
-app.post('/api/helper/convert', wrap(proxyHelperRequest));
-app.post('/api/helper/jobs', wrap(proxyHelperRequest));
-app.get('/api/helper/jobs', wrap(proxyHelperRequest));
-app.get('/api/helper/jobs/:id', wrap(proxyHelperRequest));
-app.get('/api/helper/jobs/:id/result', wrap(proxyHelperRequest));
-app.delete('/api/helper/jobs/:id', wrap(proxyHelperRequest));
+app.get('/api/helper/info', wrap((req, res) => proxyCompositeHelperInfo(req, res)));
+app.post('/api/helper/check', wrap((req, res) => proxyDistributedCheck(req, res)));
+app.post('/api/helper/submit', wrap((req, res) => proxyDistributedHelperOperation(req, res, '/api/helper/submit')));
+app.post('/api/helper/convert', wrap((req, res) => proxyDistributedHelperOperation(req, res, '/api/helper/convert')));
+app.post('/api/helper/jobs', wrap((req, res) => proxyHelperRouteRequest(req, res, '/api/helper/jobs')));
+app.get('/api/helper/jobs', wrap((req, res) => proxyHelperRouteRequest(req, res, req.originalUrl)));
+app.get('/api/helper/jobs/:id', wrap((req, res) => proxyHelperRouteRequest(req, res, req.originalUrl)));
+app.get('/api/helper/jobs/:id/result', wrap((req, res) => proxyHelperRouteRequest(req, res, req.originalUrl)));
+app.delete('/api/helper/jobs/:id', wrap((req, res) => proxyHelperRouteRequest(req, res, req.originalUrl)));
 
 app.get('/api/jscoq/*', wrap((req, res) => {
   req.query = req.query || {};
@@ -485,12 +100,12 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`[ivucx] server listening on ${host}:${port}`);
 });
 
-server.on('error', (err) => {
-  console.error('[ivucx] server failed to bind', err);
+server.on('error', (error) => {
+  console.error('[ivucx] server failed to bind', error);
 });
 
-process.on('uncaughtException', (err) => {
-  console.error('[ivucx] uncaught exception', err);
+process.on('uncaughtException', (error) => {
+  console.error('[ivucx] uncaught exception', error);
 });
 
 process.on('unhandledRejection', (reason) => {

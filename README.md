@@ -88,13 +88,31 @@ API routes used by BlueMode:
 
 ## Helper API
 
-The main app can proxy helper routes to a dedicated service.
+The current recommended topology is:
+
+- `Render` (this `iVucx` app) handles Lean/Coq proof checking locally
+- `Railway` helper handles conversion, submission, and jobs
 
 Required environment variables on the main app:
 
-- `HELPER_API_BASE_URL`
+- `HELPER_API_BASE_URL` - Railway helper for conversion, submission, and jobs
 - `HELPER_API_KEY` (optional)
 - `HELPER_API_TIMEOUT_MS` (optional)
+
+Optional only when proof execution is moved to another service later:
+
+- `EXECUTION_API_BASE_URL`
+- `EXECUTION_API_KEY`
+- `EXECUTION_API_TIMEOUT_MS`
+
+Split behavior:
+
+- `POST /api/lean-check` -> local proof check on the Render-hosted `iVucx` app
+- `POST /api/coq-check` -> local proof check on the Render-hosted `iVucx` app
+- `POST /api/helper/check` -> local proof check
+- `POST /api/helper/convert` -> local proof check + Railway conversion
+- `POST /api/helper/submit` -> local proof check + Railway submit/save
+- `GET /api/helper/info` -> Railway info plus deployment metadata
 
 Proxy routes:
 
