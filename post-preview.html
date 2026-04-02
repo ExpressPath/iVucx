@@ -585,6 +585,8 @@
       let touchStartX = 0;
       let touchStartY = 0;
       let helperBusy = false;
+      let helperInfoRequest = null;
+      let helperInfoCache = null;
 
       function resolveLanguage(value){
         const input = String(value || '').trim().toLowerCase();
@@ -657,6 +659,52 @@
           return payload.details.error;
         }
         return fallback || 'Helper request failed.';
+      }
+
+      async function fetchHelperInfo(){
+        if(helperInfoCache) return helperInfoCache;
+        if(helperInfoRequest) return helperInfoRequest;
+        helperInfoRequest = fetch('/api/helper/info', {
+          method: 'GET',
+          cache: 'no-store',
+          credentials: 'same-origin'
+        }).then(async (response)=>{
+          const raw = await response.text();
+          const payload = tryParseJson(raw);
+          if(!response.ok || !payload || typeof payload !== 'object'){
+            return null;
+          }
+          helperInfoCache = payload;
+          return payload;
+        }).catch(()=>null).finally(()=>{
+          helperInfoRequest = null;
+        });
+        return helperInfoRequest;
+      }
+
+      function resolveCicRuntime(info, language){
+        const runtimes = info && info.runtimes && typeof info.runtimes === 'object'
+          ? info.runtimes
+          : null;
+        const conversionRuntimes = runtimes && runtimes.conversionRuntimes && typeof runtimes.conversionRuntimes === 'object'
+          ? runtimes.conversionRuntimes
+          : null;
+        const cic = conversionRuntimes && conversionRuntimes.cic && typeof conversionRuntimes.cic === 'object'
+          ? conversionRuntimes.cic
+          : null;
+        const key = String(language || '').trim().toLowerCase();
+        return cic && cic[key] && typeof cic[key] === 'object'
+          ? cic[key]
+          : null;
+      }
+
+      async function resolveHelperFormat(language){
+        const info = await fetchHelperInfo();
+        const cicRuntime = resolveCicRuntime(info, language);
+        if(cicRuntime && cicRuntime.available){
+          return 'cic-v1';
+        }
+        return 'typed-lambda-v1';
       }
 
       async function persistHelperResult(patch){
@@ -740,10 +788,12 @@
         }
 
         const requestedAt = new Date().toISOString();
+        let requestedFormat = null;
         setFutureBusy(true);
         setHelperStatus('Loading...', 'pending');
 
         try{
+          requestedFormat = await resolveHelperFormat(proofPayload.language);
           const response = await fetch('/api/helper/submit', {
             method: 'POST',
             cache: 'no-store',
@@ -758,7 +808,7 @@
               code: proofPayload.code,
               verify: true,
               async: true,
-              format: 'typed-lambda-v1'
+              format: requestedFormat
             })
           });
           const raw = await response.text();
@@ -778,6 +828,7 @@
               language: proofPayload.language,
               fileName: proofPayload.fileName,
               title: proofPayload.title,
+              format: requestedFormat,
               result
             });
             setHelperStatus('Problem saved on helper server.', 'success');
@@ -793,6 +844,7 @@
               language: proofPayload.language,
               fileName: proofPayload.fileName,
               title: proofPayload.title,
+              format: requestedFormat,
               result: payload.result
             });
             setHelperStatus('Problem saved on helper server.', 'success');
@@ -810,6 +862,7 @@
             language: proofPayload.language,
             fileName: proofPayload.fileName,
             title: proofPayload.title,
+            format: requestedFormat,
             error: message
           });
           setHelperStatus(message, 'error');

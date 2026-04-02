@@ -38,7 +38,9 @@ const COQ_ARGS = splitArgs(process.env.COQ_ARGS || '');
 const COQ_WORKDIR = process.env.COQ_WORKDIR
   ? path.resolve(process.env.COQ_WORKDIR)
   : '';
-const HELPER_API_BASE_URL = String(process.env.HELPER_API_BASE_URL || '')
+const HELPER_API_BASE_URL = String(
+  process.env.HELPER_API_BASE_URL || 'https://nodejs-production-e71bc.up.railway.app/'
+)
   .trim()
   .replace(/\/+$/, '');
 const HELPER_API_KEY = String(process.env.HELPER_API_KEY || '').trim();
