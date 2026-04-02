@@ -17,6 +17,7 @@ import {
   proxyExecutionApiRequest,
   proxyHelperRequest as proxyHelperRouteRequest
 } from './lib/helper-proxy.js';
+import { sendProofConversionResponse } from './lib/proof-convert.js';
 import { sendProofCheckResponse } from './lib/proof-check.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,6 +58,10 @@ app.post('/api/coq-check', wrap(async (req, res) => {
     return;
   }
   await sendProofCheckResponse('coq', req, res);
+}));
+
+app.post('/api/proof-convert', wrap(async (req, res) => {
+  await sendProofConversionResponse(req, res);
 }));
 
 app.get('/api/helper/info', wrap((req, res) => proxyCompositeHelperInfo(req, res)));

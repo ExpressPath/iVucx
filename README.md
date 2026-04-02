@@ -90,8 +90,8 @@ API routes used by BlueMode:
 
 The current recommended topology is:
 
-- `Render` (this `iVucx` app) handles Lean/Coq proof checking locally
-- `Railway` helper handles conversion, submission, and jobs
+- `Render` (this `iVucx` app) handles Lean/Coq proof checking and heavy conversion locally
+- `Railway` helper handles lightweight helper orchestration, submission flow, and jobs
 
 Required environment variables on the main app:
 
@@ -109,9 +109,10 @@ Split behavior:
 
 - `POST /api/lean-check` -> local proof check on the Render-hosted `iVucx` app
 - `POST /api/coq-check` -> local proof check on the Render-hosted `iVucx` app
+- `POST /api/proof-convert` -> local typed-lambda / `cic-v1` conversion on the Render-hosted `iVucx` app
 - `POST /api/helper/check` -> local proof check
-- `POST /api/helper/convert` -> local proof check + Railway conversion
-- `POST /api/helper/submit` -> local proof check + Railway submit/save
+- `POST /api/helper/convert` -> local proof check + Railway helper orchestration + Render conversion
+- `POST /api/helper/submit` -> local proof check + Railway helper orchestration + Render conversion
 - `GET /api/helper/info` -> Railway info plus deployment metadata
 
 Proxy routes:
