@@ -623,6 +623,59 @@
         return new Promise((resolve)=>setTimeout(resolve, ms));
       }
 
+      function shouldRetryHelperResponse(response, payload, raw){
+        if(!response) return false;
+        if(![502, 503, 504].includes(response.status)) return false;
+        if(payload && typeof payload === 'object') return true;
+        const text = String(raw || '').trim().toLowerCase();
+        if(!text) return true;
+        return (
+          text.includes('bad gateway')
+          || text.includes('service unavailable')
+          || text.includes('hibernate-wake-error')
+          || text.includes('no-deploy')
+        );
+      }
+
+      async function postHelperSubmitWithRetry(body){
+        const attempts = [
+          { delayMs: 0, label: 'Submitting on helper server...' },
+          { delayMs: 1800, label: 'Waking server and retrying...' },
+          { delayMs: 4200, label: 'Retrying helper submission...' }
+        ];
+        let lastRaw = '';
+        let lastStatus = 0;
+
+        for(let index = 0; index < attempts.length; index += 1){
+          const attempt = attempts[index];
+          if(attempt.delayMs > 0){
+            setHelperStatus(attempt.label, 'pending');
+            await delay(attempt.delayMs);
+          }
+
+          const response = await fetch('/api/helper/submit', {
+            method: 'POST',
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          });
+
+          const raw = await response.text();
+          const payload = tryParseJson(raw);
+          lastRaw = raw;
+          lastStatus = response.status;
+
+          if(!shouldRetryHelperResponse(response, payload, raw) || index === attempts.length - 1){
+            return { response, raw, payload };
+          }
+        }
+
+        throw new Error(lastRaw || ('Helper submission failed with status ' + lastStatus + '.'));
+      }
+
       function setFutureBusy(busy){
         helperBusy = !!busy;
         if(!futureBtn) return;
@@ -794,25 +847,16 @@
 
         try{
           requestedFormat = await resolveHelperFormat(proofPayload.language);
-          const response = await fetch('/api/helper/submit', {
-            method: 'POST',
-            cache: 'no-store',
-            credentials: 'same-origin',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              title: proofPayload.title,
-              language: proofPayload.language,
-              fileName: proofPayload.fileName,
-              code: proofPayload.code,
-              verify: true,
-              async: true,
-              format: requestedFormat
-            })
-          });
-          const raw = await response.text();
-          const payload = tryParseJson(raw);
+          const body = {
+            title: proofPayload.title,
+            language: proofPayload.language,
+            fileName: proofPayload.fileName,
+            code: proofPayload.code,
+            verify: true,
+            async: true,
+            format: requestedFormat
+          };
+          const { response, raw, payload } = await postHelperSubmitWithRetry(body);
           if(!payload || typeof payload !== 'object'){
             throw new Error(raw || 'Invalid response from helper proxy.');
           }
