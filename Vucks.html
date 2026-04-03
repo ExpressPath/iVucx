@@ -2675,34 +2675,47 @@
     saveSelectionNavigation(selectionReturnScreen, 'selection');
   }
 
+  async function persistProofEditorTransition(choice){
+    await Promise.race([
+      Promise.allSettled([
+        saveSelectionNavigation('proof-editor', 'selection', choice),
+        saveSlideDraftSnapshot('open-proof-editor')
+      ]),
+      new Promise(resolve => setTimeout(resolve, 450))
+    ]);
+  }
+
   async function openEditor(choice){
-    if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
-      window.slideEditorControls.preserveInBackground();
-    }
-    setModeDraft(1, rememberedContent || compactGrayAcceptedValue, rememberedFiles);
-    const initPayload = {
-      proofAssistant: choice,
-      summary: rememberedContent || compactGrayAcceptedValue || '',
-      draft: '',
-      keepSummaryBackground: true,
-      attachedFileNames: rememberedFiles.map(file=>file.name),
-      sourceState: state,
-      createdAt: new Date().toISOString()
-    };
+    const params = new URLSearchParams({ lang: choice });
+    const targetUrl = `editor.html?${params.toString()}`;
 
     try{
-      sessionStorage.setItem('ivucxEditorInit', JSON.stringify(initPayload));
+      if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
+        window.slideEditorControls.preserveInBackground();
+      }
+      setModeDraft(1, rememberedContent || compactGrayAcceptedValue, rememberedFiles);
+      const initPayload = {
+        proofAssistant: choice,
+        summary: rememberedContent || compactGrayAcceptedValue || '',
+        draft: '',
+        keepSummaryBackground: true,
+        attachedFileNames: rememberedFiles.map(file=>file.name),
+        sourceState: state,
+        createdAt: new Date().toISOString()
+      };
+
+      try{
+        sessionStorage.setItem('ivucxEditorInit', JSON.stringify(initPayload));
+      }catch(err){
+        // ignore storage failure
+      }
+
+      await persistProofEditorTransition(choice);
     }catch(err){
-      // ignore storage failure
+      console.warn('Failed to prepare proof editor transition', err);
     }
 
-    await Promise.all([
-      saveSelectionNavigation('proof-editor', 'selection', choice),
-      saveSlideDraftSnapshot('open-proof-editor')
-    ]);
-
-    const params = new URLSearchParams({ lang: choice });
-    window.location.href = `editor.html?${params.toString()}`;
+    window.location.assign(targetUrl);
   }
 
   function handleSelection(choice){
