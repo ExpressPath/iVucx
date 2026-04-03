@@ -17,6 +17,8 @@ RUN apt-get update \
 RUN curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
     | sh -s -- -y --default-toolchain "${LEAN_TOOLCHAIN}" --no-modify-path
 
+RUN /opt/elan/bin/lean --version
+
 FROM lean-runtime AS lean4export-builder
 
 RUN apt-get update \
