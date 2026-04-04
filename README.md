@@ -90,8 +90,19 @@ API routes used by BlueMode:
 
 The current recommended topology is:
 
-- `Render` (this `iVucx` app) handles Lean/Coq proof checking and heavy conversion locally
-- `Railway` helper handles lightweight helper orchestration, submission flow, and jobs
+- `Supabase` stores durable state:
+  - auth/session data
+  - helper jobs
+  - conversion plans
+  - saved problems
+- `Railway` helper handles lightweight planning:
+  - create / update conversion plans
+  - read the right source bundle from Supabase
+  - orchestrate Render execution
+  - persist final problem rows
+- `Render` (this `iVucx` app) handles heavy execution:
+  - Lean / Coq proof checking
+  - typed-lambda / `cic-v1` conversion
 
 Required environment variables on the main app:
 
@@ -110,9 +121,9 @@ Split behavior:
 - `POST /api/lean-check` -> local proof check on the Render-hosted `iVucx` app
 - `POST /api/coq-check` -> local proof check on the Render-hosted `iVucx` app
 - `POST /api/proof-convert` -> local typed-lambda / `cic-v1` conversion on the Render-hosted `iVucx` app
-- `POST /api/helper/check` -> local proof check
-- `POST /api/helper/convert` -> local proof check + Railway helper orchestration + Render conversion
-- `POST /api/helper/submit` -> local proof check + Railway helper orchestration + Render conversion
+- `POST /api/helper/check` -> helper-routed proof check via Render
+- `POST /api/helper/convert` -> Railway creates a Supabase-backed conversion plan, then Render executes it
+- `POST /api/helper/submit` -> Railway creates a Supabase-backed submission plan, then Render executes it and Railway saves the problem row
 - `GET /api/helper/info` -> Railway info plus deployment metadata
 
 Proxy routes:

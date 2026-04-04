@@ -1,14 +1,22 @@
-﻿# Railway Helper Service
+# Railway Helper Service
 
-Railway に載せる proof helper API です。
+Railway に載せる軽量 helper API です。
 
-## Purpose
+## Role Split
 
-- Coq / Lean の検証
-- 非同期ジョブ受付
-- 再起動時の stale job 失敗化
-- 正規化アダプタ実行
-- Supabase の `public.problems` 保存
+- `Supabase`
+  - user/session などの状態
+  - helper job
+  - conversion plan
+  - saved problem
+- `Railway helper`
+  - 計算計画の作成
+  - Supabase への plan / job 保存
+  - Render 実行のオーケストレーション
+  - 完了後の `problems` 保存
+- `Render` (`iVucx` 本体)
+  - Lean / Coq proof check
+  - typed-lambda / `cic-v1` の重い変換
 
 ## Routes
 
@@ -26,47 +34,32 @@ Railway に載せる proof helper API です。
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `EXECUTION_SERVER_BASE_URL`
 
-## Proof Toolchain Env
+Optional:
 
-- `LEAN_CMD`
-- `LEAN_ARGS`
-- `LEAN_WORKDIR`
-- `COQ_CMD`
-- `COQ_ARGS`
-- `COQ_WORKDIR`
+- `HELPER_API_KEY`
+- `EXECUTION_SERVER_API_KEY`
+- `EXECUTION_SERVER_TIMEOUT_MS`
+- `EXECUTION_SERVER_CONVERT_ROUTE`
+- `EXECUTION_SERVER_LEAN_CHECK_ROUTE`
+- `EXECUTION_SERVER_COQ_CHECK_ROUTE`
+- `HELPER_MAX_CODE_BYTES`
 
-## Exact Adapter Env
+## Supabase Schema
 
-The helper server is intentionally built to call exact exporter adapters rather than faking a lossy translation.
+Run:
 
-- `HELPER_LEAN_ADAPTER_CMD`
-- `HELPER_LEAN_ADAPTER_ARGS`
-- `HELPER_COQ_ADAPTER_CMD`
-- `HELPER_COQ_ADAPTER_ARGS`
+- `supabase/proof_helper.sql`
 
-Adapter contract:
+This now creates:
 
-- Request JSON is passed on `stdin`
-- Adapter must print JSON on `stdout`
-- Successful output must include either:
-  - `term`
-  - or `result.term`
-- Optional `proofState` can override the helper's coarse fallback classification when the adapter knows the exact status.
+- `public.problems`
+- `public.helper_jobs`
+- `public.helper_conversion_plans`
 
-Suggested upstream directions:
+## Notes
 
-- Lean: elaborated `Expr` / export based adapter
-- Rocq / Coq: MetaRocq / Template-Rocq quotation based adapter
-
-Related local files:
-
-- `.env.example`
-- `ADAPTER_PROTOCOL.md`
-- `EXACT_EXPORT_SOURCES.md`
-
-## Railway Notes
-
-- Deploy this directory with its Dockerfile
-- Public service only if you want to call it directly
-- Usually this should be a private helper service and the main app should proxy to it
+- Railway helper no longer builds Lean / Coq toolchains.
+- Heavy CIC conversion is intentionally left to Render.
+- Jobs keep progress metadata so the UI can show short real-time status text.

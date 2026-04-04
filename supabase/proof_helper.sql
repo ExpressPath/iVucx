@@ -52,6 +52,51 @@ create table if not exists public.helper_jobs (
   completed_at timestamptz
 );
 
+create table if not exists public.helper_conversion_plans (
+  id uuid primary key default gen_random_uuid(),
+  helper_job_id text references public.helper_jobs(id) on delete set null,
+  operation text not null check (operation in ('convert', 'submit')),
+  status text not null check (status in ('queued', 'planning', 'ready', 'running', 'succeeded', 'failed')),
+  title text not null default '',
+  language text not null check (language in ('lean', 'coq')),
+  file_name text not null default '',
+  requested_format text not null default 'typed-lambda-v1',
+  verify boolean not null default true,
+  source_code text not null,
+  source_sha256 text not null,
+  plan jsonb not null default '{}'::jsonb,
+  progress jsonb not null default '{}'::jsonb,
+  execution_payload jsonb not null default '{}'::jsonb,
+  execution_result jsonb,
+  execution_error jsonb,
+  proof_state text check (proof_state in ('YY', 'NY', 'YN', 'NN')),
+  verification_status text check (verification_status in ('verified', 'failed', 'skipped')),
+  problem_id uuid references public.problems(id) on delete set null,
+  request_meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  started_at timestamptz,
+  completed_at timestamptz
+);
+
+alter table public.helper_jobs add column if not exists operation text default 'convert';
+alter table public.helper_jobs add column if not exists progress jsonb not null default '{}'::jsonb;
+alter table public.helper_jobs add column if not exists plan_id uuid;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'helper_jobs_plan_id_fkey'
+  ) then
+    alter table public.helper_jobs
+      add constraint helper_jobs_plan_id_fkey
+      foreign key (plan_id) references public.helper_conversion_plans(id) on delete set null;
+  end if;
+end;
+$$;
+
 create index if not exists idx_problems_language_created_at
   on public.problems(language, created_at desc);
 
@@ -60,6 +105,15 @@ create index if not exists idx_problems_source_sha256
 
 create index if not exists idx_helper_jobs_status_created_at
   on public.helper_jobs(status, created_at desc);
+
+create index if not exists idx_helper_jobs_plan_id
+  on public.helper_jobs(plan_id);
+
+create index if not exists idx_helper_conversion_plans_status_created_at
+  on public.helper_conversion_plans(status, created_at desc);
+
+create index if not exists idx_helper_conversion_plans_job_id
+  on public.helper_conversion_plans(helper_job_id);
 
 drop trigger if exists trg_problems_touch_updated_at on public.problems;
 create trigger trg_problems_touch_updated_at
@@ -71,8 +125,14 @@ create trigger trg_helper_jobs_touch_updated_at
 before update on public.helper_jobs
 for each row execute procedure public.touch_updated_at();
 
+drop trigger if exists trg_helper_conversion_plans_touch_updated_at on public.helper_conversion_plans;
+create trigger trg_helper_conversion_plans_touch_updated_at
+before update on public.helper_conversion_plans
+for each row execute procedure public.touch_updated_at();
+
 alter table public.problems enable row level security;
 alter table public.helper_jobs enable row level security;
+alter table public.helper_conversion_plans enable row level security;
 
 -- No policies are created intentionally.
 -- Service role key bypasses RLS; anon/authenticated cannot query these tables.
