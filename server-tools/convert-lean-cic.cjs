@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 const path = require('node:path');
+const readline = require('node:readline');
 const { normalizeCicExport } = require('./cic-normalizer.cjs');
 const {
   buildError,
@@ -204,48 +206,57 @@ function detectLeanDeclarations(source) {
   return declarations;
 }
 
-function parseNdjson(input) {
-  return String(input || '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
-}
-
-function buildExportState(lines) {
-  const state = {
+function createEmptyExportState() {
+  return {
     meta: null,
     names: new Map(),
     levels: new Map(),
     exprs: new Map(),
     decls: []
   };
+}
 
-  for (const line of lines) {
-    if (line.meta) {
-      state.meta = line.meta;
+function applyExportLine(state, line) {
+  if (line.meta) {
+    state.meta = line.meta;
+    return;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(line, 'in') && (line.str || line.num)) {
+    state.names.set(line.in, line);
+    return;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(line, 'il')) {
+    state.levels.set(line.il, line);
+    return;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(line, 'ie')) {
+    state.exprs.set(line.ie, line);
+    return;
+  }
+
+  const kind = ['axiom', 'def', 'opaque', 'thm', 'quot', 'inductive'].find((key) => line[key]);
+  if (kind) {
+    state.decls.push({ kind, payload: line[kind] });
+  }
+}
+
+async function buildExportStateFromNdjsonFile(ndjsonPath) {
+  const state = createEmptyExportState();
+  const input = fsSync.createReadStream(ndjsonPath, { encoding: 'utf8' });
+  const lineReader = readline.createInterface({
+    input,
+    crlfDelay: Infinity
+  });
+
+  for await (const rawLine of lineReader) {
+    const line = String(rawLine || '').trim();
+    if (!line) {
       continue;
     }
-
-    if (Object.prototype.hasOwnProperty.call(line, 'in') && (line.str || line.num)) {
-      state.names.set(line.in, line);
-      continue;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(line, 'il')) {
-      state.levels.set(line.il, line);
-      continue;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(line, 'ie')) {
-      state.exprs.set(line.ie, line);
-      continue;
-    }
-
-    const kind = ['axiom', 'def', 'opaque', 'thm', 'quot', 'inductive'].find((key) => line[key]);
-    if (kind) {
-      state.decls.push({ kind, payload: line[kind] });
-    }
+    applyExportLine(state, JSON.parse(line));
   }
 
   return state;
@@ -446,6 +457,7 @@ async function runLean4Export(sourcePath, moduleName) {
   const dir = path.dirname(sourcePath);
   const lakefileTomlPath = path.join(dir, 'lakefile.toml');
   const toolchainPath = path.join(dir, 'lean-toolchain');
+  const stdoutPath = path.join(dir, 'lean4export.ndjson');
   const command = String(process.env.IVUCX_LEAN_EXPORTER_CMD || process.env.LEAN4EXPORT_CMD || 'lake').trim();
   const exportBin = String(process.env.IVUCX_LEAN_EXPORTER_BIN || process.env.LEAN4EXPORT_BIN || 'lean4export').trim();
   const rawArgs = String(process.env.IVUCX_LEAN_EXPORTER_ARGS || process.env.LEAN4EXPORT_ARGS || 'env {bin} {module}').trim();
@@ -466,7 +478,9 @@ async function runLean4Export(sourcePath, moduleName) {
   const result = await runProcess(command, args, {
     cwd: dir,
     env,
-    timeoutMs: Number(process.env.IVUCX_CONVERTER_TIMEOUT_MS || 180000)
+    timeoutMs: Number(process.env.IVUCX_CONVERTER_TIMEOUT_MS || 180000),
+    stdoutFilePath: stdoutPath,
+    captureLimitChars: 8192
   });
 
   if (result.timedOut) {
@@ -479,7 +493,8 @@ async function runLean4Export(sourcePath, moduleName) {
   return {
     command,
     args,
-    stdout: result.stdout
+    stdoutPath,
+    stderr: result.stderr
   };
 }
 
@@ -504,8 +519,7 @@ async function main() {
 
   const moduleName = path.parse(sourcePath).name;
   const exportResult = await runLean4Export(sourcePath, moduleName);
-  const lines = parseNdjson(exportResult.stdout);
-  const state = buildExportState(lines);
+  const state = await buildExportStateFromNdjsonFile(exportResult.stdoutPath);
   const decoders = createDecoders(state);
   const declaration = findTargetDeclaration(state, decoders, moduleName, target);
 

@@ -1,7 +1,11 @@
 #!/usr/bin/env node
-const fs = require('node:fs/promises');
+const fs = require('node:fs');
+const fsPromises = require('node:fs/promises');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const { finished } = require('node:stream/promises');
+
+const DEFAULT_CAPTURE_LIMIT = Math.max(4096, Number(process.env.IVUCX_EXPORT_CAPTURE_CHARS || 32000));
 
 function parseCliArgs(argv) {
   const flags = {};
@@ -31,6 +35,7 @@ async function runProcess(command, args, options = {}) {
   const timeoutMs = Number.isFinite(Number(options.timeoutMs)) ? Number(options.timeoutMs) : 180000;
   const cwd = options.cwd || process.cwd();
   const env = options.env || process.env;
+  const captureLimit = Math.max(4096, Number(options.captureLimitChars || DEFAULT_CAPTURE_LIMIT));
 
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -39,8 +44,10 @@ async function runProcess(command, args, options = {}) {
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
-    let stdout = '';
-    let stderr = '';
+    const stdoutBuffer = createBoundedOutputBuffer(captureLimit);
+    const stderrBuffer = createBoundedOutputBuffer(captureLimit);
+    const stdoutStream = options.stdoutFilePath ? fs.createWriteStream(options.stdoutFilePath) : null;
+    const stderrStream = options.stderrFilePath ? fs.createWriteStream(options.stderrFilePath) : null;
     let timedOut = false;
     let settled = false;
 
@@ -49,42 +56,94 @@ async function runProcess(command, args, options = {}) {
       child.kill();
     }, timeoutMs);
 
-    const finish = (callback) => {
+    const closeStreams = async () => {
+      const pending = [];
+      if (stdoutStream) {
+        stdoutStream.end();
+        pending.push(finished(stdoutStream).catch(() => {}));
+      }
+      if (stderrStream) {
+        stderrStream.end();
+        pending.push(finished(stderrStream).catch(() => {}));
+      }
+      await Promise.all(pending);
+    };
+
+    const finish = async (callback) => {
       if (settled) {
         return;
       }
       settled = true;
       clearTimeout(timer);
+      await closeStreams();
       callback();
     };
 
     child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString();
+      stdoutBuffer.push(chunk);
+      if (stdoutStream) {
+        stdoutStream.write(chunk);
+      }
     });
 
     child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
+      stderrBuffer.push(chunk);
+      if (stderrStream) {
+        stderrStream.write(chunk);
+      }
     });
 
     child.on('error', (error) => {
-      finish(() => reject(error));
+      void finish(() => reject(error));
     });
 
     child.on('close', (exitCode, signal) => {
-      finish(() => resolve({
+      void finish(() => resolve({
         exitCode,
         signal,
         timedOut,
-        stdout,
-        stderr
+        stdout: stdoutBuffer.value(),
+        stderr: stderrBuffer.value(),
+        stdoutFilePath: options.stdoutFilePath || '',
+        stderrFilePath: options.stderrFilePath || ''
       }));
     });
   });
 }
 
 async function writeJson(filePath, value) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+  await fsPromises.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+function createBoundedOutputBuffer(limit) {
+  let text = '';
+  let truncatedChars = 0;
+
+  return {
+    push(chunk) {
+      const value = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk || '');
+      if (!value) {
+        return;
+      }
+
+      if (text.length < limit) {
+        const remaining = limit - text.length;
+        const accepted = value.slice(0, remaining);
+        text += accepted;
+        truncatedChars += Math.max(0, value.length - accepted.length);
+        return;
+      }
+
+      truncatedChars += value.length;
+    },
+    value() {
+      if (!truncatedChars) {
+        return text;
+      }
+      return `${text}\n...[capture truncated ${truncatedChars} chars]`;
+    }
+  };
 }
 
 function collapseWhitespace(value) {

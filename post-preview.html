@@ -587,6 +587,7 @@
       let helperBusy = false;
       let helperInfoRequest = null;
       let helperInfoCache = null;
+      let helperPollTicks = 0;
 
       function resolveLanguage(value){
         const input = String(value || '').trim().toLowerCase();
@@ -623,6 +624,19 @@
         return new Promise((resolve)=>setTimeout(resolve, ms));
       }
 
+      function formatHelperProgress(progress, message){
+        const text = String(message || '').trim();
+        if(Number.isFinite(progress)){
+          const safeProgress = Math.max(0, Math.min(100, Math.round(progress)));
+          return text ? `${safeProgress}% ${text}` : `${safeProgress}%`;
+        }
+        return text;
+      }
+
+      function setHelperProgress(progress, message, tone){
+        setHelperStatus(formatHelperProgress(progress, message), tone);
+      }
+
       function shouldRetryHelperResponse(response, payload, raw){
         if(!response) return false;
         if(![502, 503, 504].includes(response.status)) return false;
@@ -637,19 +651,21 @@
         );
       }
 
-      async function postHelperSubmitWithRetry(body){
+      async function postHelperSubmitWithRetry(body, onProgress){
         const attempts = [
-          { delayMs: 0, label: 'Submitting on helper server...' },
-          { delayMs: 1800, label: 'Waking server and retrying...' },
-          { delayMs: 4200, label: 'Retrying helper submission...' }
+          { delayMs: 0, progress: 42, label: 'Submitting' },
+          { delayMs: 1800, progress: 48, label: 'Waking server' },
+          { delayMs: 4200, progress: 54, label: 'Retrying submit' }
         ];
         let lastRaw = '';
         let lastStatus = 0;
 
         for(let index = 0; index < attempts.length; index += 1){
           const attempt = attempts[index];
+          if(typeof onProgress === 'function'){
+            onProgress(attempt.progress, attempt.label);
+          }
           if(attempt.delayMs > 0){
-            setHelperStatus(attempt.label, 'pending');
             await delay(attempt.delayMs);
           }
 
@@ -699,6 +715,60 @@
         }else{
           helperStatusEl.classList.add('pending');
         }
+      }
+
+      function describeHelperJob(job){
+        const status = job && typeof job.status === 'string'
+          ? job.status.toLowerCase()
+          : '';
+        const progressMeta = job && job.progress && typeof job.progress === 'object'
+          ? job.progress
+          : null;
+
+        if(progressMeta){
+          const percent = Number.isFinite(Number(progressMeta.percent))
+            ? Number(progressMeta.percent)
+            : null;
+          const message = typeof progressMeta.message === 'string' && progressMeta.message.trim()
+            ? progressMeta.message.trim()
+            : (
+              typeof progressMeta.stage === 'string' && progressMeta.stage.trim()
+                ? progressMeta.stage.trim()
+                : ''
+            );
+          if(percent !== null || message){
+            return {
+              progress: percent !== null ? percent : (status === 'running' ? 84 : 72),
+              message: message || (status === 'running' ? 'Processing' : 'Queued')
+            };
+          }
+        }
+
+        if(status === 'queued'){
+          return {
+            progress: Math.min(78, 60 + helperPollTicks * 3),
+            message: 'Queued'
+          };
+        }
+
+        if(status === 'running'){
+          return {
+            progress: Math.min(94, 80 + helperPollTicks * 2),
+            message: 'Processing'
+          };
+        }
+
+        if(status === 'succeeded'){
+          return {
+            progress: 100,
+            message: 'Saved'
+          };
+        }
+
+        return {
+          progress: 70,
+          message: 'Working'
+        };
       }
 
       function extractHelperError(payload, fallback){
@@ -788,13 +858,18 @@
         return payload;
       }
 
-      async function waitForHelperJob(jobId){
+      async function waitForHelperJob(jobId, onUpdate){
         const startedAt = Date.now();
+        helperPollTicks = 0;
         while(Date.now() - startedAt < 180000){
           const payload = await fetchHelperJob(jobId);
           const job = payload && payload.job && typeof payload.job === 'object' ? payload.job : null;
           if(!job){
             throw new Error('Helper job payload is missing.');
+          }
+          helperPollTicks += 1;
+          if(typeof onUpdate === 'function'){
+            onUpdate(job, payload);
           }
           if(job.status === 'succeeded'){
             return job.result || null;
@@ -843,9 +918,10 @@
         const requestedAt = new Date().toISOString();
         let requestedFormat = null;
         setFutureBusy(true);
-        setHelperStatus('Loading...', 'pending');
+        setHelperProgress(6, 'Preparing', 'pending');
 
         try{
+          setHelperProgress(14, 'Checking runtime', 'pending');
           requestedFormat = await resolveHelperFormat(proofPayload.language);
           const body = {
             title: proofPayload.title,
@@ -856,14 +932,20 @@
             async: true,
             format: requestedFormat
           };
-          const { response, raw, payload } = await postHelperSubmitWithRetry(body);
+          setHelperProgress(28, 'Checking proof', 'pending');
+          const { response, raw, payload } = await postHelperSubmitWithRetry(body, (progress, message)=>{
+            setHelperProgress(progress, message, 'pending');
+          });
           if(!payload || typeof payload !== 'object'){
             throw new Error(raw || 'Invalid response from helper proxy.');
           }
 
           if(response.status === 202 && payload.job && payload.job.id){
-            setHelperStatus('Submitting on helper server...', 'pending');
-            const result = await waitForHelperJob(payload.job.id);
+            setHelperProgress(60, 'Queued', 'pending');
+            const result = await waitForHelperJob(payload.job.id, (job)=>{
+              const statusView = describeHelperJob(job);
+              setHelperProgress(statusView.progress, statusView.message, 'pending');
+            });
             await persistHelperResult({
               status: 'succeeded',
               requestedAt,
@@ -875,7 +957,7 @@
               format: requestedFormat,
               result
             });
-            setHelperStatus('Problem saved on helper server.', 'success');
+            setHelperProgress(100, 'Problem saved', 'success');
             return;
           }
 
@@ -891,7 +973,7 @@
               format: requestedFormat,
               result: payload.result
             });
-            setHelperStatus('Problem saved on helper server.', 'success');
+            setHelperProgress(100, 'Problem saved', 'success');
             return;
           }
 
