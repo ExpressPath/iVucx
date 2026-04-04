@@ -122,9 +122,15 @@ Split behavior:
 - `POST /api/coq-check` -> local proof check on the Render-hosted `iVucx` app
 - `POST /api/proof-convert` -> local typed-lambda / `cic-v1` conversion on the Render-hosted `iVucx` app
 - `POST /api/helper/check` -> helper-routed proof check via Render
-- `POST /api/helper/convert` -> Railway creates a Supabase-backed conversion plan, then Render executes it
-- `POST /api/helper/submit` -> Railway creates a Supabase-backed submission plan, then Render executes it and Railway saves the problem row
+- `POST /api/helper/convert` -> Railway creates a Supabase-backed conversion plan, then Render executes it by `planId`
+- `POST /api/helper/submit` -> Railway creates a Supabase-backed submission plan, then Render executes it by `planId` and Railway saves the problem row
 - `GET /api/helper/info` -> Railway info plus deployment metadata
+
+Because Render now loads conversion plans from Supabase, the Render-hosted `iVucx` app also needs:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `COQ_CMD` or `IVUCX_COQ_CMD` when Render is not picking up `coqc` from `PATH`
 
 Proxy routes:
 

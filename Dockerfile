@@ -62,6 +62,7 @@ FROM node:20-bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ELAN_HOME=/opt/elan
+ENV OPAM_SWITCH_PREFIX=/home/opam/.opam/ivucx
 ENV PATH=/home/opam/.opam/ivucx/bin:/opt/elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 RUN apt-get update \
@@ -88,6 +89,8 @@ ENV NODE_ENV=production
 ENV PORT=10000
 ENV LEAN_CMD=lean
 ENV COQ_CMD=/home/opam/.opam/ivucx/bin/coqc
+ENV IVUCX_LEAN_CMD=/opt/elan/bin/lean
+ENV IVUCX_COQ_CMD=/home/opam/.opam/ivucx/bin/coqc
 ENV LEAN_LAMBDA_CMD=node
 ENV LEAN_LAMBDA_ARGS="/app/server-tools/convert-lean.cjs --out {out}"
 ENV COQ_LAMBDA_CMD=node

@@ -584,12 +584,9 @@ async function executeRemoteConversion(plan, format) {
   await updatePlanProgress(plan.id, PLAN_STATUS.RUNNING, createProgress(46, 'running', 'Running on Render'));
 
   const executionPayload = {
-    title: plan.title,
-    language: plan.language,
-    fileName: plan.fileName,
-    code: plan.sourceCode,
-    verify: plan.verify,
-    format
+    planId: plan.id,
+    format,
+    verify: plan.verify
   };
 
   const upstream = await sendExecutionRequest(EXECUTION_SERVER_CONVERT_ROUTE, executionPayload);

@@ -12,11 +12,12 @@ Railway に載せる軽量 helper API です。
 - `Railway helper`
   - 計算計画の作成
   - Supabase への plan / job 保存
-  - Render 実行のオーケストレーション
+  - `planId` ベースで Render 実行をオーケストレーション
   - 完了後の `problems` 保存
 - `Render` (`iVucx` 本体)
   - Lean / Coq proof check
   - typed-lambda / `cic-v1` の重い変換
+  - Supabase から `helper_conversion_plans` を読んで必要な source だけ取得
 
 ## Routes
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {
@@ -9,6 +10,30 @@ const {
   runProcess,
   writeJson
 } = require('./export-utils.cjs');
+
+function resolveCoqCommand(rawCommand) {
+  const command = String(rawCommand || 'coqc').trim() || 'coqc';
+  if (path.isAbsolute(command)) {
+    return command;
+  }
+
+  const candidates = [
+    process.env.COQ_BIN ? path.join(process.env.COQ_BIN, command) : '',
+    process.env.COQBIN ? path.join(process.env.COQBIN, command) : '',
+    process.env.OPAM_SWITCH_PREFIX ? path.join(process.env.OPAM_SWITCH_PREFIX, 'bin', command) : '',
+    '/home/opam/.opam/ivucx/bin/coqc',
+    '/home/opam/.opam/default/bin/coqc',
+    '/usr/bin/coqc'
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (fsSync.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return command;
+}
 
 function stripCoqCommentsAndStrings(source) {
   let output = '';
@@ -244,7 +269,7 @@ async function main() {
 
   try {
     await fs.writeFile(exportPath, exportSource, 'utf8');
-    const coqCommand = process.env.IVUCX_COQ_CMD || process.env.COQ_CMD || 'coqc';
+    const coqCommand = resolveCoqCommand(process.env.IVUCX_COQ_CMD || process.env.COQ_CMD || 'coqc');
     const result = await runProcess(coqCommand, [exportPath], {
       cwd: path.dirname(sourcePath),
       timeoutMs: Number(process.env.IVUCX_CONVERTER_TIMEOUT_MS || 180000)
