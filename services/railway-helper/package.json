@@ -1,12 +1,13 @@
 ﻿{
   "name": "ivucx-railway-helper",
-  "version": "1.0.0",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
+  "description": "Railway planner/orchestrator for Supabase-backed proof conversion jobs.",
   "dependencies": {
     "@supabase/supabase-js": "^2.50.2",
     "express": "^4.19.2"

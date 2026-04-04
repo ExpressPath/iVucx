@@ -6,6 +6,8 @@ const app = express();
 
 const PORT = Number(process.env.PORT || 3000);
 const MAX_CODE_BYTES = Number(process.env.HELPER_MAX_CODE_BYTES || 200000);
+const SERVICE_NAME = String(process.env.SERVICE_NAME || 'ivucx-railway-helper').trim() || 'ivucx-railway-helper';
+const SERVICE_VERSION = String(process.env.SERVICE_VERSION || '1.7.0').trim() || '1.7.0';
 
 const HELPER_API_KEY = String(process.env.HELPER_API_KEY || '').trim();
 const EXECUTION_SERVER_BASE_URL = String(process.env.EXECUTION_SERVER_BASE_URL || '').trim().replace(/\/+$/, '');
@@ -62,7 +64,8 @@ app.use((req, res, next) => {
 app.get('/healthz', (_req, res) => {
   res.status(200).json({
     ok: true,
-    service: 'ivucx-railway-helper',
+    service: SERVICE_NAME,
+    version: SERVICE_VERSION,
     supabaseConfigured: !!getSupabaseAdmin().client,
     execution: getExecutionInfo(),
     roles: getRoleInfo()
@@ -73,7 +76,8 @@ app.get('/api/helper/info', (_req, res) => {
   const supabase = getSupabaseAdmin();
   res.status(200).json({
     ok: true,
-    service: 'ivucx-railway-helper',
+    service: SERVICE_NAME,
+    version: SERVICE_VERSION,
     supabaseConfigured: !!supabase.client,
     executionConfigured: !!EXECUTION_SERVER_BASE_URL,
     roles: getRoleInfo(),
@@ -1246,6 +1250,6 @@ async function recoverStaleJobs() {
 async function startServer() {
   await recoverStaleJobs();
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`ivucx railway helper listening on ${PORT}`);
+    console.log(`${SERVICE_NAME} ${SERVICE_VERSION} listening on ${PORT}`);
   });
 }
