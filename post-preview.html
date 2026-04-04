@@ -637,6 +637,66 @@
         setHelperStatus(formatHelperProgress(progress, message), tone);
       }
 
+      function summarizeProxyFailure(response, raw){
+        const status = response && typeof response.status === 'number'
+          ? response.status
+          : 0;
+        const statusText = response && typeof response.statusText === 'string' && response.statusText.trim()
+          ? response.statusText.trim()
+          : '';
+        const normalizedRaw = String(raw || '').trim();
+        const lowerRaw = normalizedRaw.toLowerCase();
+
+        if(status === 502){
+          return 'Helper proxy returned 502 Bad Gateway. The app may still be waking up.';
+        }
+        if(status === 503){
+          return 'Helper proxy returned 503 Service Unavailable. The app may still be waking up.';
+        }
+        if(status === 504){
+          return 'Helper proxy timed out while waiting for the server.';
+        }
+        if(normalizedRaw){
+          if(lowerRaw.includes('bad gateway')){
+            return 'Helper proxy returned 502 Bad Gateway.';
+          }
+          if(lowerRaw.includes('service unavailable')){
+            return 'Helper proxy returned 503 Service Unavailable.';
+          }
+        }
+
+        return status
+          ? ('Helper proxy returned ' + status + (statusText ? (' ' + statusText) : '') + '.')
+          : 'Helper proxy request failed.';
+      }
+
+      async function warmHelperProxy(onProgress){
+        const attempts = [
+          { progress: 10, label: 'Waking app', path: '/healthz' },
+          { progress: 12, label: 'Checking helper', path: '/api/helper/info' }
+        ];
+
+        for(const attempt of attempts){
+          if(typeof onProgress === 'function'){
+            onProgress(attempt.progress, attempt.label);
+          }
+          try{
+            const response = await fetch(attempt.path, {
+              method: 'GET',
+              cache: 'no-store',
+              credentials: 'same-origin'
+            });
+            if(response.ok){
+              return true;
+            }
+          }catch(err){
+            // ignore wake-up probe failures; retry with the main request
+          }
+        }
+
+        return false;
+      }
+
       function shouldRetryHelperResponse(response, payload, raw){
         if(!response) return false;
         if(![502, 503, 504].includes(response.status)) return false;
@@ -655,7 +715,8 @@
         const attempts = [
           { delayMs: 0, progress: 42, label: 'Submitting' },
           { delayMs: 1800, progress: 48, label: 'Waking server' },
-          { delayMs: 4200, progress: 54, label: 'Retrying submit' }
+          { delayMs: 4200, progress: 54, label: 'Retrying submit' },
+          { delayMs: 7000, progress: 58, label: 'Retrying again' }
         ];
         let lastRaw = '';
         let lastStatus = 0;
@@ -921,6 +982,9 @@
         setHelperProgress(6, 'Preparing', 'pending');
 
         try{
+          await warmHelperProxy((progress, message)=>{
+            setHelperProgress(progress, message, 'pending');
+          });
           setHelperProgress(14, 'Checking runtime', 'pending');
           requestedFormat = await resolveHelperFormat(proofPayload.language);
           const body = {
@@ -937,6 +1001,9 @@
             setHelperProgress(progress, message, 'pending');
           });
           if(!payload || typeof payload !== 'object'){
+            if(!response.ok){
+              throw new Error(summarizeProxyFailure(response, raw));
+            }
             throw new Error(raw || 'Invalid response from helper proxy.');
           }
 
