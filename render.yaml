@@ -17,3 +17,13 @@ services:
         value: lake
       - key: LEAN_ARGS
         value: env lean
+      - key: IVUCX_LEAN_CMD
+        value: /opt/elan/bin/lean
+      - key: OPAM_SWITCH_PREFIX
+        value: /home/opam/.opam/ivucx
+      - key: COQBIN
+        value: /home/opam/.opam/ivucx/bin
+      - key: COQ_CMD
+        value: /home/opam/.opam/ivucx/bin/coqc
+      - key: IVUCX_COQ_CMD
+        value: /home/opam/.opam/ivucx/bin/coqc

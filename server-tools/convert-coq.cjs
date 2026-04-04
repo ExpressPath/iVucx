@@ -12,12 +12,13 @@ const {
 } = require('./export-utils.cjs');
 
 function resolveCoqCommand(rawCommand) {
-  const command = String(rawCommand || 'coqc').trim() || 'coqc';
-  if (path.isAbsolute(command)) {
+  const command = String(rawCommand || '/home/opam/.opam/ivucx/bin/coqc').trim() || '/home/opam/.opam/ivucx/bin/coqc';
+  if (path.isAbsolute(command) && fsSync.existsSync(command)) {
     return command;
   }
 
   const candidates = [
+    process.env.IVUCX_COQ_CMD || '',
     process.env.COQ_BIN ? path.join(process.env.COQ_BIN, command) : '',
     process.env.COQBIN ? path.join(process.env.COQBIN, command) : '',
     process.env.OPAM_SWITCH_PREFIX ? path.join(process.env.OPAM_SWITCH_PREFIX, 'bin', command) : '',
@@ -269,7 +270,9 @@ async function main() {
 
   try {
     await fs.writeFile(exportPath, exportSource, 'utf8');
-    const coqCommand = resolveCoqCommand(process.env.IVUCX_COQ_CMD || process.env.COQ_CMD || 'coqc');
+    const coqCommand = resolveCoqCommand(
+      process.env.IVUCX_COQ_CMD || process.env.COQ_CMD || '/home/opam/.opam/ivucx/bin/coqc'
+    );
     const result = await runProcess(coqCommand, [exportPath], {
       cwd: path.dirname(sourcePath),
       timeoutMs: Number(process.env.IVUCX_CONVERTER_TIMEOUT_MS || 180000)
