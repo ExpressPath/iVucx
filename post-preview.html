@@ -671,26 +671,32 @@
       }
 
       async function warmHelperProxy(onProgress){
-        const attempts = [
+        const steps = [
           { progress: 10, label: 'Waking app', path: '/healthz' },
           { progress: 12, label: 'Checking helper', path: '/api/helper/info' }
         ];
 
-        for(const attempt of attempts){
-          if(typeof onProgress === 'function'){
-            onProgress(attempt.progress, attempt.label);
-          }
-          try{
-            const response = await fetch(attempt.path, {
-              method: 'GET',
-              cache: 'no-store',
-              credentials: 'same-origin'
-            });
-            if(response.ok){
-              return true;
+        for(let round = 0; round < 6; round += 1){
+          for(const step of steps){
+            if(typeof onProgress === 'function'){
+              onProgress(Math.min(24, step.progress + round * 2), step.label);
             }
-          }catch(err){
-            // ignore wake-up probe failures; retry with the main request
+            try{
+              const response = await fetch(step.path, {
+                method: 'GET',
+                cache: 'no-store',
+                credentials: 'same-origin'
+              });
+              if(response.ok){
+                return true;
+              }
+            }catch(err){
+              // ignore wake-up probe failures; retry until timeout budget is used
+            }
+          }
+
+          if(round < 5){
+            await delay(3000);
           }
         }
 
@@ -751,6 +757,28 @@
         }
 
         throw new Error(lastRaw || ('Helper submission failed with status ' + lastStatus + '.'));
+      }
+
+      function shouldFallbackToTypedLambda(requestedFormat, message){
+        if(String(requestedFormat || '').trim().toLowerCase() !== 'cic-v1'){
+          return false;
+        }
+        const normalized = String(message || '').trim().toLowerCase();
+        if(!normalized){
+          return true;
+        }
+        return (
+          normalized.includes('helper proxy returned 502')
+          || normalized.includes('helper proxy returned 503')
+          || normalized.includes('helper proxy returned 504')
+          || normalized.includes('lean cic exporter failed')
+          || normalized.includes('coq cic')
+          || normalized.includes('spawn lake enoent')
+          || normalized.includes('spawn coqc enoent')
+          || normalized.includes('invalid response from helper proxy')
+          || normalized.includes('bad gateway')
+          || normalized.includes('service unavailable')
+        );
       }
 
       function setFutureBusy(busy){
@@ -978,6 +1006,7 @@
 
         const requestedAt = new Date().toISOString();
         let requestedFormat = null;
+        let completedFormat = null;
         setFutureBusy(true);
         setHelperProgress(6, 'Preparing', 'pending');
 
@@ -987,64 +1016,80 @@
           });
           setHelperProgress(14, 'Checking runtime', 'pending');
           requestedFormat = await resolveHelperFormat(proofPayload.language);
-          const body = {
-            title: proofPayload.title,
+          const attemptSubmit = async (format, progressBaseLabel) => {
+            const body = {
+              title: proofPayload.title,
+              language: proofPayload.language,
+              fileName: proofPayload.fileName,
+              code: proofPayload.code,
+              verify: true,
+              async: true,
+              format
+            };
+            setHelperProgress(28, progressBaseLabel, 'pending');
+            const { response, raw, payload } = await postHelperSubmitWithRetry(body, (progress, message)=>{
+              setHelperProgress(progress, message, 'pending');
+            });
+            if(!payload || typeof payload !== 'object'){
+              if(!response.ok){
+                throw new Error(summarizeProxyFailure(response, raw));
+              }
+              throw new Error(raw || 'Invalid response from helper proxy.');
+            }
+
+            if(response.status === 202 && payload.job && payload.job.id){
+              setHelperProgress(60, 'Queued', 'pending');
+              const result = await waitForHelperJob(payload.job.id, (job)=>{
+                const statusView = describeHelperJob(job);
+                setHelperProgress(statusView.progress, statusView.message, 'pending');
+              });
+              return {
+                jobId: payload.job.id,
+                result
+              };
+            }
+
+            if(response.ok && payload.result){
+              return {
+                jobId: null,
+                result: payload.result
+              };
+            }
+
+            throw new Error(extractHelperError(payload, 'Helper conversion failed.'));
+          };
+
+          let submitResult;
+          try{
+            submitResult = await attemptSubmit(requestedFormat, 'Checking proof');
+            completedFormat = requestedFormat;
+          }catch(primaryError){
+            const primaryMessage = primaryError && primaryError.message ? primaryError.message : String(primaryError);
+            if(!shouldFallbackToTypedLambda(requestedFormat, primaryMessage)){
+              throw primaryError;
+            }
+            setHelperProgress(34, 'Retrying with typed lambda', 'pending');
+            await warmHelperProxy((progress, message)=>{
+              setHelperProgress(Math.max(34, progress), message, 'pending');
+            });
+            submitResult = await attemptSubmit('typed-lambda-v1', 'Retrying locally');
+            completedFormat = 'typed-lambda-v1';
+          }
+
+          await persistHelperResult({
+            status: 'succeeded',
+            requestedAt,
+            completedAt: new Date().toISOString(),
+            jobId: submitResult.jobId,
             language: proofPayload.language,
             fileName: proofPayload.fileName,
-            code: proofPayload.code,
-            verify: true,
-            async: true,
-            format: requestedFormat
-          };
-          setHelperProgress(28, 'Checking proof', 'pending');
-          const { response, raw, payload } = await postHelperSubmitWithRetry(body, (progress, message)=>{
-            setHelperProgress(progress, message, 'pending');
+            title: proofPayload.title,
+            format: completedFormat || requestedFormat,
+            requestedFormat,
+            result: submitResult.result
           });
-          if(!payload || typeof payload !== 'object'){
-            if(!response.ok){
-              throw new Error(summarizeProxyFailure(response, raw));
-            }
-            throw new Error(raw || 'Invalid response from helper proxy.');
-          }
-
-          if(response.status === 202 && payload.job && payload.job.id){
-            setHelperProgress(60, 'Queued', 'pending');
-            const result = await waitForHelperJob(payload.job.id, (job)=>{
-              const statusView = describeHelperJob(job);
-              setHelperProgress(statusView.progress, statusView.message, 'pending');
-            });
-            await persistHelperResult({
-              status: 'succeeded',
-              requestedAt,
-              completedAt: new Date().toISOString(),
-              jobId: payload.job.id,
-              language: proofPayload.language,
-              fileName: proofPayload.fileName,
-              title: proofPayload.title,
-              format: requestedFormat,
-              result
-            });
-            setHelperProgress(100, 'Problem saved', 'success');
-            return;
-          }
-
-          if(response.ok && payload.result){
-            await persistHelperResult({
-              status: 'succeeded',
-              requestedAt,
-              completedAt: new Date().toISOString(),
-              jobId: null,
-              language: proofPayload.language,
-              fileName: proofPayload.fileName,
-              title: proofPayload.title,
-              format: requestedFormat,
-              result: payload.result
-            });
-            setHelperProgress(100, 'Problem saved', 'success');
-            return;
-          }
-
-          throw new Error(extractHelperError(payload, 'Helper conversion failed.'));
+          setHelperProgress(100, 'Problem saved', 'success');
+          return;
         }catch(err){
           const message = err && err.message ? err.message : String(err);
           await persistHelperResult({
@@ -1055,7 +1100,8 @@
             language: proofPayload.language,
             fileName: proofPayload.fileName,
             title: proofPayload.title,
-            format: requestedFormat,
+            format: completedFormat || requestedFormat,
+            requestedFormat,
             error: message
           });
           setHelperStatus(message, 'error');
