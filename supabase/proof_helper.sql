@@ -83,6 +83,30 @@ alter table public.helper_jobs add column if not exists operation text default '
 alter table public.helper_jobs add column if not exists progress jsonb not null default '{}'::jsonb;
 alter table public.helper_jobs add column if not exists plan_id uuid;
 
+alter table public.helper_conversion_plans add column if not exists helper_job_id text;
+alter table public.helper_conversion_plans add column if not exists operation text default 'convert';
+alter table public.helper_conversion_plans add column if not exists status text default 'queued';
+alter table public.helper_conversion_plans add column if not exists title text not null default '';
+alter table public.helper_conversion_plans add column if not exists language text default 'lean';
+alter table public.helper_conversion_plans add column if not exists file_name text not null default '';
+alter table public.helper_conversion_plans add column if not exists requested_format text not null default 'typed-lambda-v1';
+alter table public.helper_conversion_plans add column if not exists verify boolean not null default true;
+alter table public.helper_conversion_plans add column if not exists source_code text not null default '';
+alter table public.helper_conversion_plans add column if not exists source_sha256 text not null default '';
+alter table public.helper_conversion_plans add column if not exists plan jsonb not null default '{}'::jsonb;
+alter table public.helper_conversion_plans add column if not exists progress jsonb not null default '{}'::jsonb;
+alter table public.helper_conversion_plans add column if not exists execution_payload jsonb not null default '{}'::jsonb;
+alter table public.helper_conversion_plans add column if not exists execution_result jsonb;
+alter table public.helper_conversion_plans add column if not exists execution_error jsonb;
+alter table public.helper_conversion_plans add column if not exists proof_state text;
+alter table public.helper_conversion_plans add column if not exists verification_status text;
+alter table public.helper_conversion_plans add column if not exists problem_id uuid;
+alter table public.helper_conversion_plans add column if not exists request_meta jsonb not null default '{}'::jsonb;
+alter table public.helper_conversion_plans add column if not exists created_at timestamptz not null default now();
+alter table public.helper_conversion_plans add column if not exists updated_at timestamptz not null default now();
+alter table public.helper_conversion_plans add column if not exists started_at timestamptz;
+alter table public.helper_conversion_plans add column if not exists completed_at timestamptz;
+
 do $$
 begin
   if not exists (
