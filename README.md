@@ -155,3 +155,5 @@ Railway helper service files:
 - `services/railway-helper/EXACT_EXPORT_SOURCES.md`
 - `supabase/proof_helper.sql`
 - `supabase/proof_helper_check.sql`
+
+If Railway is missing `helper_conversion_plans`, the helper can now fall back to in-memory planning for the current process, but durable planning still requires the Supabase schema above.
