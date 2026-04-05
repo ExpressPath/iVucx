@@ -37,6 +37,11 @@ Railway に載せる軽量 helper API です。
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `EXECUTION_SERVER_BASE_URL`
 
+Accepted aliases:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_KEY`
+
 Optional:
 
 - `HELPER_API_KEY`
@@ -64,3 +69,5 @@ This now creates:
 - Railway helper no longer builds Lean / Coq toolchains.
 - Heavy CIC conversion is intentionally left to Render.
 - Jobs keep progress metadata so the UI can show short real-time status text.
+- BlueMode client UI may expose only public values like `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- The helper planner still needs a server-side service-role key and cannot bootstrap that key from browser state.
