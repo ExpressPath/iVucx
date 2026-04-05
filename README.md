@@ -125,6 +125,7 @@ Split behavior:
 - `POST /api/helper/convert` -> Railway creates a Supabase-backed conversion plan, then Render executes it by `planId`
 - `POST /api/helper/submit` -> Railway creates a Supabase-backed submission plan, then Render executes it by `planId` and Railway saves the problem row
 - `GET /api/helper/info` -> Railway info plus deployment metadata
+- `GET /api/helper/schema-check` -> Railway-side Supabase schema diagnosis
 
 Because Render now loads conversion plans from Supabase, the Render-hosted `iVucx` app also needs:
 
@@ -153,3 +154,4 @@ Railway helper service files:
 - `services/railway-helper/ADAPTER_PROTOCOL.md`
 - `services/railway-helper/EXACT_EXPORT_SOURCES.md`
 - `supabase/proof_helper.sql`
+- `supabase/proof_helper_check.sql`

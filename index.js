@@ -65,6 +65,7 @@ app.post('/api/proof-convert', wrap(async (req, res) => {
 }));
 
 app.get('/api/helper/info', wrap((req, res) => proxyCompositeHelperInfo(req, res)));
+app.get('/api/helper/schema-check', wrap((req, res) => proxyHelperRouteRequest(req, res, '/api/helper/schema-check')));
 app.post('/api/helper/check', wrap((req, res) => proxyDistributedCheck(req, res)));
 app.post('/api/helper/submit', wrap((req, res) => proxyDistributedHelperOperation(req, res, '/api/helper/submit')));
 app.post('/api/helper/convert', wrap((req, res) => proxyDistributedHelperOperation(req, res, '/api/helper/convert')));

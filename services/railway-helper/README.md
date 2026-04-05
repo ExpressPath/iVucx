@@ -23,6 +23,7 @@ Railway に載せる軽量 helper API です。
 
 - `GET /healthz`
 - `GET /api/helper/info`
+- `GET /api/helper/schema-check`
 - `POST /api/helper/check`
 - `POST /api/helper/submit`
 - `POST /api/helper/convert`
@@ -57,6 +58,7 @@ Optional:
 Run:
 
 - `supabase/proof_helper.sql`
+- `supabase/proof_helper_check.sql`
 
 This now creates:
 
