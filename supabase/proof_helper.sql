@@ -33,6 +33,23 @@ create table if not exists public.problems (
   updated_at timestamptz not null default now()
 );
 
+alter table public.problems add column if not exists title text not null default '';
+alter table public.problems add column if not exists language text default 'lean';
+alter table public.problems add column if not exists file_name text not null default '';
+alter table public.problems add column if not exists source_code text not null default '';
+alter table public.problems add column if not exists source_sha256 text not null default '';
+alter table public.problems add column if not exists proof_state text;
+alter table public.problems add column if not exists verification_status text;
+alter table public.problems add column if not exists verification_result jsonb not null default '{}'::jsonb;
+alter table public.problems add column if not exists normalized_format text not null default 'typed-lambda-v1';
+alter table public.problems add column if not exists normalized_term jsonb;
+alter table public.problems add column if not exists adapter_name text not null default '';
+alter table public.problems add column if not exists adapter_meta jsonb not null default '{}'::jsonb;
+alter table public.problems add column if not exists helper_job_id text;
+alter table public.problems add column if not exists request_meta jsonb not null default '{}'::jsonb;
+alter table public.problems add column if not exists created_at timestamptz not null default now();
+alter table public.problems add column if not exists updated_at timestamptz not null default now();
+
 create table if not exists public.helper_jobs (
   id text primary key,
   status text not null check (status in ('queued', 'running', 'succeeded', 'failed')),
