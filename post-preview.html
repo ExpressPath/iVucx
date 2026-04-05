@@ -894,6 +894,16 @@
         return helperInfoRequest;
       }
 
+      function resolveDirectHelperBaseUrl(info){
+        const deployment = info && info.deployment && typeof info.deployment === 'object'
+          ? info.deployment
+          : null;
+        const helperServer = deployment && typeof deployment.helperServer === 'string'
+          ? deployment.helperServer.trim()
+          : '';
+        return helperServer ? helperServer.replace(/\/+$/, '') : '';
+      }
+
       function resolveCicRuntime(info, language){
         const runtimes = info && info.runtimes && typeof info.runtimes === 'object'
           ? info.runtimes
@@ -930,28 +940,121 @@
         });
       }
 
-      async function fetchHelperJob(jobId){
-        const response = await fetch('/api/helper/jobs/' + encodeURIComponent(jobId), {
+      function isTransientHelperJobFailure(status, payload, raw, errorMessage){
+        const normalizedError = String(errorMessage || '').trim().toLowerCase();
+        if([502, 503, 504].includes(Number(status || 0))){
+          return true;
+        }
+        const payloadMessage = extractHelperError(payload, '').toLowerCase();
+        const normalizedRaw = String(raw || '').trim().toLowerCase();
+        return (
+          normalizedError.includes('bad gateway')
+          || normalizedError.includes('service unavailable')
+          || normalizedError.includes('gateway timeout')
+          || normalizedError.includes('invalid job response')
+          || payloadMessage.includes('bad gateway')
+          || payloadMessage.includes('service unavailable')
+          || payloadMessage.includes('gateway timeout')
+          || normalizedRaw.includes('bad gateway')
+          || normalizedRaw.includes('service unavailable')
+          || normalizedRaw.includes('hibernate-wake-error')
+          || normalizedRaw.includes('no-deploy')
+        );
+      }
+
+      async function fetchHelperJobFromUrl(baseUrl, jobId, sameOrigin){
+        const response = await fetch(baseUrl + '/api/helper/jobs/' + encodeURIComponent(jobId), {
           method: 'GET',
           cache: 'no-store',
-          credentials: 'same-origin'
+          credentials: sameOrigin ? 'same-origin' : 'omit',
+          mode: sameOrigin ? 'same-origin' : 'cors'
         });
         const raw = await response.text();
         const payload = tryParseJson(raw);
-        if(!payload || typeof payload !== 'object'){
-          throw new Error(raw || 'Invalid job response from helper proxy.');
+        return { response, raw, payload };
+      }
+
+      async function fetchHelperJob(jobId){
+        const info = await fetchHelperInfo();
+        const directBaseUrl = resolveDirectHelperBaseUrl(info);
+        const attempts = [];
+        if(directBaseUrl){
+          attempts.push({
+            label: 'direct-helper',
+            sameOrigin: false,
+            baseUrl: directBaseUrl
+          });
         }
-        if(!response.ok){
-          throw new Error(extractHelperError(payload, 'Failed to load helper job.'));
+        attempts.push({
+          label: 'render-proxy',
+          sameOrigin: true,
+          baseUrl: ''
+        });
+
+        let lastError = null;
+
+        for(const attempt of attempts){
+          try{
+            const { response, raw, payload } = await fetchHelperJobFromUrl(attempt.baseUrl, jobId, attempt.sameOrigin);
+            if(!payload || typeof payload !== 'object'){
+              const invalidMessage = raw || 'Invalid job response from helper proxy.';
+              if(isTransientHelperJobFailure(response.status, null, raw, invalidMessage)){
+                lastError = new Error(summarizeProxyFailure(response, raw));
+                continue;
+              }
+              throw new Error(invalidMessage);
+            }
+            if(!response.ok){
+              const errorMessage = extractHelperError(payload, 'Failed to load helper job.');
+              if(isTransientHelperJobFailure(response.status, payload, raw, errorMessage)){
+                lastError = new Error(errorMessage);
+                continue;
+              }
+              throw new Error(errorMessage);
+            }
+            return payload;
+          }catch(err){
+            const message = err && err.message ? err.message : String(err);
+            if(isTransientHelperJobFailure(0, null, '', message)){
+              lastError = err;
+              continue;
+            }
+            throw err;
+          }
         }
-        return payload;
+
+        throw lastError || new Error('Failed to load helper job.');
       }
 
       async function waitForHelperJob(jobId, onUpdate){
         const startedAt = Date.now();
         helperPollTicks = 0;
         while(Date.now() - startedAt < 180000){
-          const payload = await fetchHelperJob(jobId);
+          let payload = null;
+          try{
+            payload = await fetchHelperJob(jobId);
+          }catch(err){
+            const message = err && err.message ? err.message : String(err);
+            if(isTransientHelperJobFailure(0, null, '', message)){
+              if(typeof onUpdate === 'function'){
+                onUpdate({
+                  status: 'running',
+                  progress: {
+                    percent: Math.min(92, 64 + helperPollTicks * 2),
+                    message: 'Reconnecting'
+                  }
+                }, null);
+              }
+              await warmHelperProxy((progress, label)=>{
+                const adjusted = Math.min(92, Math.max(36, progress));
+                setHelperProgress(adjusted, label, 'pending');
+              });
+              helperPollTicks += 1;
+              await delay(2200);
+              continue;
+            }
+            throw err;
+          }
           const job = payload && payload.job && typeof payload.job === 'object' ? payload.job : null;
           if(!job){
             throw new Error('Helper job payload is missing.');
