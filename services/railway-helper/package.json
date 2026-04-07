@@ -1,6 +1,6 @@
 ﻿{
   "name": "ivucx-railway-helper",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "private": true,
   "type": "module",
   "main": "index.js",
@@ -10,7 +10,8 @@
   "description": "Railway planner/orchestrator for Supabase-backed proof conversion jobs.",
   "dependencies": {
     "@supabase/supabase-js": "^2.50.2",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "pg": "^8.16.3"
   },
   "engines": {
     "node": ">=20.0.0"
