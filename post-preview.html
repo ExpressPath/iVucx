@@ -671,10 +671,27 @@
       }
 
       async function warmHelperProxy(onProgress){
+        const directHelperBaseUrl = resolveDirectHelperBaseUrl(helperInfoCache);
         const steps = [
-          { progress: 10, label: 'Waking app', path: '/healthz' },
-          { progress: 12, label: 'Checking helper', path: '/api/helper/info' }
+          {
+            progress: 10,
+            label: 'Checking helper',
+            baseUrl: directHelperBaseUrl,
+            path: '/healthz',
+            sameOrigin: false,
+            headers: {}
+          },
+          {
+            progress: 12,
+            label: 'Loading helper',
+            baseUrl: directHelperBaseUrl,
+            path: '/api/helper/info',
+            sameOrigin: false,
+            headers: buildDirectHelperHeaders()
+          }
         ];
+
+        let helperReady = false;
 
         for(let round = 0; round < 6; round += 1){
           for(const step of steps){
@@ -682,17 +699,39 @@
               onProgress(Math.min(24, step.progress + round * 2), step.label);
             }
             try{
-              const response = await fetch(step.path, {
+              const baseUrl = step.sameOrigin ? '' : step.baseUrl;
+              if(!step.sameOrigin && !baseUrl){
+                continue;
+              }
+              const response = await fetch(baseUrl + step.path, {
                 method: 'GET',
                 cache: 'no-store',
-                credentials: 'same-origin'
+                credentials: step.sameOrigin ? 'same-origin' : 'omit',
+                mode: step.sameOrigin ? 'same-origin' : 'cors',
+                headers: step.headers || {}
               });
-              if(response.ok){
-                return true;
+              if(!response.ok){
+                continue;
+              }
+              if(step.path === '/api/helper/info'){
+                const raw = await response.text();
+                const payload = tryParseJson(raw);
+                if(payload && typeof payload === 'object'){
+                  helperInfoCache = payload;
+                }
+                helperReady = true;
+                continue;
+              }
+              if(step.baseUrl === directHelperBaseUrl){
+                helperReady = true;
               }
             }catch(err){
               // ignore wake-up probe failures; retry until timeout budget is used
             }
+          }
+
+          if(helperReady){
+            return true;
           }
 
           if(round < 5){
@@ -700,7 +739,7 @@
           }
         }
 
-        return false;
+        return helperReady;
       }
 
       function shouldRetryHelperResponse(response, payload, raw){
@@ -717,6 +756,42 @@
         );
       }
 
+      const DEFAULT_DIRECT_HELPER_BASE_URL = 'https://nodejs-production-e71bc.up.railway.app';
+      const HELPER_EXECUTION_BRIDGE_HEADER = 'X-Ivucx-Execution-Base-Url';
+
+      function resolveExecutionBridgeBaseUrl(){
+        if(typeof window !== 'undefined' && window.location && typeof window.location.origin === 'string'){
+          const origin = window.location.origin.trim();
+          if(origin){
+            return origin.replace(/\/+$/, '');
+          }
+        }
+        return 'https://provf.onrender.com';
+      }
+
+      function buildDirectHelperHeaders(extraHeaders){
+        return Object.assign(
+          {},
+          extraHeaders || {},
+          {
+            [HELPER_EXECUTION_BRIDGE_HEADER]: resolveExecutionBridgeBaseUrl()
+          }
+        );
+      }
+
+      async function fetchHelperInfoFromUrl(baseUrl, sameOrigin){
+        const response = await fetch((baseUrl || '') + '/api/helper/info', {
+          method: 'GET',
+          cache: 'no-store',
+          credentials: sameOrigin ? 'same-origin' : 'omit',
+          mode: sameOrigin ? 'same-origin' : 'cors',
+          headers: sameOrigin ? {} : buildDirectHelperHeaders()
+        });
+        const raw = await response.text();
+        const payload = tryParseJson(raw);
+        return { response, raw, payload };
+      }
+
       async function postHelperSubmitWithRetry(body, onProgress){
         const attempts = [
           { delayMs: 0, progress: 42, label: 'Submitting' },
@@ -724,6 +799,7 @@
           { delayMs: 4200, progress: 54, label: 'Retrying submit' },
           { delayMs: 7000, progress: 58, label: 'Retrying again' }
         ];
+        const directHelperBaseUrl = resolveDirectHelperBaseUrl(helperInfoCache);
         let lastRaw = '';
         let lastStatus = 0;
 
@@ -736,12 +812,14 @@
             await delay(attempt.delayMs);
           }
 
-          const response = await fetch('/api/helper/submit', {
+          const response = await fetch(directHelperBaseUrl + '/api/helper/submit', {
             method: 'POST',
             cache: 'no-store',
-            credentials: 'same-origin',
+            credentials: directHelperBaseUrl ? 'omit' : 'same-origin',
+            mode: directHelperBaseUrl ? 'cors' : 'same-origin',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              ...(directHelperBaseUrl ? buildDirectHelperHeaders() : {})
             },
             body: JSON.stringify(body)
           });
@@ -879,19 +957,28 @@
       async function fetchHelperInfo(){
         if(helperInfoCache) return helperInfoCache;
         if(helperInfoRequest) return helperInfoRequest;
-        helperInfoRequest = fetch('/api/helper/info', {
-          method: 'GET',
-          cache: 'no-store',
-          credentials: 'same-origin'
-        }).then(async (response)=>{
-          const raw = await response.text();
-          const payload = tryParseJson(raw);
-          if(!response.ok || !payload || typeof payload !== 'object'){
-            return null;
+        helperInfoRequest = (async ()=>{
+          const directBaseUrl = resolveDirectHelperBaseUrl(null);
+          const attempts = [];
+          if(directBaseUrl){
+            attempts.push({ baseUrl: directBaseUrl, sameOrigin: false });
           }
-          helperInfoCache = payload;
-          return payload;
-        }).catch(()=>null).finally(()=>{
+          attempts.push({ baseUrl: '', sameOrigin: true });
+
+          for(const attempt of attempts){
+            try{
+              const { response, payload } = await fetchHelperInfoFromUrl(attempt.baseUrl, attempt.sameOrigin);
+              if(!response.ok || !payload || typeof payload !== 'object'){
+                continue;
+              }
+              helperInfoCache = payload;
+              return payload;
+            }catch(err){
+              // try the next transport
+            }
+          }
+          return null;
+        })().finally(()=>{
           helperInfoRequest = null;
         });
         return helperInfoRequest;
@@ -904,7 +991,16 @@
         const helperServer = deployment && typeof deployment.helperServer === 'string'
           ? deployment.helperServer.trim()
           : '';
-        return helperServer ? helperServer.replace(/\/+$/, '') : '';
+        if(helperServer){
+          return helperServer.replace(/\/+$/, '');
+        }
+        const host = typeof window !== 'undefined' && window.location && typeof window.location.hostname === 'string'
+          ? window.location.hostname.trim().toLowerCase()
+          : '';
+        if(host === 'localhost' || host === '127.0.0.1'){
+          return '';
+        }
+        return DEFAULT_DIRECT_HELPER_BASE_URL.replace(/\/+$/, '');
       }
 
       function resolveCicRuntime(info, language){
@@ -970,7 +1066,8 @@
           method: 'GET',
           cache: 'no-store',
           credentials: sameOrigin ? 'same-origin' : 'omit',
-          mode: sameOrigin ? 'same-origin' : 'cors'
+          mode: sameOrigin ? 'same-origin' : 'cors',
+          headers: sameOrigin ? {} : buildDirectHelperHeaders()
         });
         const raw = await response.text();
         const payload = tryParseJson(raw);
