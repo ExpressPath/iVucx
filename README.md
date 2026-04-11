@@ -115,6 +115,7 @@ Required environment variables on the main app:
 - `HELPER_API_TIMEOUT_MS` (optional)
 - `EXECUTION_API_BASE_URL`
 - `EXECUTION_API_KEY`
+- `EXECUTION_API_PRIVATE_KEY` or `EXECUTION_API_PRIVATE_KEY_PATH` (optional PEM request signing)
 - `EXECUTION_API_TIMEOUT_MS`
 - `ALLOW_LOCAL_EXECUTION_FALLBACK` (optional, defaults to `false` in production)
 - `ALLOW_LOCAL_HELPER_FALLBACK` (optional, defaults to `false` in production)
@@ -123,6 +124,8 @@ Accepted aliases for the execution server:
 
 - `ORACLE_SERVER_BASE_URL`
 - `ORACLE_SERVER_API_KEY`
+- `ORACLE_SERVER_PRIVATE_KEY`
+- `ORACLE_SERVER_PRIVATE_KEY_PATH`
 - `ORACLE_SERVER_TIMEOUT_MS`
 
 Split behavior:
@@ -141,6 +144,11 @@ Because Oracle-server may load conversion plans from Supabase, the execution ser
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `COQ_CMD` or `IVUCX_COQ_CMD` when Oracle-server is not picking up `coqc` from `PATH`
+
+Important URL note:
+
+- `https://iaas.<region>.oraclecloud.com` is Oracle Cloud's control-plane endpoint, not the Oracle-server app URL for `/api/lean-check`, `/api/coq-check`, or `/api/proof-convert`.
+- Point `EXECUTION_API_BASE_URL` / `ORACLE_SERVER_BASE_URL` to the public URL of the machine or reverse proxy where `Oracle-server/index.js` is actually running.
 
 Proxy routes:
 
