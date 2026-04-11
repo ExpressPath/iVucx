@@ -98,40 +98,49 @@ The current recommended topology is:
 - `Railway` helper handles lightweight planning:
   - create / update conversion plans
   - read the right source bundle from Supabase
-  - orchestrate Render execution
+  - orchestrate Oracle-server execution
   - persist final problem rows
-- `Render` (this `iVucx` app) handles heavy execution:
+- `Oracle-server` handles heavy execution:
   - Lean / Coq proof checking
   - typed-lambda / `cic-v1` conversion
+- `Vercel` (this `iVucx` app) remains the public entrypoint:
+  - serves UI and auth routes
+  - proxies execution requests to Oracle-server
+  - proxies helper routes to Railway
 
 Required environment variables on the main app:
 
 - `HELPER_API_BASE_URL` - Railway helper for conversion, submission, and jobs
 - `HELPER_API_KEY` (optional)
 - `HELPER_API_TIMEOUT_MS` (optional)
-
-Optional only when proof execution is moved to another service later:
-
 - `EXECUTION_API_BASE_URL`
 - `EXECUTION_API_KEY`
 - `EXECUTION_API_TIMEOUT_MS`
+- `ALLOW_LOCAL_EXECUTION_FALLBACK` (optional, defaults to `false` in production)
+- `ALLOW_LOCAL_HELPER_FALLBACK` (optional, defaults to `false` in production)
+
+Accepted aliases for the execution server:
+
+- `ORACLE_SERVER_BASE_URL`
+- `ORACLE_SERVER_API_KEY`
+- `ORACLE_SERVER_TIMEOUT_MS`
 
 Split behavior:
 
-- `POST /api/lean-check` -> local proof check on the Render-hosted `iVucx` app
-- `POST /api/coq-check` -> local proof check on the Render-hosted `iVucx` app
-- `POST /api/proof-convert` -> local typed-lambda / `cic-v1` conversion on the Render-hosted `iVucx` app
-- `POST /api/helper/check` -> helper-routed proof check via Render
-- `POST /api/helper/convert` -> Railway creates a Supabase-backed conversion plan, then Render executes it by `planId`
-- `POST /api/helper/submit` -> Railway creates a Supabase-backed submission plan, then Render executes it by `planId` and Railway saves the problem row
+- `POST /api/lean-check` -> Vercel proxies proof check to Oracle-server
+- `POST /api/coq-check` -> Vercel proxies proof check to Oracle-server
+- `POST /api/proof-convert` -> Vercel proxies typed-lambda / `cic-v1` conversion to Oracle-server
+- `POST /api/helper/check` -> helper-routed proof check via Oracle-server
+- `POST /api/helper/convert` -> Railway creates a Supabase-backed conversion plan, then Oracle-server executes it
+- `POST /api/helper/submit` -> Railway creates a Supabase-backed submission plan, then Oracle-server executes it and Railway saves the problem row
 - `GET /api/helper/info` -> Railway info plus deployment metadata
 - `GET /api/helper/schema-check` -> Railway-side Supabase schema diagnosis
 
-Because Render now loads conversion plans from Supabase, the Render-hosted `iVucx` app also needs:
+Because Oracle-server may load conversion plans from Supabase, the execution service also needs:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `COQ_CMD` or `IVUCX_COQ_CMD` when Render is not picking up `coqc` from `PATH`
+- `COQ_CMD` or `IVUCX_COQ_CMD` when Oracle-server is not picking up `coqc` from `PATH`
 
 Proxy routes:
 

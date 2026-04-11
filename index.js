@@ -10,12 +10,14 @@ import cookieConsent from './api/cookie-consent.js';
 import jscoqProxy from './api/jscoq-proxy.js';
 import suggest from './api/suggest.js';
 import {
+  canUseLocalExecutionFallback,
   isExecutionConfigured as isRemoteExecutionConfigured,
   proxyCompositeHelperInfo,
   proxyDistributedCheck,
   proxyDistributedHelperOperation,
   proxyExecutionApiRequest,
-  proxyHelperRequest as proxyHelperRouteRequest
+  proxyHelperRequest as proxyHelperRouteRequest,
+  sendRemoteConfigurationError
 } from './lib/helper-proxy.js';
 import { sendProofConversionResponse } from './lib/proof-convert.js';
 import { sendProofCheckResponse } from './lib/proof-check.js';
@@ -49,6 +51,10 @@ app.post('/api/lean-check', wrap(async (req, res) => {
     await proxyExecutionApiRequest(req, res, '/api/lean-check');
     return;
   }
+  if (!canUseLocalExecutionFallback()) {
+    sendRemoteConfigurationError(res, 'execution');
+    return;
+  }
   await sendProofCheckResponse('lean', req, res);
 }));
 
@@ -57,10 +63,22 @@ app.post('/api/coq-check', wrap(async (req, res) => {
     await proxyExecutionApiRequest(req, res, '/api/coq-check');
     return;
   }
+  if (!canUseLocalExecutionFallback()) {
+    sendRemoteConfigurationError(res, 'execution');
+    return;
+  }
   await sendProofCheckResponse('coq', req, res);
 }));
 
 app.post('/api/proof-convert', wrap(async (req, res) => {
+  if (isRemoteExecutionConfigured()) {
+    await proxyExecutionApiRequest(req, res, '/api/proof-convert');
+    return;
+  }
+  if (!canUseLocalExecutionFallback()) {
+    sendRemoteConfigurationError(res, 'execution');
+    return;
+  }
   await sendProofConversionResponse(req, res);
 }));
 

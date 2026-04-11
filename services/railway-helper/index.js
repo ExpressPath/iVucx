@@ -16,9 +16,21 @@ const SERVICE_NAME = String(process.env.SERVICE_NAME || 'ivucx-railway-helper').
 const SERVICE_VERSION = String(process.env.SERVICE_VERSION || '1.8.1').trim() || '1.8.1';
 
 const HELPER_API_KEY = String(process.env.HELPER_API_KEY || '').trim();
-const EXECUTION_SERVER_BASE_URL = String(process.env.EXECUTION_SERVER_BASE_URL || '').trim().replace(/\/+$/, '');
-const EXECUTION_SERVER_API_KEY = String(process.env.EXECUTION_SERVER_API_KEY || '').trim();
-const EXECUTION_SERVER_TIMEOUT_MS = Number(process.env.EXECUTION_SERVER_TIMEOUT_MS || 180000);
+const EXECUTION_SERVER_BASE_URL = String(
+  process.env.EXECUTION_SERVER_BASE_URL
+  || process.env.ORACLE_SERVER_BASE_URL
+  || ''
+).trim().replace(/\/+$/, '');
+const EXECUTION_SERVER_API_KEY = String(
+  process.env.EXECUTION_SERVER_API_KEY
+  || process.env.ORACLE_SERVER_API_KEY
+  || ''
+).trim();
+const EXECUTION_SERVER_TIMEOUT_MS = Number(
+  process.env.EXECUTION_SERVER_TIMEOUT_MS
+  || process.env.ORACLE_SERVER_TIMEOUT_MS
+  || 180000
+);
 const EXECUTION_SERVER_CONVERT_ROUTE = String(process.env.EXECUTION_SERVER_CONVERT_ROUTE || '/api/proof-convert').trim();
 const EXECUTION_SERVER_LEAN_CHECK_ROUTE = String(process.env.EXECUTION_SERVER_LEAN_CHECK_ROUTE || '/api/lean-check').trim();
 const EXECUTION_SERVER_COQ_CHECK_ROUTE = String(process.env.EXECUTION_SERVER_COQ_CHECK_ROUTE || '/api/coq-check').trim();
@@ -211,8 +223,8 @@ app.get('/api/helper/info', (_req, res) => {
           ? (ENABLE_MEMORY_SCHEMA_FALLBACK ? 'supabase-with-memory-fallback' : 'supabase')
           : 'memory',
         planning: 'railway',
-        proofCheck: executionConfigured ? 'render' : 'unconfigured',
-        conversion: executionConfigured ? 'render' : 'unconfigured'
+        proofCheck: executionConfigured ? 'oracle-server' : 'unconfigured',
+        conversion: executionConfigured ? 'oracle-server' : 'unconfigured'
       },
       conversionRuntimes: {
         typedLambda: buildConversionAvailability(_req),
@@ -328,7 +340,7 @@ function getRoleInfo() {
   return {
     stateStore: 'supabase',
     planner: 'railway',
-    executor: 'render'
+    executor: 'oracle-server'
   };
 }
 
@@ -338,13 +350,13 @@ function buildConversionAvailability(req) {
     lean: {
       available: !!executionBaseUrl,
       planner: 'railway',
-      executor: executionBaseUrl ? 'render' : 'unconfigured',
+      executor: executionBaseUrl ? 'oracle-server' : 'unconfigured',
       stateStore: 'supabase'
     },
     coq: {
       available: !!executionBaseUrl,
       planner: 'railway',
-      executor: executionBaseUrl ? 'render' : 'unconfigured',
+      executor: executionBaseUrl ? 'oracle-server' : 'unconfigured',
       stateStore: 'supabase'
     }
   };
@@ -908,7 +920,7 @@ async function createConversionPlan(payload, operation, helperJobId, req) {
       schema: 'ivucx-conversion-plan-v1',
       stateStore: 'supabase',
       planner: 'railway',
-      executor: 'render',
+      executor: 'oracle-server',
       operation,
       requestedFormat: payload.format || 'typed-lambda-v1',
       fallbackFormat: String(payload.format || '').trim().toLowerCase() === 'cic-v1' ? 'typed-lambda-v1' : null,
@@ -1038,7 +1050,7 @@ async function executePlannedOperation(plan, job) {
     operation: currentPlan.operation,
     stateStore: 'supabase',
     planner: 'railway',
-    executor: 'render',
+    executor: 'oracle-server',
     requestedFormat: currentPlan.requestedFormat,
     completedFormat,
     fallbackUsed
@@ -1088,13 +1100,13 @@ async function executeRemoteConversion(plan, format) {
   const executionInfo = getExecutionInfo(plan);
   if (!executionInfo.configured || !executionInfo.baseUrl) {
     const error = new Error(
-      'No execution server base URL is available on the helper server. Set EXECUTION_SERVER_BASE_URL or call through the Render app proxy.'
+      'No execution server base URL is available on the helper server. Set EXECUTION_SERVER_BASE_URL (or ORACLE_SERVER_BASE_URL) or call through the Vercel app proxy.'
     );
     error.statusCode = 503;
     throw error;
   }
 
-  await updatePlanProgress(plan.id, PLAN_STATUS.RUNNING, createProgress(46, 'running', 'Running on Render'));
+  await updatePlanProgress(plan.id, PLAN_STATUS.RUNNING, createProgress(46, 'running', 'Running on Oracle-server'));
 
   const executionPayload = {
     planId: plan.id,
@@ -1173,7 +1185,7 @@ async function requestExecutionCheck(payload, req) {
   const executionInfo = getExecutionInfo(req);
   if (!executionInfo.configured || !executionInfo.baseUrl) {
     const error = new Error(
-      'No execution server base URL is available on the helper server. Set EXECUTION_SERVER_BASE_URL or call through the Render app proxy.'
+      'No execution server base URL is available on the helper server. Set EXECUTION_SERVER_BASE_URL (or ORACLE_SERVER_BASE_URL) or call through the Vercel app proxy.'
     );
     error.statusCode = 503;
     throw error;
@@ -1198,7 +1210,7 @@ async function requestExecutionCheck(payload, req) {
     stderr: typeof body.stderr === 'string' ? truncateOutput(body.stderr) : '',
     error: typeof body.error === 'string' ? body.error : '',
     upstreamStatus: upstream.status,
-    source: 'render-execution',
+    source: 'oracle-server-execution',
     proofState: normalizeProofState(analyzeProofState(payload.language, payload.code).proofState) || 'NN'
   };
 }
@@ -1350,10 +1362,10 @@ async function saveProblemRecord(plan, result, proofState, completedFormat) {
     },
     normalized_format: lambda.format || completedFormat || plan.requestedFormat,
     normalized_term: lambda.term && typeof lambda.term === 'object' ? lambda.term : (lambda && Object.keys(lambda).length ? lambda : { raw: String(lambda.error || '') }),
-    adapter_name: 'render-proof-convert',
+    adapter_name: 'oracle-server-proof-convert',
     adapter_meta: {
       planner: 'railway',
-      executor: 'render',
+      executor: 'oracle-server',
       planId: plan.id,
       operation: plan.operation,
       targetFamily: conversion.targetFamily || null,

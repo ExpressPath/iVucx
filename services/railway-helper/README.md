@@ -42,12 +42,15 @@ Accepted aliases:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_KEY`
+- `ORACLE_SERVER_BASE_URL`
+- `ORACLE_SERVER_API_KEY`
 
 Optional:
 
 - `HELPER_API_KEY`
 - `EXECUTION_SERVER_API_KEY`
 - `EXECUTION_SERVER_TIMEOUT_MS`
+- `ORACLE_SERVER_TIMEOUT_MS`
 - `EXECUTION_SERVER_CONVERT_ROUTE`
 - `EXECUTION_SERVER_LEAN_CHECK_ROUTE`
 - `EXECUTION_SERVER_COQ_CHECK_ROUTE`
@@ -69,7 +72,7 @@ This now creates:
 ## Notes
 
 - Railway helper no longer builds Lean / Coq toolchains.
-- Heavy CIC conversion is intentionally left to Render.
+- Heavy CIC conversion is intentionally left to Oracle-server.
 - Jobs keep progress metadata so the UI can show short real-time status text.
 - BlueMode client UI may expose only public values like `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 - The helper planner still needs a server-side service-role key and cannot bootstrap that key from browser state.
