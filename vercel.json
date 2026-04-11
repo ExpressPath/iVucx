@@ -13,6 +13,14 @@
       "dest": "/api/jscoq-proxy.js?path=$1"
     },
     {
+      "src": "/api/helper",
+      "dest": "/api/helper.js"
+    },
+    {
+      "src": "/api/helper/(.*)",
+      "dest": "/api/helper.js?route=$1"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/$1"
     },
