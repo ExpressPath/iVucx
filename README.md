@@ -98,14 +98,14 @@ The current recommended topology is:
 - `Railway` helper handles lightweight planning:
   - create / update conversion plans
   - read the right source bundle from Supabase
-  - orchestrate Oracle-server execution
+  - orchestrate GitHub Actions execution through the helper-compatible execution routes
   - persist final problem rows
-- `Oracle-server` handles heavy execution:
+- `GitHub Actions` handles heavy execution:
   - Lean / Coq proof checking
   - typed-lambda / `cic-v1` conversion
 - `Vercel` (this `iVucx` app) remains the public entrypoint:
   - serves UI and auth routes
-  - proxies execution requests to Oracle-server
+  - proxies execution requests to the execution API
   - proxies helper routes to Railway
 
 Required environment variables on the main app:
@@ -113,8 +113,8 @@ Required environment variables on the main app:
 - `HELPER_API_BASE_URL` - Railway helper for conversion, submission, and jobs
 - `HELPER_API_KEY` (optional)
 - `HELPER_API_TIMEOUT_MS` (optional)
-- `EXECUTION_API_BASE_URL`
-- `EXECUTION_API_KEY`
+- `EXECUTION_API_BASE_URL` (optional when `HELPER_API_BASE_URL` points at a helper that exposes `/api/lean-check`, `/api/coq-check`, and `/api/proof-convert`)
+- `EXECUTION_API_KEY` (optional; defaults to `HELPER_API_KEY` when the helper is reused as the execution endpoint)
 - `EXECUTION_API_PRIVATE_KEY` or `EXECUTION_API_PRIVATE_KEY_PATH` (optional PEM request signing)
 - `EXECUTION_API_TIMEOUT_MS`
 - `ALLOW_LOCAL_EXECUTION_FALLBACK` (optional, defaults to `false` in production)
@@ -130,25 +130,28 @@ Accepted aliases for the execution server:
 
 Split behavior:
 
-- `POST /api/lean-check` -> Vercel proxies proof check to Oracle-server
-- `POST /api/coq-check` -> Vercel proxies proof check to Oracle-server
-- `POST /api/proof-convert` -> Vercel proxies typed-lambda / `cic-v1` conversion to Oracle-server
-- `POST /api/helper/check` -> helper-routed proof check via Oracle-server
-- `POST /api/helper/convert` -> Railway creates a Supabase-backed conversion plan, then Oracle-server executes it
-- `POST /api/helper/submit` -> Railway creates a Supabase-backed submission plan, then Oracle-server executes it and Railway saves the problem row
+- `POST /api/lean-check` -> Vercel proxies proof check to the configured execution API; if `EXECUTION_API_BASE_URL` is unset, it can reuse `HELPER_API_BASE_URL`
+- `POST /api/coq-check` -> same as above for Coq
+- `POST /api/proof-convert` -> Vercel proxies typed-lambda / `cic-v1` conversion to the configured execution API
+- `POST /api/helper/check` -> helper-routed proof check via the same execution backend
+- `POST /api/helper/convert` -> Railway creates a Supabase-backed conversion plan, then GitHub Actions executes it
+- `POST /api/helper/submit` -> Railway creates a Supabase-backed submission plan, then GitHub Actions executes it and Railway saves the problem row
 - `GET /api/helper/info` -> Railway info plus deployment metadata
 - `GET /api/helper/schema-check` -> Railway-side Supabase schema diagnosis
 
-Because Oracle-server may load conversion plans from Supabase, the execution service also needs:
+The helper / executor side also needs:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `COQ_CMD` or `IVUCX_COQ_CMD` when Oracle-server is not picking up `coqc` from `PATH`
+- Lean / Coq toolchain setup in GitHub Actions
+- `HELPER_API_KEY` as a GitHub Actions secret when callbacks are protected
 
-Important URL note:
+Recommended deployment note:
 
-- `https://iaas.<region>.oraclecloud.com` is Oracle Cloud's control-plane endpoint, not the Oracle-server app URL for `/api/lean-check`, `/api/coq-check`, or `/api/proof-convert`.
-- Point `EXECUTION_API_BASE_URL` / `ORACLE_SERVER_BASE_URL` to the public URL of the machine or reverse proxy where `Oracle-server/index.js` is actually running.
+- The simplest Vercel setup is:
+  - `HELPER_API_BASE_URL=https://<railway-helper>`
+  - `EXECUTION_API_BASE_URL` unset
+- In that setup, direct proof routes on Vercel reuse the helper's Render-compatible execution routes, and the helper forwards heavy work to GitHub Actions.
 
 Proxy routes:
 
