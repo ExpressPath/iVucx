@@ -95,7 +95,7 @@ The current recommended topology is:
   - helper jobs
   - conversion plans
   - saved problems
-- `Railway` helper handles lightweight planning:
+- `Compute Engine` helper handles lightweight planning:
   - create / update conversion plans
   - read the right source bundle from Supabase
   - orchestrate GitHub Actions execution through the helper-compatible execution routes
@@ -106,11 +106,11 @@ The current recommended topology is:
 - `Vercel` (this `iVucx` app) remains the public entrypoint:
   - serves UI and auth routes
   - proxies execution requests to the execution API
-  - proxies helper routes to Railway
+  - proxies helper routes to the helper VM
 
 Required environment variables on the main app:
 
-- `HELPER_API_BASE_URL` - Railway helper for conversion, submission, and jobs
+- `HELPER_API_BASE_URL` - Compute Engine helper for conversion, submission, and jobs
 - `HELPER_API_KEY` (optional)
 - `HELPER_API_TIMEOUT_MS` (optional)
 - `EXECUTION_API_BASE_URL` (optional when `HELPER_API_BASE_URL` points at a helper that exposes `/api/lean-check`, `/api/coq-check`, and `/api/proof-convert`)
@@ -134,10 +134,10 @@ Split behavior:
 - `POST /api/coq-check` -> same as above for Coq
 - `POST /api/proof-convert` -> Vercel proxies typed-lambda / `cic-v1` conversion to the configured execution API
 - `POST /api/helper/check` -> helper-routed proof check via the same execution backend
-- `POST /api/helper/convert` -> Railway creates a Supabase-backed conversion plan, then GitHub Actions executes it
-- `POST /api/helper/submit` -> Railway creates a Supabase-backed submission plan, then GitHub Actions executes it and Railway saves the problem row
-- `GET /api/helper/info` -> Railway info plus deployment metadata
-- `GET /api/helper/schema-check` -> Railway-side Supabase schema diagnosis
+- `POST /api/helper/convert` -> the helper creates a Supabase-backed conversion plan, then GitHub Actions executes it
+- `POST /api/helper/submit` -> the helper creates a Supabase-backed submission plan, then GitHub Actions executes it and the helper saves the problem row
+- `GET /api/helper/info` -> helper info plus deployment metadata
+- `GET /api/helper/schema-check` -> helper-side Supabase schema diagnosis
 
 The helper / executor side also needs:
 
@@ -149,9 +149,18 @@ The helper / executor side also needs:
 Recommended deployment note:
 
 - The simplest Vercel setup is:
-  - `HELPER_API_BASE_URL=https://<railway-helper>`
+  - `HELPER_API_BASE_URL=http://<gce-helper-ip-or-domain>`
   - `EXECUTION_API_BASE_URL` unset
 - In that setup, direct proof routes on Vercel reuse the helper's Render-compatible execution routes, and the helper forwards heavy work to GitHub Actions.
+
+Google Compute Engine helper files:
+
+- `../nodejs/deploy/gce/compose.yaml`
+- `../nodejs/deploy/gce/runtime.env.example`
+- `../nodejs/deploy/gce/startup-script.sh`
+- `../nodejs/deploy/gce/create-instance.sh`
+- `../nodejs/deploy/gce/create-firewall-rule.sh`
+- `../nodejs/deploy/gce/README.md`
 
 Proxy routes:
 
@@ -164,7 +173,7 @@ Proxy routes:
 - `GET /api/helper/jobs/:id/result`
 - `DELETE /api/helper/jobs/:id`
 
-Railway helper service files:
+Helper service files:
 
 - `services/railway-helper/package.json`
 - `services/railway-helper/Dockerfile`
@@ -176,4 +185,4 @@ Railway helper service files:
 - `supabase/proof_helper.sql`
 - `supabase/proof_helper_check.sql`
 
-If Railway is missing `helper_conversion_plans`, the helper can now fall back to in-memory planning for the current process, but durable planning still requires the Supabase schema above.
+If the helper is missing `helper_conversion_plans`, it can now fall back to in-memory planning for the current process, but durable planning still requires the Supabase schema above.
