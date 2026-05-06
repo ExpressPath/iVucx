@@ -152,6 +152,7 @@ Recommended deployment note:
   - `HELPER_API_BASE_URL=http://<gce-helper-ip-or-domain>`
   - `EXECUTION_API_BASE_URL` unset
 - In that setup, direct proof routes on Vercel reuse the helper's Render-compatible execution routes, and the helper forwards heavy work to GitHub Actions.
+- The browser-side helper UI now prefers the same-origin Vercel proxy in production, so it does not need direct cross-origin access to the helper VM for submit / job polling.
 
 Google Compute Engine helper files:
 

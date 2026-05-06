@@ -675,21 +675,34 @@
         const steps = [
           {
             progress: 10,
-            label: 'Checking helper',
-            baseUrl: directHelperBaseUrl,
-            path: '/healthz',
-            sameOrigin: false,
-            headers: {}
-          },
-          {
-            progress: 12,
             label: 'Loading helper',
-            baseUrl: directHelperBaseUrl,
+            baseUrl: '',
             path: '/api/helper/info',
-            sameOrigin: false,
-            headers: buildDirectHelperHeaders()
+            sameOrigin: true,
+            headers: {}
           }
         ];
+
+        if(directHelperBaseUrl){
+          steps.push(
+            {
+              progress: 12,
+              label: 'Checking helper',
+              baseUrl: directHelperBaseUrl,
+              path: '/healthz',
+              sameOrigin: false,
+              headers: {}
+            },
+            {
+              progress: 14,
+              label: 'Loading helper',
+              baseUrl: directHelperBaseUrl,
+              path: '/api/helper/info',
+              sameOrigin: false,
+              headers: buildDirectHelperHeaders()
+            }
+          );
+        }
 
         let helperReady = false;
 
@@ -756,7 +769,7 @@
         );
       }
 
-      const DEFAULT_DIRECT_HELPER_BASE_URL = 'https://nodejs-production-e71bc.up.railway.app';
+      const DEFAULT_DIRECT_HELPER_BASE_URL = '';
       const HELPER_EXECUTION_BRIDGE_HEADER = 'X-Ivucx-Execution-Base-Url';
 
       function resolveExecutionBridgeBaseUrl(){
@@ -959,11 +972,12 @@
         if(helperInfoRequest) return helperInfoRequest;
         helperInfoRequest = (async ()=>{
           const directBaseUrl = resolveDirectHelperBaseUrl(null);
-          const attempts = [];
+          const attempts = [
+            { baseUrl: '', sameOrigin: true }
+          ];
           if(directBaseUrl){
             attempts.push({ baseUrl: directBaseUrl, sameOrigin: false });
           }
-          attempts.push({ baseUrl: '', sameOrigin: true });
 
           for(const attempt of attempts){
             try{
@@ -991,14 +1005,15 @@
         const helperServer = deployment && typeof deployment.helperServer === 'string'
           ? deployment.helperServer.trim()
           : '';
-        if(helperServer){
-          return helperServer.replace(/\/+$/, '');
-        }
         const host = typeof window !== 'undefined' && window.location && typeof window.location.hostname === 'string'
           ? window.location.hostname.trim().toLowerCase()
           : '';
-        if(host === 'localhost' || host === '127.0.0.1'){
+        const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+        if(!isLocalHost){
           return '';
+        }
+        if(helperServer){
+          return helperServer.replace(/\/+$/, '');
         }
         return DEFAULT_DIRECT_HELPER_BASE_URL.replace(/\/+$/, '');
       }
