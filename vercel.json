@@ -7,6 +7,35 @@
       "excludeFiles": "jscoq/**"
     }
   },
+  "headers": [
+    {
+      "source": "/post-preview.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
+      ]
+    },
+    {
+      "source": "/post-runner.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
+      ]
+    },
+    {
+      "source": "/editor.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
+      ]
+    }
+  ],
   "routes": [
     {
       "src": "/api/jscoq/(.*)",
