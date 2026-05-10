@@ -39,15 +39,15 @@
   "routes": [
     {
       "src": "/api/jscoq/(.*)",
-      "dest": "/api/jscoq-proxy.js?path=$1"
+      "dest": "/api/jscoq-proxy?path=$1"
     },
     {
       "src": "/api/helper",
-      "dest": "/api/helper.js"
+      "dest": "/api/helper"
     },
     {
       "src": "/api/helper/(.*)",
-      "dest": "/api/helper.js?route=$1"
+      "dest": "/api/helper?route=$1"
     },
     {
       "src": "/api/(.*)",
