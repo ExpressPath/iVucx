@@ -1141,10 +1141,12 @@
         throw lastError || new Error('Failed to load helper job.');
       }
 
+      const HELPER_JOB_TIMEOUT_MS = 45 * 60 * 1000;
+
       async function waitForHelperJob(jobId, onUpdate){
         const startedAt = Date.now();
         helperPollTicks = 0;
-        while(Date.now() - startedAt < 180000){
+        while(Date.now() - startedAt < HELPER_JOB_TIMEOUT_MS){
           let payload = null;
           try{
             payload = await fetchHelperJob(jobId);
