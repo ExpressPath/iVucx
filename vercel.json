@@ -50,6 +50,26 @@
       "dest": "/api/helper?route=$1"
     },
     {
+      "src": "/api/google-auth-start",
+      "dest": "/api/google?route=auth-start"
+    },
+    {
+      "src": "/api/google-auth-callback",
+      "dest": "/api/google?route=auth-callback"
+    },
+    {
+      "src": "/api/google-files",
+      "dest": "/api/google?route=files"
+    },
+    {
+      "src": "/api/google-import",
+      "dest": "/api/google?route=import"
+    },
+    {
+      "src": "/api/google-status",
+      "dest": "/api/google?route=status"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/$1"
     },

@@ -8,11 +8,7 @@ import blueAuthLogout from './api/blue-auth-logout.js';
 import blueAuthSignup from './api/blue-auth-signup.js';
 import checkLogin from './api/check-login.js';
 import cookieConsent from './api/cookie-consent.js';
-import googleAuthCallback from './api/google-auth-callback.js';
-import googleAuthStart from './api/google-auth-start.js';
-import googleFiles from './api/google-files.js';
-import googleImport from './api/google-import.js';
-import googleStatus from './api/google-status.js';
+import googleApi from './api/google.js';
 import jscoqProxy from './api/jscoq-proxy.js';
 import suggest from './api/suggest.js';
 import {
@@ -49,6 +45,14 @@ function wrap(handler) {
         detail: error && error.message ? error.message : String(error)
       });
     }
+  };
+}
+
+function googleRoute(route) {
+  return (req, res) => {
+    req.query = req.query || {};
+    req.query.route = route;
+    return googleApi(req, res);
   };
 }
 
@@ -110,11 +114,12 @@ app.all('/api/blue-auth-login', wrap(blueAuthLogin));
 app.all('/api/blue-auth-logout', wrap(blueAuthLogout));
 app.all('/api/check-login', wrap(checkLogin));
 app.all('/api/cookie-consent', wrap(cookieConsent));
-app.all('/api/google-auth-start', wrap(googleAuthStart));
-app.all('/api/google-auth-callback', wrap(googleAuthCallback));
-app.all('/api/google-files', wrap(googleFiles));
-app.all('/api/google-import', wrap(googleImport));
-app.all('/api/google-status', wrap(googleStatus));
+app.all('/api/google', wrap(googleApi));
+app.all('/api/google-auth-start', wrap(googleRoute('auth-start')));
+app.all('/api/google-auth-callback', wrap(googleRoute('auth-callback')));
+app.all('/api/google-files', wrap(googleRoute('files')));
+app.all('/api/google-import', wrap(googleRoute('import')));
+app.all('/api/google-status', wrap(googleRoute('status')));
 app.all('/api/suggest', wrap(suggest));
 
 app.use(express.static(__dirname, { dotfiles: 'ignore', extensions: ['html'] }));
