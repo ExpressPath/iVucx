@@ -1,3 +1,4 @@
+import './lib/local-env.js';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -7,6 +8,11 @@ import blueAuthLogout from './api/blue-auth-logout.js';
 import blueAuthSignup from './api/blue-auth-signup.js';
 import checkLogin from './api/check-login.js';
 import cookieConsent from './api/cookie-consent.js';
+import googleAuthCallback from './api/google-auth-callback.js';
+import googleAuthStart from './api/google-auth-start.js';
+import googleFiles from './api/google-files.js';
+import googleImport from './api/google-import.js';
+import googleStatus from './api/google-status.js';
 import jscoqProxy from './api/jscoq-proxy.js';
 import suggest from './api/suggest.js';
 import {
@@ -104,6 +110,11 @@ app.all('/api/blue-auth-login', wrap(blueAuthLogin));
 app.all('/api/blue-auth-logout', wrap(blueAuthLogout));
 app.all('/api/check-login', wrap(checkLogin));
 app.all('/api/cookie-consent', wrap(cookieConsent));
+app.all('/api/google-auth-start', wrap(googleAuthStart));
+app.all('/api/google-auth-callback', wrap(googleAuthCallback));
+app.all('/api/google-files', wrap(googleFiles));
+app.all('/api/google-import', wrap(googleImport));
+app.all('/api/google-status', wrap(googleStatus));
 app.all('/api/suggest', wrap(suggest));
 
 app.use(express.static(__dirname, { dotfiles: 'ignore', extensions: ['html'] }));

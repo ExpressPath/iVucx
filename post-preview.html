@@ -450,12 +450,35 @@
     }
     .doc-empty{
       display:flex;
+      flex-direction:column;
       align-items:center;
       justify-content:center;
+      gap:14px;
       padding:28px;
       font-size:24px;
       color:#475569;
       text-align:center;
+    }
+    .doc-empty small{
+      display:block;
+      max-width:620px;
+      color:#64748b;
+      font-size:14px;
+      line-height:1.55;
+    }
+    .doc-link{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-height:40px;
+      padding:0 16px;
+      border-radius:999px;
+      background:#0f172a;
+      color:#ffffff;
+      font-size:13px;
+      font-weight:800;
+      letter-spacing:.02em;
+      text-decoration:none;
     }
     @media (max-width:1020px){
       .topbar{
@@ -521,7 +544,7 @@
     </div>
     <div class="topbar-actions">
       <div class="view-switch" role="tablist" aria-label="Preview mode">
-        <button class="view-tab" id="slideTab" type="button" role="tab" aria-selected="true">Slide</button>
+        <button class="view-tab" id="slideTab" type="button" role="tab" aria-selected="true">Upload</button>
         <span class="view-divider" aria-hidden="true"></span>
         <button class="view-tab" id="sourceTab" type="button" role="tab" aria-selected="false">Source</button>
       </div>
@@ -582,6 +605,7 @@
       let currentView = 'slide';
       let currentLanguage = 'Lean';
       let currentFileName = 'Main.lean';
+      let deckItemLabel = 'Slide';
       let touchStartX = 0;
       let touchStartY = 0;
       let helperBusy = false;
@@ -1358,7 +1382,27 @@
           : null;
         const source = editorState && Array.isArray(editorState.slides)
           ? editorState.slides
-          : [];
+          : (editorState && Array.isArray(editorState.uploads)
+            ? editorState.uploads.map(upload => ({
+              type: 'document',
+              hidden: false,
+              document: {
+                title: upload.title || 'Uploaded file',
+                kind: upload.kind || 'file',
+                ext: upload.ext || '',
+                mime: upload.mime || '',
+                size: Number(upload.size) || 0,
+                checked: true,
+                url: upload.url || '',
+                text: upload.text || '',
+                source: upload.source || 'local',
+                provider: upload.provider || '',
+                providerKind: upload.providerKind || '',
+                webViewLink: upload.webViewLink || '',
+                googleFileId: upload.googleFileId || ''
+              }
+            }))
+            : []);
         return source
           .map((slide, index)=>slide && typeof slide === 'object' ? { ...slide, __index: index } : null)
           .filter(Boolean);
@@ -1574,7 +1618,26 @@
         }else{
           const empty = document.createElement('div');
           empty.className = 'doc-empty';
-          empty.textContent = 'No previewable document is saved for this slide.';
+          const title = document.createElement('div');
+          title.textContent = documentInfo && documentInfo.title
+            ? documentInfo.title
+            : 'Uploaded file';
+          const note = document.createElement('small');
+          note.textContent = documentInfo && documentInfo.source === 'google'
+            ? 'This Google file is linked to the post. Open it in Google to inspect the original file.'
+            : 'This file is saved with the post, but this browser preview cannot render the format directly.';
+          empty.appendChild(title);
+          empty.appendChild(note);
+          const href = documentInfo && (documentInfo.webViewLink || documentInfo.url);
+          if(href){
+            const link = document.createElement('a');
+            link.className = 'doc-link';
+            link.href = href;
+            link.target = documentInfo && documentInfo.webViewLink ? '_blank' : '_self';
+            link.rel = 'noopener';
+            link.textContent = documentInfo && documentInfo.webViewLink ? 'Open in Google' : 'Download file';
+            empty.appendChild(link);
+          }
           body.appendChild(empty);
         }
         shell.appendChild(body);
@@ -1593,13 +1656,13 @@
         stageEl.innerHTML = '';
         const visible = clampSlideIndex();
         counterEl.textContent = visible.length
-          ? 'Slide ' + (slideIndex + 1) + ' / ' + visible.length
-          : 'No slides';
+          ? deckItemLabel + ' ' + (slideIndex + 1) + ' / ' + visible.length
+          : 'No uploads';
 
         if(visible.length === 0){
           const empty = document.createElement('div');
           empty.className = 'empty';
-          empty.textContent = 'No finished slides are saved yet.';
+          empty.textContent = 'No uploaded files are saved yet.';
           stageEl.appendChild(empty);
           syncStageScale();
           return;
@@ -1655,6 +1718,7 @@
         const record = draft && draft.summarySlide && draft.summarySlide.record && typeof draft.summarySlide.record === 'object'
           ? draft.summarySlide.record
           : null;
+        deckItemLabel = record && record.uploadMode ? 'File' : 'Slide';
         const helperResult = draft
           && draft.helper
           && draft.helper.lambdaConversion

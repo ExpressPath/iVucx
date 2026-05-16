@@ -199,62 +199,35 @@
       margin-top:8px;
     }
 
-    .slide-toolbar,
-    .slide-thumbs,
-    .slide-canvas,
-    .slide-inspector,
+    .upload-shell,
     .slide-status{
       display:none;
     }
 
     body.scrolled .search-container.expanded .search-box{
-      --slide-panel:#f7f8fa;
-      --slide-paper:#ffffff;
-      --slide-ink:#1f2933;
-      --slide-line:rgba(15,23,42,0.12);
-      --slide-accent:#1a73e8;
+      --upload-ink:#f8fbff;
+      --upload-muted:rgba(241,247,255,0.74);
+      --upload-glass:rgba(255,255,255,0.16);
+      --upload-glass-strong:rgba(255,255,255,0.24);
+      --upload-line:rgba(255,255,255,0.22);
+      --upload-blue:#61a9ff;
       display:grid;
-      grid-template-columns:140px minmax(0,1fr) 220px;
+      grid-template-columns:minmax(0,1fr);
       grid-template-rows:auto minmax(0,1fr) auto;
       grid-template-areas:
-        "toolbar toolbar toolbar"
-        "thumbs canvas inspector"
-        "status status actions";
-      gap:8px;
-      padding:8px;
+        "upload"
+        "upload"
+        "actions";
+      gap:0;
+      padding:18px;
       overflow:hidden;
-      background:linear-gradient(180deg, rgba(255,255,255,0.92), rgba(238,240,244,0.9));
-      border:1px solid rgba(15,23,42,0.12);
-      border-radius:12px;
-      box-shadow:0 22px 46px rgba(15,23,42,0.2);
-      backdrop-filter:blur(10px);
-    }
-
-    body.scrolled .search-container.expanded.slide-css-editing .search-box{
-      grid-template-columns:40px minmax(0,1fr) 320px;
-    }
-
-    body.scrolled .search-container.expanded .slide-toolbar{
-      grid-area:toolbar;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      flex-wrap:wrap;
-      padding:8px 12px;
-      border-radius:12px;
-      background:var(--slide-panel);
-      border:1px solid var(--slide-line);
-      color:var(--slide-ink);
-      gap:12px;
-    }
-
-    .slide-toolbar-left,
-    .slide-toolbar-right{
-      display:flex;
-      align-items:center;
-      gap:12px;
-      min-width:0;
-      flex-wrap:wrap;
+      background:
+        linear-gradient(145deg, rgba(120,196,255,0.72) 0%, rgba(18,101,222,0.88) 42%, rgba(4,21,78,0.96) 100%),
+        linear-gradient(12deg, rgba(255,255,255,0.28), rgba(255,255,255,0) 48%);
+      border:1px solid rgba(255,255,255,0.24);
+      border-radius:22px;
+      box-shadow:0 30px 80px rgba(3,16,58,0.34);
+      backdrop-filter:blur(18px) saturate(142%);
     }
 
     .slide-app-pill{
@@ -276,7 +249,7 @@
     }
 
     .slide-app-pill:hover{
-      background:#1f2937;
+      background:#0d1b34;
       transform:translateY(-1px);
     }
 
@@ -400,145 +373,250 @@
       color:#ffffff;
     }
 
-    .slide-toolbar-group{
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      font-size:12px;
-      color:#516071;
-    }
-
-    .slide-tool{
-      padding:4px 6px;
-      border-radius:6px;
-      background:rgba(15,23,42,0.04);
-      border:1px solid rgba(15,23,42,0.08);
-    }
-
-    .slide-zoom-pill{
-      font-size:12px;
-      padding:6px 10px;
-      border-radius:999px;
-      background:#fff;
-      border:1px solid var(--slide-line);
-      color:#111;
-      white-space:nowrap;
-    }
-
-    .slide-toolbar-button{
-      padding:6px 12px;
-      border-radius:10px;
-      background:#fff;
-      border:1px solid var(--slide-line);
-      font-size:12px;
-      font-weight:600;
-      color:#111;
-      white-space:nowrap;
-    }
-
-    .slide-toolbar-button.is-primary{
-      background:var(--slide-accent);
-      border-color:var(--slide-accent);
-      color:#fff;
-      box-shadow:0 8px 16px rgba(26,115,232,0.28);
-    }
-
-    body.scrolled .search-container.expanded .slide-thumbs{
-      grid-area:thumbs;
+    body.scrolled .search-container.expanded .upload-shell{
+      grid-area:upload;
       display:flex;
       flex-direction:column;
-      gap:10px;
-      padding:8px;
-      border-radius:12px;
-      background:var(--slide-panel);
-      border:1px solid var(--slide-line);
-      overflow:auto;
       min-height:0;
-      min-width:120px;
+      color:var(--upload-ink);
     }
 
-    .slide-thumb{
+    .upload-topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
       position:relative;
-      padding:8px;
-      border-radius:10px;
-      background:#fff;
-      border:1px solid var(--slide-line);
-      box-shadow:0 6px 14px rgba(15,23,42,0.12);
+      z-index:2;
+      min-height:34px;
+    }
+
+    .upload-status-label{
+      min-width:0;
+      color:rgba(255,255,255,0.76);
+      font-size:12px;
+      font-weight:650;
+      letter-spacing:.01em;
+      text-align:right;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .upload-main{
+      flex:1;
+      min-height:0;
       display:flex;
       flex-direction:column;
-      gap:6px;
+      align-items:center;
+      justify-content:center;
+      padding:clamp(28px, 7vh, 72px) 16px clamp(42px, 11vh, 108px);
     }
 
-    .slide-thumb.is-active{
-      outline:2px solid var(--slide-accent);
-      outline-offset:2px;
-    }
-
-    .slide-thumb-index{
-      position:absolute;
-      top:6px;
-      left:6px;
-      font-size:10px;
-      font-weight:700;
-      color:#5b6b7c;
-    }
-
-    .slide-thumb-canvas{
-      border-radius:6px;
-      aspect-ratio:16/9;
+    .upload-dropzone{
+      appearance:none;
+      width:min(760px, 82vw);
+      min-height:clamp(170px, 28vh, 280px);
+      border:0;
+      border-radius:26px;
+      color:#ffffff;
       background:
-        linear-gradient(180deg, #f9fafb, #eef1f4);
-      border:1px solid rgba(15,23,42,0.1);
+        linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.12)),
+        rgba(255,255,255,0.08);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.36),
+        inset 0 -1px 0 rgba(255,255,255,0.08),
+        0 28px 70px rgba(2,13,47,0.28);
+      backdrop-filter:blur(18px) saturate(145%);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:12px;
+      cursor:pointer;
+      text-align:center;
+      padding:30px;
+      transition:transform .18s ease, box-shadow .22s ease, background-color .18s ease;
     }
 
-    .slide-thumb-add{
-      border:1px dashed rgba(15,23,42,0.28);
-      border-radius:10px;
-      background:transparent;
-      color:#3b4b5f;
-      padding:8px;
-      font-size:12px;
+    .upload-dropzone:hover,
+    .upload-dropzone.is-dragging{
+      transform:translateY(-2px);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.42),
+        inset 0 -1px 0 rgba(255,255,255,0.1),
+        0 34px 82px rgba(2,13,47,0.34);
+      background-color:rgba(255,255,255,0.1);
+    }
+
+    .upload-dropzone:focus-visible{
+      outline:none;
+      box-shadow:
+        0 0 0 3px rgba(255,255,255,0.34),
+        0 34px 82px rgba(2,13,47,0.34);
+    }
+
+    .upload-dropzone-title{
+      font-size:clamp(22px, 4vw, 34px);
+      font-weight:760;
+      letter-spacing:0;
+      line-height:1.1;
+    }
+
+    .upload-dropzone-copy{
+      max-width:460px;
+      color:rgba(255,255,255,0.76);
+      font-size:14px;
+      line-height:1.55;
+    }
+
+    .upload-file-list{
+      width:min(760px, 82vw);
+      margin-top:18px;
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+      gap:10px;
+    }
+
+    .upload-file-item{
+      min-width:0;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      border-radius:16px;
+      padding:11px 12px;
+      color:#ffffff;
+      background:rgba(255,255,255,0.14);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.18);
+      backdrop-filter:blur(14px);
+    }
+
+    .upload-file-name{
+      display:block;
+      min-width:0;
+      font-size:13px;
+      font-weight:700;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .upload-file-meta{
+      display:block;
+      margin-top:2px;
+      font-size:11px;
+      color:rgba(255,255,255,0.68);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .upload-file-remove{
+      appearance:none;
+      border:0;
+      flex:0 0 auto;
+      width:26px;
+      height:26px;
+      border-radius:50%;
+      background:rgba(255,255,255,0.16);
+      color:#ffffff;
+      font-size:18px;
+      line-height:1;
       cursor:pointer;
     }
 
-    body.scrolled .search-container.expanded .slide-canvas{
-      grid-area:canvas;
+    .google-import{
+      position:relative;
+      margin-top:20px;
       display:flex;
-      position:relative;
-      min-height:0;
-      border-radius:12px;
-      background:
-        radial-gradient(circle at 1px 1px, rgba(15,23,42,0.08) 1px, transparent 1px) 0 0 / 24px 24px,
-        linear-gradient(180deg, rgba(255,255,255,0.82), rgba(244,246,248,0.9));
-      border:1px solid var(--slide-line);
-      overflow:hidden;
+      flex-direction:column;
+      align-items:center;
+      color:#ffffff;
     }
 
-    body.scrolled .search-container.expanded .search-input{
-      grid-area:canvas;
-      position:relative;
-      z-index:2;
-      width:min(1200px, 100%);
-      min-height:320px;
-      max-height:100%;
-      border-radius:8px;
-      border:1px solid #d5d8de;
-      background:var(--slide-paper);
-      box-shadow:0 18px 40px rgba(15,23,42,0.18);
-      padding:32px 36px;
-      font-size:18px;
-      line-height:1.55;
-      color:#111;
-      justify-self:center;
-      align-self:center;
-      caret-color:#111;
-      aspect-ratio:16/9;
+    .google-trigger{
+      appearance:none;
+      border:0;
+      background:transparent;
+      color:#ffffff;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 10px;
+      font-size:14px;
+      font-weight:720;
+      cursor:pointer;
     }
 
-    body.scrolled .search-container.expanded .slide-toolbar,
-    body.scrolled .search-container.expanded .slide-thumbs,
-    body.scrolled .search-container.expanded .slide-canvas,
-    body.scrolled .search-container.expanded .slide-inspector,
+    .google-trigger:focus-visible{
+      outline:none;
+      text-decoration:underline;
+      text-underline-offset:5px;
+    }
+
+    .google-logo{
+      width:18px;
+      height:18px;
+      display:block;
+      flex:0 0 auto;
+    }
+
+    .google-menu{
+      position:absolute;
+      top:100%;
+      left:50%;
+      transform:translate(-50%, 8px);
+      min-width:176px;
+      padding:8px;
+      border:0;
+      border-radius:16px;
+      background:rgba(255,255,255,0.14);
+      box-shadow:0 18px 44px rgba(2,13,47,0.26);
+      backdrop-filter:blur(18px) saturate(142%);
+      z-index:5;
+    }
+
+    .google-menu[hidden]{
+      display:none;
+    }
+
+    .google-menu button{
+      appearance:none;
+      border:0;
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:flex-start;
+      background:transparent;
+      color:#ffffff;
+      border-radius:11px;
+      padding:9px 12px;
+      font-size:13px;
+      font-weight:650;
+      text-align:left;
+      cursor:pointer;
+    }
+
+    .google-menu button:hover,
+    .google-menu button:focus-visible{
+      outline:none;
+      background:rgba(255,255,255,0.16);
+    }
+
+    .upload-message{
+      min-height:20px;
+      margin-top:14px;
+      color:rgba(255,255,255,0.75);
+      font-size:12px;
+      text-align:center;
+    }
+
+    .upload-message.is-error{
+      color:#ffe0e0;
+    }
+
+    body.scrolled .search-container.expanded .upload-shell,
     body.scrolled .search-container.expanded .slide-status,
     body.scrolled .search-container.expanded .slide-actions,
     body.scrolled .search-container.expanded .search-input{
@@ -546,10 +624,7 @@
       will-change:opacity,transform;
     }
 
-    body.scrolled .search-container.expanded:not(.editor-ui-ready) .slide-toolbar,
-    body.scrolled .search-container.expanded:not(.editor-ui-ready) .slide-thumbs,
-    body.scrolled .search-container.expanded:not(.editor-ui-ready) .slide-canvas,
-    body.scrolled .search-container.expanded:not(.editor-ui-ready) .slide-inspector,
+    body.scrolled .search-container.expanded:not(.editor-ui-ready) .upload-shell,
     body.scrolled .search-container.expanded:not(.editor-ui-ready) .slide-status,
     body.scrolled .search-container.expanded:not(.editor-ui-ready) .slide-actions,
     body.scrolled .search-container.expanded:not(.editor-ui-ready) .search-input{
@@ -557,10 +632,7 @@
       transform:translateY(10px) scale(.985);
     }
 
-    body.scrolled .search-container.expanded.editor-ui-ready .slide-toolbar,
-    body.scrolled .search-container.expanded.editor-ui-ready .slide-thumbs,
-    body.scrolled .search-container.expanded.editor-ui-ready .slide-canvas,
-    body.scrolled .search-container.expanded.editor-ui-ready .slide-inspector,
+    body.scrolled .search-container.expanded.editor-ui-ready .upload-shell,
     body.scrolled .search-container.expanded.editor-ui-ready .slide-status,
     body.scrolled .search-container.expanded.editor-ui-ready .slide-actions,
     body.scrolled .search-container.expanded.editor-ui-ready .search-input{
@@ -568,84 +640,22 @@
       transform:translateY(0) scale(1);
     }
 
-    body.scrolled .search-container.expanded .search-input:focus{
-      outline:none;
-      box-shadow:0 0 0 2px rgba(26,115,232,0.32), 0 18px 40px rgba(15,23,42,0.18);
-    }
-
-    body.scrolled .search-container.expanded .slide-inspector{
-      grid-area:inspector;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
+    body.scrolled .search-container.expanded .search-input{
+      position:absolute;
+      width:1px;
+      height:1px;
       min-height:0;
-      padding:8px;
-      border-radius:12px;
-      background:var(--slide-panel);
-      border:1px solid var(--slide-line);
-      color:var(--slide-ink);
-      overflow:auto;
-    }
-
-    .slide-panel{
-      border-radius:10px;
-      border:1px solid rgba(15,23,42,0.08);
-      background:#fff;
-      padding:10px;
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-    }
-
-    .slide-panel-title{
-      font-size:12px;
-      font-weight:700;
-      text-transform:uppercase;
-      letter-spacing:.04em;
-      color:#556171;
-    }
-
-    .slide-swatches{
-      display:flex;
-      gap:8px;
-    }
-
-    .slide-swatch{
-      width:22px;
-      height:22px;
-      border-radius:6px;
-      border:1px solid rgba(15,23,42,0.15);
-      box-shadow:0 4px 8px rgba(15,23,42,0.12);
-    }
-
-    .slide-swatch.one{ background:#1a73e8; }
-    .slide-swatch.two{ background:#34a853; }
-    .slide-swatch.three{ background:#fbbc04; }
-    .slide-swatch.four{ background:#ea4335; }
-    .slide-swatch.five{ background:#111827; }
-
-    .slide-layout-grid{
-      display:grid;
-      grid-template-columns:repeat(2, 1fr);
-      gap:8px;
-    }
-
-    .slide-layout-card{
-      height:38px;
-      border-radius:8px;
-      border:1px solid rgba(15,23,42,0.12);
-      background:linear-gradient(180deg, #f8fafc, #eef2f6);
-    }
-
-    .slide-panel-note{
-      font-size:12px;
-      color:#5b6878;
-      line-height:1.4;
+      max-height:none;
+      padding:0;
+      border:0;
+      opacity:0;
+      pointer-events:none;
+      overflow:hidden;
     }
 
     body.scrolled .search-container.expanded .slide-status{
       grid-area:status;
-      display:flex;
+      display:none;
       align-items:center;
       justify-content:space-between;
       padding:0 8px;
@@ -668,6 +678,8 @@
       align-self:stretch;
       margin-top:0;
       justify-self:end;
+      position:relative;
+      z-index:4;
     }
 
     body.scrolled .search-container.expanded .send-button{
@@ -675,23 +687,24 @@
       height:40px;
       padding:0 16px;
       border-radius:12px;
-      background:var(--slide-accent);
+      background:#ffffff;
       color:#fff;
       gap:8px;
-      box-shadow:0 10px 22px rgba(26,115,232,0.28);
+      box-shadow:0 16px 34px rgba(2,13,47,0.24);
       margin-top:0;
     }
 
     body.scrolled .search-container.expanded .send-button svg{
-      stroke:#fff;
+      stroke:#08225d;
     }
 
     body.scrolled .search-container.expanded .send-button::after{
-      content:'Insert';
+      content:'Next';
       font-size:12px;
       font-weight:700;
       letter-spacing:.03em;
       text-transform:uppercase;
+      color:#08225d;
     }
 
     body.scrolled .search-container.expanded .search-mode-close{
@@ -705,8 +718,9 @@
       display:inline-flex;
       z-index:auto;
       box-shadow:none;
-      background:#ffffff;
-      color:#111;
+      background:rgba(255,255,255,0.16);
+      color:#ffffff;
+      backdrop-filter:blur(12px);
     }
 
     body.scrolled .search-container.expanded .attachment-list,
@@ -715,55 +729,155 @@
       display:none;
     }
 
+    .google-picker{
+      position:fixed;
+      inset:0;
+      z-index:1320;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      background:rgba(2,8,28,0.46);
+      backdrop-filter:blur(12px);
+    }
+
+    .google-picker.is-open{
+      display:flex;
+    }
+
+    .google-picker-card{
+      width:min(720px, 100%);
+      max-height:min(680px, calc(100dvh - 48px));
+      border-radius:22px;
+      border:1px solid rgba(255,255,255,0.24);
+      background:rgba(255,255,255,0.9);
+      box-shadow:0 34px 90px rgba(2,13,47,0.38);
+      color:#0f172a;
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+    }
+
+    .google-picker-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:18px 20px;
+      border-bottom:1px solid rgba(15,23,42,0.08);
+    }
+
+    .google-picker-title{
+      margin:0;
+      font-size:18px;
+      font-weight:760;
+      letter-spacing:0;
+    }
+
+    .google-picker-close{
+      appearance:none;
+      border:0;
+      width:34px;
+      height:34px;
+      border-radius:50%;
+      background:#eef2f7;
+      color:#0f172a;
+      font-size:22px;
+      cursor:pointer;
+    }
+
+    .google-picker-status{
+      min-height:20px;
+      padding:12px 20px 0;
+      font-size:13px;
+      color:#475569;
+    }
+
+    .google-picker-list{
+      overflow:auto;
+      padding:12px 12px 18px;
+      display:grid;
+      gap:8px;
+    }
+
+    .google-file-option{
+      appearance:none;
+      border:0;
+      border-radius:14px;
+      background:#ffffff;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      padding:13px 14px;
+      color:#0f172a;
+      text-align:left;
+      cursor:pointer;
+      box-shadow:0 8px 22px rgba(15,23,42,0.08);
+    }
+
+    .google-file-option:hover,
+    .google-file-option:focus-visible{
+      outline:none;
+      background:#f8fbff;
+    }
+
+    .google-file-name{
+      display:block;
+      min-width:0;
+      font-size:14px;
+      font-weight:720;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .google-file-meta{
+      display:block;
+      margin-top:3px;
+      font-size:12px;
+      color:#64748b;
+    }
+
+    .google-file-import{
+      flex:0 0 auto;
+      font-size:12px;
+      font-weight:760;
+      color:#1458d9;
+    }
+
     @media (max-width:980px){
       body.scrolled .search-container.expanded .search-box{
-        grid-template-columns:120px minmax(0,1fr);
-        grid-template-areas:
-          "toolbar toolbar"
-          "thumbs canvas"
-          "status actions";
-      }
-
-      body.scrolled .search-container.expanded.slide-css-editing .search-box{
-        grid-template-columns:40px minmax(0,1fr) 300px;
-        grid-template-areas:
-          "toolbar toolbar toolbar"
-          "thumbs canvas inspector"
-          "status status actions";
-      }
-
-      body.scrolled .search-container.expanded .slide-inspector{
-        display:none;
-      }
-
-      body.scrolled .search-container.expanded.slide-css-editing .slide-inspector{
-        display:flex;
+        padding:14px;
       }
     }
 
     @media (max-width:700px){
       body.scrolled .search-container.expanded .search-box{
-        grid-template-columns:minmax(0,1fr);
-        grid-template-rows:auto minmax(0,1fr) auto auto;
-        grid-template-areas:
-          "toolbar"
-          "canvas"
-          "thumbs"
-          "status"
-          "actions";
+        padding:10px;
       }
 
-      body.scrolled .search-container.expanded .slide-thumbs{
-        flex-direction:row;
-        overflow-x:auto;
-        overflow-y:hidden;
+      .upload-topbar{
+        align-items:flex-start;
+        flex-direction:column;
       }
 
-      body.scrolled .search-container.expanded .slide-thumb{
-        min-width:140px;
+      .upload-status-label{
+        text-align:left;
+        white-space:normal;
       }
 
-      body.scrolled .search-container.expanded .search-input{
+      .upload-main{
+        padding:24px 6px 54px;
+      }
+
+      .upload-dropzone{
+        width:100%;
+        min-height:190px;
+        padding:24px 18px;
+      }
+
+      .upload-file-list{
         width:100%;
       }
 
@@ -2093,8 +2207,6 @@
       }
     }
   </style>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/mathquill/0.10.1/mathquill.min.css" />
-  <link rel="stylesheet" href="slide-editor.css" />
 </head>
 <body>
 
@@ -2102,47 +2214,36 @@
   <div class="search-container" id="searchContainer">
 
     <form class="search-box" id="searchForm">
-      <div class="slide-toolbar">
-        <div class="slide-toolbar-left">
-          <button class="slide-app-pill" id="slideTitleTrigger" type="button" aria-haspopup="dialog" aria-expanded="false" title="Change the saved title">Slides</button>
-          <div class="slide-toolbar-group" data-group="tools">
-            <button class="slide-tool is-active" type="button" data-tool="select">Select</button>
-            <button class="slide-tool" type="button" data-tool="text">Text</button>
-            <button class="slide-tool" type="button" data-tool="equation">Math Text</button>
-            <button class="slide-tool" type="button" data-tool="shape">Shape...</button>
-            <button class="slide-tool" type="button" data-tool="line">Line...</button>
-            <button class="slide-tool" type="button" data-tool="image">Image</button>
-            <button class="slide-tool" type="button" data-tool="video">Video</button>
-            <button class="slide-tool" type="button" data-tool="file">File</button>
-          </div>
+      <div class="upload-shell" id="uploadShell">
+        <div class="upload-topbar">
+          <button class="slide-app-pill" id="slideTitleTrigger" type="button" aria-haspopup="dialog" aria-expanded="false" title="Change the saved title">Upload</button>
+          <div class="upload-status-label" id="uploadStatusLabel">No file uploaded</div>
         </div>
-        <div class="slide-toolbar-right">
-          <div class="slide-toolbar-group" data-group="arrange">
-            <button class="slide-tool" type="button" data-action="bring-front">Front</button>
-            <button class="slide-tool" type="button" data-action="send-back">Back</button>
-            <button class="slide-tool" type="button" data-action="duplicate">Duplicate</button>
-            <button class="slide-tool" type="button" data-action="delete">Delete</button>
+        <div class="upload-main">
+          <button class="upload-dropzone" id="uploadDropzone" type="button">
+            <span class="upload-dropzone-title">Upload a file</span>
+            <span class="upload-dropzone-copy">Drop a presentation, PDF, image, spreadsheet, or document here.</span>
+          </button>
+          <div class="upload-file-list" id="uploadFileList" aria-live="polite"></div>
+          <div class="google-import">
+            <button class="google-trigger" id="googleMenuTrigger" type="button" aria-haspopup="menu" aria-expanded="false">
+              <svg class="google-logo" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.75h3.57c2.08-1.92 3.28-4.74 3.28-8.07z"></path>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.68l-3.57-2.75c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"></path>
+                <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"></path>
+                <path fill="#EA4335" d="M12 5.37c1.62 0 3.07.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06L5.84 9.9C6.71 7.3 9.14 5.37 12 5.37z"></path>
+              </svg>
+              <span>Google</span>
+            </button>
+            <div class="google-menu" id="googleMenu" role="menu" hidden>
+              <button type="button" role="menuitem" data-google-kind="drive">Drive</button>
+              <button type="button" role="menuitem" data-google-kind="slides">Slides</button>
+              <button type="button" role="menuitem" data-google-kind="sheets">Spreadsheets</button>
+              <button type="button" role="menuitem" data-google-kind="docs">Documents</button>
+            </div>
           </div>
-          <div class="slide-toolbar-group" data-group="align">
-            <button class="slide-tool" type="button" data-action="align-left">Left</button>
-            <button class="slide-tool" type="button" data-action="align-center">Center</button>
-            <button class="slide-tool" type="button" data-action="align-right">Right</button>
-            <button class="slide-tool" type="button" data-action="align-top">Top</button>
-            <button class="slide-tool" type="button" data-action="align-middle">Middle</button>
-            <button class="slide-tool" type="button" data-action="align-bottom">Bottom</button>
-          </div>
-          <div class="slide-zoom">
-            <button class="slide-tool" type="button" data-zoom="out">-</button>
-            <div class="slide-zoom-pill" id="slideZoomPill">100%</div>
-            <button class="slide-tool" type="button" data-zoom="in">+</button>
-          </div>
-          <button class="slide-toolbar-button" type="button" data-action="export">Export</button>
-          <button class="slide-toolbar-button is-primary" type="button" data-action="present">Present</button>
+          <div class="upload-message" id="uploadMessage" role="status" aria-live="polite"></div>
         </div>
-      </div>
-      <div class="slide-thumbs" id="slideThumbs"></div>
-      <div class="slide-canvas">
-        <div class="slide-stage" id="slideStage"></div>
       </div>
       <textarea
         class="search-input"
@@ -2150,125 +2251,9 @@
         placeholder="Search..."
         rows="1"
       ></textarea>
-      <div class="slide-inspector">
-        <div class="slide-panel">
-          <div class="slide-panel-title">Selection</div>
-          <div class="slide-panel-note" id="slideSelectionLabel">No selection</div>
-        </div>
-        <div class="slide-panel" id="slideTextPanel">
-          <div class="slide-panel-title">Text</div>
-          <label class="slide-control">
-            <span>Font</span>
-            <select id="propFont">
-              <option value="Arial">Arial</option>
-              <option value="Helvetica">Helvetica</option>
-              <option value="Times New Roman">Times New Roman</option>
-              <option value="Georgia">Georgia</option>
-              <option value="Courier New">Courier New</option>
-            </select>
-          </label>
-          <label class="slide-control">
-            <span>Size</span>
-            <input type="number" id="propFontSize" min="8" max="120" step="1" />
-          </label>
-          <label class="slide-control">
-            <span>Color</span>
-            <input type="color" id="propFill" />
-          </label>
-          <label class="slide-control">
-            <span>Align</span>
-            <select id="propAlign">
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
-            </select>
-          </label>
-        </div>
-        <div class="slide-panel" id="slideShapePanel">
-          <div class="slide-panel-title">Shape</div>
-          <label class="slide-control">
-            <span>Fill</span>
-            <input type="color" id="propShapeFill" />
-          </label>
-          <label class="slide-control">
-            <span>Stroke</span>
-            <input type="color" id="propStroke" />
-          </label>
-          <label class="slide-control">
-            <span>Stroke W</span>
-            <input type="number" id="propStrokeWidth" min="0" max="20" step="1" />
-          </label>
-        </div>
-        <div class="slide-panel" id="slideCommonPanel">
-          <div class="slide-panel-title">Common</div>
-          <label class="slide-control">
-            <span>Opacity</span>
-            <input type="range" id="propOpacity" min="0" max="1" step="0.05" />
-          </label>
-          <label class="slide-control">
-            <span>Animation</span>
-            <select id="propAnimType">
-              <option value="none">None</option>
-              <option value="fade">Fade In</option>
-              <option value="zoom">Zoom In</option>
-              <option value="from-left">From Left</option>
-              <option value="from-right">From Right</option>
-              <option value="from-top">From Top</option>
-              <option value="from-bottom">From Bottom</option>
-              <option value="draw-arrow">Draw From Tail</option>
-              <option value="css-edit">CSS Edit</option>
-            </select>
-          </label>
-          <label class="slide-control">
-            <span>Duration</span>
-            <input type="number" id="propAnimDuration" min="0.1" max="8" step="0.1" value="0.6" />
-          </label>
-          <label class="slide-control">
-            <span>Delay</span>
-            <input type="number" id="propAnimDelay" min="0" max="8" step="0.1" value="0" />
-          </label>
-          <label class="slide-control">
-            <span>Order</span>
-            <span class="slide-inline-field">
-              <input type="text" id="propAnimOrder" inputmode="text" value="1" />
-              <span class="slide-inline-hint" id="propAnimOrderHint" aria-hidden="true"></span>
-            </span>
-          </label>
-          <label class="slide-control slide-control-stack" id="propAnimCssWrap">
-            <span>CSS</span>
-            <textarea id="propAnimCss" rows="8" spellcheck="false" placeholder="from { opacity: 0; transform: translateX(-120px) scale(.85); }&#10;to { opacity: 1; transform: translateX(0) scale(1); }"></textarea>
-          </label>
-          <div class="slide-panel-note" id="propAnimCssStatus">Use from/to blocks with opacity and transform.</div>
-          <button class="slide-toolbar-button slide-preview-button" id="propAnimPreview" type="button">Preview Motion</button>
-        </div>
-        <div class="slide-panel" id="slideMediaPanel">
-          <div class="slide-panel-title">Video</div>
-          <label class="slide-control">
-            <span>On Cue</span>
-            <select id="propVideoAction">
-              <option value="none">No media cue</option>
-              <option value="play">Play</option>
-              <option value="pause">Pause</option>
-              <option value="restart">Restart</option>
-            </select>
-          </label>
-          <label class="slide-control">
-            <span>Audio</span>
-            <select id="propVideoSound">
-              <option value="mute">Muted</option>
-              <option value="sound">With sound</option>
-            </select>
-          </label>
-          <label class="slide-control slide-control-checkbox">
-            <span>Loop</span>
-            <input type="checkbox" id="propVideoLoop" checked />
-          </label>
-          <div class="slide-panel-note">Use Order above to place this video cue with the rest of the slide animations.</div>
-        </div>
-      </div>
       <div class="slide-status">
-        <div id="slideStatusLabel">Slide 1 of 1</div>
-        <div id="slideMetaLabel">Canvas 16:9</div>
+        <div id="slideStatusLabel">No file uploaded</div>
+        <div id="slideMetaLabel">External upload</div>
       </div>
       <div class="slide-actions">
         <button class="search-mode-close" id="searchModeClose" type="button" aria-label="Close editor">&times;</button>
@@ -2284,9 +2269,7 @@
         </button>
       </div>
     </form>
-    <input id="slideImageInput" type="file" accept="image/*" hidden />
-    <input id="slideVideoInput" type="file" accept="video/*" hidden />
-    <input id="slideFileInput" type="file" accept=".pdf,.txt,.md,.markdown,.json,.csv,image/*" hidden />
+    <input id="slideFileInput" type="file" accept=".pdf,.txt,.md,.markdown,.json,.csv,.ppt,.pptx,.key,.doc,.docx,.xls,.xlsx,image/*,application/pdf,text/*" multiple hidden />
     <div class="attachment-list" id="attachmentList" aria-live="polite"></div>
 
     <div class="button-group">
@@ -2302,7 +2285,7 @@
 <div class="editor-close-menu" id="editorCloseMenu" hidden>
   <div class="editor-close-card" role="dialog" aria-modal="true" aria-labelledby="editorCloseTitle">
     <h2 class="editor-close-title" id="editorCloseTitle">エディタを閉じますか？</h2>
-    <div class="editor-close-copy">保持すると現在のエディタ内容を見えないバックグラウンドにそのまま残し、白い検索モードへ戻ります。次にグレーモードへ戻ったときはその状態から復元されます。完全に破棄すると編集内容は一切保持されず、次回のグレーモードは初期状態から始まります。</div>
+    <div class="editor-close-copy">保持すると現在のアップロード内容を見えないバックグラウンドにそのまま残し、白い検索モードへ戻ります。次にグレーモードへ戻ったときはその状態から復元されます。完全に破棄するとアップロード内容は一切保持されず、次回のグレーモードは初期状態から始まります。</div>
     <div class="editor-close-actions">
       <button class="editor-close-btn" id="editorCloseCancel" type="button">戻る</button>
       <button class="editor-close-btn discard" id="editorCloseDiscard" type="button">完全に破棄</button>
@@ -2314,7 +2297,7 @@
 <div class="title-decision-menu" id="titleDecisionMenu" hidden>
   <div class="title-decision-card" role="dialog" aria-modal="true" aria-labelledby="titleDecisionTitle">
     <h2 class="title-decision-title" id="titleDecisionTitle">題名はこれ以上長くできません。この題名で決定しますか</h2>
-    <div class="title-decision-copy">YES を選ぶと題名をバックグラウンドに保持したままスライドエディタへ移行します。NO を選ぶと現在の題名の長さで止めます。</div>
+    <div class="title-decision-copy">YES を選ぶと題名をバックグラウンドに保持したままアップロード画面へ移行します。NO を選ぶと現在の題名の長さで止めます。</div>
     <div class="title-decision-actions">
       <button class="title-decision-btn" id="titleDecisionNo" type="button">NO</button>
       <button class="title-decision-btn confirm" id="titleDecisionYes" type="button">YES</button>
@@ -2324,9 +2307,9 @@
 
 <div class="slide-title-popup" id="slideTitlePopup" hidden>
   <div class="slide-title-popup-card" id="slideTitlePopupCard" role="dialog" aria-modal="false" aria-labelledby="slideTitlePopupTitle">
-    <div class="slide-title-popup-eyebrow">Slides</div>
+    <div class="slide-title-popup-eyebrow">Upload</div>
     <h2 class="slide-title-popup-title" id="slideTitlePopupTitle">Change saved title</h2>
-    <p class="slide-title-popup-copy">This updates the original problem title and overwrites the title saved for restoration, proof handoff, and later preview.</p>
+    <p class="slide-title-popup-copy">This updates the original problem title and keeps the uploaded material connected to proof handoff and preview.</p>
     <label class="slide-title-popup-label" for="slideTitlePopupInput">Title</label>
     <input class="slide-title-popup-input" id="slideTitlePopupInput" type="text" maxlength="240" autocomplete="off" spellcheck="false" />
     <div class="slide-title-popup-status" id="slideTitlePopupStatus">The updated title will be saved in the background immediately.</div>
@@ -2337,10 +2320,21 @@
   </div>
 </div>
 
+<div class="google-picker" id="googlePicker" hidden>
+  <div class="google-picker-card" role="dialog" aria-modal="true" aria-labelledby="googlePickerTitle">
+    <div class="google-picker-head">
+      <h2 class="google-picker-title" id="googlePickerTitle">Google files</h2>
+      <button class="google-picker-close" id="googlePickerClose" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div class="google-picker-status" id="googlePickerStatus">Loading...</div>
+    <div class="google-picker-list" id="googlePickerList"></div>
+  </div>
+</div>
+
 <div class="cookie-consent" id="cookieConsent" hidden>
   <div class="cookie-consent-card" role="dialog" aria-modal="false" aria-labelledby="cookieConsentTitle">
     <h2 class="cookie-consent-title" id="cookieConsentTitle">Cookie を受け入れますか？</h2>
-    <p class="cookie-consent-copy">このデバイスで直近 6 件の編集チェックポイントを残すために、軽量な編集履歴 Cookie を使えます。許可すると現在のモードや入力内容の要約を保存します。スライド本体の最新状態は引き続き IndexedDB に保存します。</p>
+    <p class="cookie-consent-copy">このデバイスで直近 6 件の編集チェックポイントを残すために、軽量な編集履歴 Cookie を使えます。許可すると現在のモードや入力内容の要約を保存します。アップロード本体の最新状態は引き続き IndexedDB に保存します。</p>
     <div class="cookie-consent-actions">
       <button class="cookie-consent-btn" id="cookieConsentDecline" type="button">今はしない</button>
       <button class="cookie-consent-btn accept" id="cookieConsentAccept" type="button">Cookie を受け入れる</button>
@@ -2452,6 +2446,21 @@
   const slideTitlePopupStatus = document.getElementById('slideTitlePopupStatus');
   const slideTitlePopupCancel = document.getElementById('slideTitlePopupCancel');
   const slideTitlePopupSave = document.getElementById('slideTitlePopupSave');
+  const uploadShell = document.getElementById('uploadShell');
+  const uploadDropzone = document.getElementById('uploadDropzone');
+  const uploadFileInput = document.getElementById('slideFileInput');
+  const uploadFileList = document.getElementById('uploadFileList');
+  const uploadStatusLabel = document.getElementById('uploadStatusLabel');
+  const uploadMessage = document.getElementById('uploadMessage');
+  const googleMenuTrigger = document.getElementById('googleMenuTrigger');
+  const googleMenu = document.getElementById('googleMenu');
+  const googlePicker = document.getElementById('googlePicker');
+  const googlePickerTitle = document.getElementById('googlePickerTitle');
+  const googlePickerStatus = document.getElementById('googlePickerStatus');
+  const googlePickerList = document.getElementById('googlePickerList');
+  const googlePickerClose = document.getElementById('googlePickerClose');
+  const slideStatusLabel = document.getElementById('slideStatusLabel');
+  const slideMetaLabel = document.getElementById('slideMetaLabel');
   const cookieConsent = document.getElementById('cookieConsent');
   const cookieConsentAccept = document.getElementById('cookieConsentAccept');
   const cookieConsentDecline = document.getElementById('cookieConsentDecline');
@@ -2508,6 +2517,17 @@
   const depositBtn = document.getElementById('depositBtn');
   const editorReturnContext = readEditorReturnContext();
   const theoremDraftStore = window.ivucxTheoremDraftStore || null;
+  const UPLOAD_FILE_SIZE_LIMIT = 35 * 1024 * 1024;
+  const UPLOAD_TEXT_PREVIEW_LIMIT = 1024 * 1024;
+  const GOOGLE_KIND_LABELS = Object.freeze({
+    drive: 'Drive',
+    slides: 'Slides',
+    sheets: 'Spreadsheets',
+    docs: 'Documents'
+  });
+  let uploadRecords = [];
+  let uploadCurrentIndex = 0;
+  let googlePickerKind = 'drive';
 
   function readEditorReturnContext(){
     try{
@@ -2636,10 +2656,555 @@
 
   window.addEventListener('paste', handlePasteFiles);
 
+  function createUploadId(){
+    if(window.crypto && typeof window.crypto.randomUUID === 'function'){
+      return window.crypto.randomUUID();
+    }
+    return `upload-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function formatBytes(bytes){
+    const value = Number(bytes) || 0;
+    if(value < 1024) return `${value} B`;
+    if(value < 1024 * 1024) return `${Math.round(value / 102.4) / 10} KB`;
+    return `${Math.round(value / 1024 / 102.4) / 10} MB`;
+  }
+
+  function getFileExtension(name){
+    const match = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+    return match ? match[1] : '';
+  }
+
+  function inferUploadKind(name, mime){
+    const ext = getFileExtension(name);
+    const type = String(mime || '').toLowerCase();
+    if(type === 'application/pdf' || ext === 'pdf') return 'pdf';
+    if(type.startsWith('image/')) return 'image';
+    if(type.startsWith('text/') || ['txt','md','markdown','json','csv'].includes(ext)) return 'text';
+    if(['ppt','pptx','key'].includes(ext)) return 'presentation';
+    if(['doc','docx'].includes(ext)) return 'document';
+    if(['xls','xlsx'].includes(ext)) return 'spreadsheet';
+    return 'file';
+  }
+
+  function readFileAsDataUrl(file){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => reject(reader.error || new Error('File read failed'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function readFileAsText(file){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => reject(reader.error || new Error('File read failed'));
+      reader.readAsText(file);
+    });
+  }
+
+  function serializeUploadRecord(record){
+    if(!record || typeof record !== 'object') return null;
+    return {
+      id: record.id || createUploadId(),
+      source: record.source || 'local',
+      provider: record.provider || '',
+      providerKind: record.providerKind || '',
+      title: record.title || 'Untitled file',
+      kind: record.kind || 'file',
+      ext: record.ext || '',
+      mime: record.mime || '',
+      size: Number(record.size) || 0,
+      url: record.url || '',
+      text: record.text || '',
+      webViewLink: record.webViewLink || '',
+      googleFileId: record.googleFileId || '',
+      importedAt: record.importedAt || record.uploadedAt || new Date().toISOString()
+    };
+  }
+
+  function buildUploadDocument(record){
+    const serialized = serializeUploadRecord(record);
+    if(!serialized) return null;
+    return {
+      title: serialized.title,
+      kind: serialized.kind,
+      ext: serialized.ext,
+      mime: serialized.mime,
+      size: serialized.size,
+      checked: true,
+      url: serialized.url,
+      text: serialized.text,
+      source: serialized.source,
+      provider: serialized.provider,
+      providerKind: serialized.providerKind,
+      webViewLink: serialized.webViewLink,
+      googleFileId: serialized.googleFileId,
+      importedAt: serialized.importedAt
+    };
+  }
+
+  function buildPersistedUploadRecord(){
+    const uploads = uploadRecords.map(serializeUploadRecord).filter(Boolean);
+    return {
+      savedAt: new Date().toISOString(),
+      currentSlideIndex: Math.max(0, Math.min(uploadCurrentIndex, Math.max(0, uploads.length - 1))),
+      uploadMode: true,
+      editorState: {
+        inputText: input ? input.value : '',
+        uploads,
+        slides: uploads.map(upload => ({
+          type: 'document',
+          hidden: false,
+          document: buildUploadDocument(upload)
+        }))
+      }
+    };
+  }
+
+  function buildUploadSnapshotSummary(){
+    return {
+      slideCount: uploadRecords.length,
+      currentSlideIndex: Math.max(0, Math.min(uploadCurrentIndex, Math.max(0, uploadRecords.length - 1))),
+      hiddenSlideCount: 0,
+      documentSlideCount: uploadRecords.length,
+      canvasSlideCount: 0,
+      nodeCount: 0,
+      uploadCount: uploadRecords.length,
+      hasContent: uploadRecords.length > 0
+    };
+  }
+
+  function setUploadMessage(message, isError = false){
+    if(!uploadMessage) return;
+    uploadMessage.textContent = message || '';
+    uploadMessage.classList.toggle('is-error', !!isError);
+  }
+
+  function updateUploadStatus(){
+    const count = uploadRecords.length;
+    const label = count === 0
+      ? 'No file uploaded'
+      : count === 1
+        ? uploadRecords[0].title
+        : `${count} files uploaded`;
+    if(uploadStatusLabel) uploadStatusLabel.textContent = label;
+    if(slideStatusLabel) slideStatusLabel.textContent = label;
+    if(slideMetaLabel) slideMetaLabel.textContent = count ? 'External upload ready' : 'External upload';
+    window.uploadState = window.uploadState || {};
+    window.uploadState.hasContent = count > 0;
+  }
+
+  function renderUploadList(){
+    if(!uploadFileList) return;
+    uploadFileList.innerHTML = '';
+    uploadRecords.forEach((record, index)=>{
+      const item = document.createElement('div');
+      item.className = 'upload-file-item';
+      const text = document.createElement('div');
+      text.style.minWidth = '0';
+      const name = document.createElement('span');
+      name.className = 'upload-file-name';
+      name.textContent = record.title || 'Untitled file';
+      const meta = document.createElement('span');
+      meta.className = 'upload-file-meta';
+      const source = record.source === 'google'
+        ? `Google ${GOOGLE_KIND_LABELS[record.providerKind] || ''}`.trim()
+        : 'Local file';
+      meta.textContent = [source, record.kind, record.size ? formatBytes(record.size) : ''].filter(Boolean).join(' - ');
+      text.appendChild(name);
+      text.appendChild(meta);
+      const remove = document.createElement('button');
+      remove.className = 'upload-file-remove';
+      remove.type = 'button';
+      remove.setAttribute('aria-label', 'Remove uploaded file');
+      remove.textContent = '×';
+      remove.addEventListener('click', ()=>{
+        uploadRecords.splice(index, 1);
+        uploadCurrentIndex = Math.max(0, Math.min(uploadCurrentIndex, uploadRecords.length - 1));
+        commitUploadState('remove-upload');
+      });
+      item.appendChild(text);
+      item.appendChild(remove);
+      uploadFileList.appendChild(item);
+    });
+    updateUploadStatus();
+  }
+
+  function commitUploadState(reason = 'upload'){
+    renderUploadList();
+    if(typeof window.dispatchEvent === 'function'){
+      window.dispatchEvent(new CustomEvent('upload-state-saved', {
+        detail: buildUploadSnapshotSummary()
+      }));
+    }
+  }
+
+  async function buildLocalUploadRecord(file){
+    if(!file) return null;
+    if(file.size > UPLOAD_FILE_SIZE_LIMIT){
+      throw new Error(`${file.name} is larger than ${formatBytes(UPLOAD_FILE_SIZE_LIMIT)}.`);
+    }
+    const kind = inferUploadKind(file.name, file.type);
+    const url = await readFileAsDataUrl(file);
+    const text = kind === 'text' && file.size <= UPLOAD_TEXT_PREVIEW_LIMIT
+      ? await readFileAsText(file)
+      : '';
+    return {
+      id: createUploadId(),
+      source: 'local',
+      title: file.name || 'Uploaded file',
+      kind,
+      ext: getFileExtension(file.name),
+      mime: file.type || '',
+      size: Number(file.size) || 0,
+      url,
+      text,
+      uploadedAt: new Date().toISOString()
+    };
+  }
+
+  async function handleUploadFiles(files){
+    const list = Array.from(files || []).filter(Boolean);
+    if(!list.length) return;
+    setUploadMessage('Preparing upload...');
+    try{
+      const records = [];
+      for(const file of list){
+        const record = await buildLocalUploadRecord(file);
+        if(record) records.push(record);
+      }
+      uploadRecords = uploadRecords.concat(records);
+      uploadCurrentIndex = Math.max(0, uploadRecords.length - 1);
+      setUploadMessage(records.length === 1 ? `${records[0].title} uploaded.` : `${records.length} files uploaded.`);
+      commitUploadState('local-upload');
+    }catch(err){
+      setUploadMessage(err && err.message ? err.message : 'Upload failed.', true);
+    }finally{
+      if(uploadFileInput) uploadFileInput.value = '';
+    }
+  }
+
+  function restoreUploadsFromRecord(record){
+    const editorState = record && record.editorState && typeof record.editorState === 'object'
+      ? record.editorState
+      : null;
+    const uploads = editorState && Array.isArray(editorState.uploads)
+      ? editorState.uploads
+      : null;
+    if(uploads){
+      uploadRecords = uploads.map(serializeUploadRecord).filter(Boolean);
+    }else if(editorState && Array.isArray(editorState.slides)){
+      uploadRecords = editorState.slides
+        .filter(slide => slide && slide.type === 'document' && slide.document)
+        .map(slide => serializeUploadRecord({
+          ...slide.document,
+          source: slide.document.source || 'local',
+          title: slide.document.title || 'Uploaded file'
+        }))
+        .filter(Boolean);
+    }else{
+      uploadRecords = [];
+    }
+    uploadCurrentIndex = Math.max(0, Math.min(Number(record && record.currentSlideIndex) || 0, Math.max(0, uploadRecords.length - 1)));
+    renderUploadList();
+  }
+
+  async function restoreUploadDraft(){
+    if(!theoremDraftStore || typeof theoremDraftStore.read !== 'function') return false;
+    try{
+      const draft = await theoremDraftStore.read();
+      const record = draft && draft.summarySlide && draft.summarySlide.record && typeof draft.summarySlide.record === 'object'
+        ? draft.summarySlide.record
+        : null;
+      if(!record) return false;
+      restoreUploadsFromRecord(record);
+      return true;
+    }catch(err){
+      return false;
+    }
+  }
+
+  function clearUploadState(){
+    uploadRecords = [];
+    uploadCurrentIndex = 0;
+    setUploadMessage('');
+    commitUploadState('clear-upload');
+  }
+
+  function closeGoogleMenu(){
+    if(!googleMenu || !googleMenuTrigger) return;
+    googleMenu.hidden = true;
+    googleMenuTrigger.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleGoogleMenu(){
+    if(!googleMenu || !googleMenuTrigger) return;
+    const nextOpen = googleMenu.hidden;
+    googleMenu.hidden = !nextOpen;
+    googleMenuTrigger.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+  }
+
+  function openGooglePickerShell(kind){
+    googlePickerKind = kind || 'drive';
+    if(googlePickerTitle){
+      googlePickerTitle.textContent = `Google ${GOOGLE_KIND_LABELS[googlePickerKind] || 'files'}`;
+    }
+    if(googlePickerStatus) googlePickerStatus.textContent = 'Loading...';
+    if(googlePickerList) googlePickerList.innerHTML = '';
+    if(googlePicker){
+      googlePicker.hidden = false;
+      googlePicker.classList.add('is-open');
+    }
+  }
+
+  function closeGooglePicker(){
+    if(!googlePicker) return;
+    googlePicker.classList.remove('is-open');
+    googlePicker.hidden = true;
+  }
+
+  async function fetchJson(url, options = {}){
+    const response = await fetch(url, {
+      credentials: 'same-origin',
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        ...(options.body ? { 'Content-Type': 'application/json' } : {})
+      }
+    });
+    const payload = await response.json().catch(()=>({}));
+    if(!response.ok){
+      const error = new Error(payload && payload.error ? payload.error : 'Request failed');
+      error.status = response.status;
+      error.payload = payload;
+      throw error;
+    }
+    return payload;
+  }
+
+  function redirectToGoogleAuth(kind){
+    const returnTo = `${window.location.pathname}${window.location.search || ''}`;
+    window.location.href = `/api/google-auth-start?kind=${encodeURIComponent(kind)}&returnTo=${encodeURIComponent(returnTo)}`;
+  }
+
+  function renderGoogleFileOptions(files){
+    if(!googlePickerList) return;
+    googlePickerList.innerHTML = '';
+    if(!files.length){
+      if(googlePickerStatus) googlePickerStatus.textContent = 'No files found.';
+      return;
+    }
+    if(googlePickerStatus) googlePickerStatus.textContent = 'Choose a file to import.';
+    files.forEach(file=>{
+      const button = document.createElement('button');
+      button.className = 'google-file-option';
+      button.type = 'button';
+      const text = document.createElement('span');
+      text.style.minWidth = '0';
+      const name = document.createElement('span');
+      name.className = 'google-file-name';
+      name.textContent = file.name || 'Untitled';
+      const meta = document.createElement('span');
+      meta.className = 'google-file-meta';
+      meta.textContent = [file.mimeType || '', file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString() : ''].filter(Boolean).join(' - ');
+      const importLabel = document.createElement('span');
+      importLabel.className = 'google-file-import';
+      importLabel.textContent = 'Import';
+      text.appendChild(name);
+      text.appendChild(meta);
+      button.appendChild(text);
+      button.appendChild(importLabel);
+      button.addEventListener('click', ()=>importGoogleFile(file));
+      googlePickerList.appendChild(button);
+    });
+  }
+
+  async function openGooglePicker(kind){
+    closeGoogleMenu();
+    openGooglePickerShell(kind);
+    try{
+      const status = await fetchJson('/api/google-status');
+      if(!status.configured){
+        const message = status.error || 'Google OAuth is not configured on this server.';
+        if(googlePickerStatus) googlePickerStatus.textContent = message;
+        setUploadMessage(message, true);
+        return;
+      }
+      if(!status.authenticated){
+        if(googlePickerStatus) googlePickerStatus.textContent = 'Connecting to Google...';
+        redirectToGoogleAuth(kind);
+        return;
+      }
+      const payload = await fetchJson(`/api/google-files?kind=${encodeURIComponent(kind)}`);
+      renderGoogleFileOptions(Array.isArray(payload.files) ? payload.files : []);
+    }catch(err){
+      if(err.status === 401 || (err.payload && err.payload.needsAuth)){
+        if(googlePickerStatus) googlePickerStatus.textContent = 'Connecting to Google...';
+        redirectToGoogleAuth(kind);
+        return;
+      }
+      const message = err && err.message ? err.message : 'Google import failed.';
+      if(googlePickerStatus) googlePickerStatus.textContent = message;
+      setUploadMessage(message, true);
+    }
+  }
+
+  async function importGoogleFile(file){
+    if(!file || !file.id) return;
+    if(googlePickerStatus) googlePickerStatus.textContent = 'Importing...';
+    try{
+      const payload = await fetchJson('/api/google-import', {
+        method: 'POST',
+        body: JSON.stringify({
+          kind: googlePickerKind,
+          fileId: file.id,
+          name: file.name,
+          mimeType: file.mimeType
+        })
+      });
+      const upload = serializeUploadRecord({
+        ...(payload.upload || {}),
+        source: 'google',
+        provider: 'google',
+        providerKind: googlePickerKind
+      });
+      uploadRecords.push(upload);
+      uploadCurrentIndex = uploadRecords.length - 1;
+      setUploadMessage(`${upload.title} imported from Google.`);
+      commitUploadState('google-upload');
+      closeGooglePicker();
+    }catch(err){
+      const message = err && err.message ? err.message : 'Google import failed.';
+      if(googlePickerStatus) googlePickerStatus.textContent = message;
+      setUploadMessage(message, true);
+    }
+  }
+
+  window.uploadState = window.uploadState || { hasContent: false };
+  window.uploadControls = {
+    preserveInBackground(){
+      commitUploadState('preserve-upload');
+      return true;
+    },
+    discardEditorState(){
+      clearUploadState();
+      return true;
+    },
+    clearPersistedState(){
+      clearUploadState();
+      return true;
+    },
+    getPersistedRecord(){
+      return JSON.parse(JSON.stringify(buildPersistedUploadRecord()));
+    },
+    getSnapshotSummary: buildUploadSnapshotSummary,
+    canCycleOutByScrollDirection(){
+      return true;
+    },
+    canNavigateSlidesByDirection(){
+      return false;
+    },
+    navigateSlidesByDirection(){
+      return false;
+    },
+    requestClose(){
+      if(typeof window.dispatchEvent === 'function'){
+        window.dispatchEvent(new CustomEvent('upload-close-requested'));
+        return true;
+      }
+      return false;
+    },
+    hasPendingChanges(){
+      return uploadRecords.length > 0;
+    }
+  };
+
+  if(uploadDropzone && uploadFileInput){
+    uploadDropzone.addEventListener('click', ()=>uploadFileInput.click());
+    uploadFileInput.addEventListener('change', ()=>handleUploadFiles(uploadFileInput.files));
+    ['dragenter','dragover'].forEach(type=>{
+      uploadDropzone.addEventListener(type, event=>{
+        event.preventDefault();
+        uploadDropzone.classList.add('is-dragging');
+      });
+    });
+    ['dragleave','drop'].forEach(type=>{
+      uploadDropzone.addEventListener(type, event=>{
+        event.preventDefault();
+        uploadDropzone.classList.remove('is-dragging');
+      });
+    });
+    uploadDropzone.addEventListener('drop', event=>{
+      handleUploadFiles(event.dataTransfer ? event.dataTransfer.files : []);
+    });
+  }
+
+  if(googleMenuTrigger){
+    googleMenuTrigger.addEventListener('click', event=>{
+      event.stopPropagation();
+      toggleGoogleMenu();
+    });
+  }
+
+  if(googleMenu){
+    googleMenu.addEventListener('click', event=>{
+      const button = event.target && event.target.closest ? event.target.closest('[data-google-kind]') : null;
+      if(!button) return;
+      openGooglePicker(button.dataset.googleKind || 'drive');
+    });
+  }
+
+  if(googlePickerClose){
+    googlePickerClose.addEventListener('click', closeGooglePicker);
+  }
+
+  if(googlePicker){
+    googlePicker.addEventListener('click', event=>{
+      if(event.target === googlePicker) closeGooglePicker();
+    });
+  }
+
+  document.addEventListener('click', event=>{
+    if(!googleMenu || googleMenu.hidden) return;
+    if(event.target && event.target.closest && event.target.closest('.google-import')) return;
+    closeGoogleMenu();
+  });
+
+  document.addEventListener('keydown', event=>{
+    if(event.key === 'Escape'){
+      closeGoogleMenu();
+      if(googlePicker && googlePicker.classList.contains('is-open')) closeGooglePicker();
+    }
+  });
+
+  restoreUploadDraft().then(()=>{
+    const params = new URLSearchParams(window.location.search || '');
+    const googleError = params.get('googleError');
+    const googleConnected = params.get('googleConnected');
+    if(googleError){
+      setUploadMessage(`Google connection failed: ${googleError}`, true);
+      params.delete('googleError');
+    }
+    if(googleConnected){
+      params.delete('googleConnected');
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+      window.history.replaceState(null, '', nextUrl);
+      setTimeout(()=>openGooglePicker(googleConnected), 250);
+    }else if(googleError){
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+      window.history.replaceState(null, '', nextUrl);
+    }
+  });
+
   function enterSelectionMode(){
     closeTitleDecisionMenu();
-    if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
-      window.slideEditorControls.preserveInBackground();
+    if(window.uploadControls && typeof window.uploadControls.preserveInBackground === 'function'){
+      window.uploadControls.preserveInBackground();
     }
     wheelAccum = 0;
     releaseModeScrollGestureLock();
@@ -2654,7 +3219,7 @@
   }
 
   function exitSelectionMode(restore = true){
-    const shouldReturnToSlideEditor = selectionReturnScreen === 'gray-editor';
+    const shouldReturnToUpload = selectionReturnScreen === 'gray-editor';
     selectionMode = false;
     if(restore){
       input.value = rememberedContent;
@@ -2663,7 +3228,7 @@
       setModeDraft(1, input.value, attachedFiles);
       compactGrayAcceptedValue = input.value;
     }
-    if(shouldReturnToSlideEditor){
+    if(shouldReturnToUpload){
       bodyEl.classList.add('scrolled');
       forceExpandedEditor = true;
       expandedTransitionHoldUntil = getUiNow() + EXPANDED_ANIMATION_MS + 40;
@@ -2671,7 +3236,7 @@
     renderAttachments();
     fixedWrapper.style.removeProperty('display');
     selectionModeEl.style.display = 'none';
-    adjustTextarea({ immediate: shouldReturnToSlideEditor });
+    adjustTextarea({ immediate: shouldReturnToUpload });
     saveSelectionNavigation(selectionReturnScreen, 'selection');
   }
 
@@ -2679,7 +3244,7 @@
     await Promise.race([
       Promise.allSettled([
         saveSelectionNavigation('proof-editor', 'selection', choice),
-        saveSlideDraftSnapshot('open-proof-editor')
+        saveUploadDraftSnapshot('open-proof-editor')
       ]),
       new Promise(resolve => setTimeout(resolve, 450))
     ]);
@@ -2690,8 +3255,8 @@
     const targetUrl = `editor.html?${params.toString()}`;
 
     try{
-      if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
-        window.slideEditorControls.preserveInBackground();
+      if(window.uploadControls && typeof window.uploadControls.preserveInBackground === 'function'){
+        window.uploadControls.preserveInBackground();
       }
       setModeDraft(1, rememberedContent || compactGrayAcceptedValue, rememberedFiles);
       const initPayload = {
@@ -3062,8 +3627,8 @@
       resetSearchModeDraft();
       clearSuggestionPane();
       armSavedGrayEditorResume();
-      if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
-        window.slideEditorControls.preserveInBackground();
+      if(window.uploadControls && typeof window.uploadControls.preserveInBackground === 'function'){
+        window.uploadControls.preserveInBackground();
       }
       closeEditorCloseMenu();
       applyState(0);
@@ -3078,8 +3643,8 @@
       clearSuggestionPane();
       resetGrayModeDraft();
       skipNextModeStatePersist = true;
-      if(window.slideEditorControls && typeof window.slideEditorControls.discardEditorState === 'function'){
-        window.slideEditorControls.discardEditorState();
+      if(window.uploadControls && typeof window.uploadControls.discardEditorState === 'function'){
+        window.uploadControls.discardEditorState();
       }
       closeEditorCloseMenu();
       applyState(0);
@@ -3087,7 +3652,7 @@
     });
   }
 
-  window.addEventListener('slide-editor:close-requested', ()=>{
+  window.addEventListener('upload-close-requested', ()=>{
     if(state === 1 && container.classList.contains('expanded')){
       if(openEditorCloseMenu()){
         return;
@@ -3354,7 +3919,7 @@
     syncPendingTitlePayloads(nextTitle);
     await Promise.allSettled([
       saveTheoremTitleNow('slide-title-popup'),
-      saveSlideDraftSnapshot('slide-title-popup')
+      saveUploadDraftSnapshot('upload-title-popup')
     ]);
     closeSlideTitlePopup();
     return true;
@@ -3521,13 +4086,13 @@
     });
   }
 
-  function saveSlideDraftSnapshot(reason = 'slide-editor'){
-    if(!window.slideEditorControls || typeof window.slideEditorControls.getPersistedRecord !== 'function'){
+  function saveUploadDraftSnapshot(reason = 'upload'){
+    if(!window.uploadControls || typeof window.uploadControls.getPersistedRecord !== 'function'){
       return Promise.resolve(null);
     }
-    const record = window.slideEditorControls.getPersistedRecord();
-    const snapshotSummary = window.slideEditorControls.getSnapshotSummary && typeof window.slideEditorControls.getSnapshotSummary === 'function'
-      ? window.slideEditorControls.getSnapshotSummary()
+    const record = window.uploadControls.getPersistedRecord();
+    const snapshotSummary = window.uploadControls.getSnapshotSummary && typeof window.uploadControls.getSnapshotSummary === 'function'
+      ? window.uploadControls.getSnapshotSummary()
       : null;
     return patchTheoremDraftRecord({
       title: {
@@ -4701,8 +5266,8 @@
     }catch(err){
       // ignore storage failure
     }
-    if(window.slideEditorControls && typeof window.slideEditorControls.clearPersistedState === 'function'){
-      window.slideEditorControls.clearPersistedState();
+    if(window.uploadControls && typeof window.uploadControls.clearPersistedState === 'function'){
+      window.uploadControls.clearPersistedState();
     }
     if(theoremDraftStore && typeof theoremDraftStore.clear === 'function'){
       if(typeof theoremDraftStore.destroy === 'function'){
@@ -4731,8 +5296,8 @@
   }
 
   function getSlideCookieSummary(){
-    if(window.slideEditorControls && typeof window.slideEditorControls.getSnapshotSummary === 'function'){
-      return window.slideEditorControls.getSnapshotSummary();
+    if(window.uploadControls && typeof window.uploadControls.getSnapshotSummary === 'function'){
+      return window.uploadControls.getSnapshotSummary();
     }
     return {
       slideCount: 0,
@@ -4741,7 +5306,7 @@
       documentSlideCount: 0,
       canvasSlideCount: 0,
       nodeCount: 0,
-      hasContent: !!(window.slideEditorState && window.slideEditorState.hasContent)
+      hasContent: !!(window.uploadState && window.uploadState.hasContent)
     };
   }
 
@@ -5104,7 +5669,10 @@
     setModeDraft(1, input.value, attachedFiles);
     adjustTextarea({ immediate: true });
     persistModeState();
-    requestAnimationFrame(()=>input.focus());
+    requestAnimationFrame(()=>{
+      if(uploadDropzone) uploadDropzone.focus();
+      else input.focus();
+    });
   }
 
   if(titleDecisionYes){
@@ -5154,8 +5722,8 @@
     updateLineCount(lineCount);
 
     const hasExternalContent = bodyEl.classList.contains('scrolled')
-      && window.slideEditorState
-      && window.slideEditorState.hasContent;
+      && window.uploadState
+      && window.uploadState.hasContent;
     const isInputEmpty = input.value.length === 0;
     if(isInputEmpty && !hasExternalContent){
       collapseToInitialSearchBox(contentHeight);
@@ -5205,9 +5773,9 @@
       }
 
       const viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-      const isSlideEditorMode = bodyEl.classList.contains('scrolled');
-      const topMargin = isSlideEditorMode ? 8 : 16;
-      const bottomSafe = isSlideEditorMode ? 8 : 16;
+      const isUploadMode = bodyEl.classList.contains('scrolled');
+      const topMargin = isUploadMode ? 8 : 16;
+      const bottomSafe = isUploadMode ? 8 : 16;
 
       // container height to fill most of viewport
       const maxContainerHeight = Math.max(200, Math.floor(viewportH - topMargin - bottomSafe));
@@ -5306,7 +5874,7 @@
 
     const v = input.value.trim();
     const hasFiles = attachedFiles.length > 0;
-    const hasEditorContent = !!(window.slideEditorState && window.slideEditorState.hasContent);
+    const hasEditorContent = !!(window.uploadState && window.uploadState.hasContent);
 
     // In gray mode, first submit expands into the full editor.
     if(state === 1){
@@ -5516,12 +6084,6 @@
 
   }
 
-  window.closeSlideEditorMode = () => {
-    if(state === 1 && container.classList.contains('expanded')){
-      applyState(0);
-    }
-  };
-
   function applyForwardCycle(){
     if(state === 0) applyState(1);
     else if(state === 1) applyState(2);
@@ -5536,8 +6098,8 @@
 
   function performAutoSavedEditorTransition(nextState){
     armSavedGrayEditorResume();
-    if(window.slideEditorControls && typeof window.slideEditorControls.preserveInBackground === 'function'){
-      window.slideEditorControls.preserveInBackground();
+    if(window.uploadControls && typeof window.uploadControls.preserveInBackground === 'function'){
+      window.uploadControls.preserveInBackground();
     }
     if(nextState === 0){
       resetSearchModeDraft();
@@ -5604,11 +6166,11 @@
       return false;
     }
     if(!options.shiftKey){
-      if(!window.slideEditorControls || typeof window.slideEditorControls.canNavigateSlidesByDirection !== 'function' || typeof window.slideEditorControls.navigateSlidesByDirection !== 'function'){
+      if(!window.uploadControls || typeof window.uploadControls.canNavigateSlidesByDirection !== 'function' || typeof window.uploadControls.navigateSlidesByDirection !== 'function'){
         wheelAccum = 0;
         return false;
       }
-      if(!window.slideEditorControls.canNavigateSlidesByDirection(deltaY)){
+      if(!window.uploadControls.canNavigateSlidesByDirection(deltaY)){
         wheelAccum = 0;
         return false;
       }
@@ -5621,24 +6183,24 @@
       if(deltaY > 0 && wheelAccum > THRESHOLD){
         wheelAccum = 0;
         lockModeScrollGesture(options.source);
-        return !!window.slideEditorControls.navigateSlidesByDirection(deltaY);
+        return !!window.uploadControls.navigateSlidesByDirection(deltaY);
       }
 
       if(deltaY < 0 && wheelAccum < -THRESHOLD){
         wheelAccum = 0;
         lockModeScrollGesture(options.source);
-        return !!window.slideEditorControls.navigateSlidesByDirection(deltaY);
+        return !!window.uploadControls.navigateSlidesByDirection(deltaY);
       }
 
       return false;
     }
 
-    if(!window.slideEditorControls || typeof window.slideEditorControls.canCycleOutByScrollDirection !== 'function'){
+    if(!window.uploadControls || typeof window.uploadControls.canCycleOutByScrollDirection !== 'function'){
       wheelAccum = 0;
       return false;
     }
 
-    if(!window.slideEditorControls.canCycleOutByScrollDirection(deltaY)){
+    if(!window.uploadControls.canCycleOutByScrollDirection(deltaY)){
       wheelAccum = 0;
       return false;
     }
@@ -5760,10 +6322,10 @@
     releaseModeScrollGestureLock();
   });
 
-  window.addEventListener('slide-editor:state-saved', ()=>{
+  window.addEventListener('upload-state-saved', ()=>{
     persistModeState();
-    scheduleCookieHistorySnapshot('slide-editor');
-    saveSlideDraftSnapshot('slide-editor');
+    scheduleCookieHistorySnapshot('upload');
+    saveUploadDraftSnapshot('upload');
   });
 
   (async ()=>{
@@ -5776,16 +6338,11 @@
   window.addEventListener('pagehide', ()=>{
     if(state === 1 || selectionMode){
       saveTheoremTitleNow('pagehide');
-      saveSlideDraftSnapshot('pagehide');
+      saveUploadDraftSnapshot('pagehide');
     }
   });
 
 </script>
-<script src="https://unpkg.com/konva@9.3.14/konva.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mathquill/0.10.1/mathquill.min.js"></script>
-<script src="slide-editor.js"></script>
-
 </body>
 </html>
 
