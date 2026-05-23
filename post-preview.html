@@ -1078,6 +1078,48 @@
         });
       }
 
+      async function persistProblemOnVercel(proofPayload, submitResult, requestedFormat, completedFormat, requestedAt){
+        const result = submitResult && submitResult.result && typeof submitResult.result === 'object'
+          ? submitResult.result
+          : null;
+        if(!result || !result.ok){
+          return result;
+        }
+        if(result.storage && result.storage.persisted && result.problemId){
+          return result;
+        }
+
+        const response = await fetch('/api/helper/persist', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            title: proofPayload.title,
+            language: proofPayload.language,
+            fileName: proofPayload.fileName,
+            code: proofPayload.code,
+            verify: true,
+            format: completedFormat || requestedFormat,
+            requestedFormat,
+            requestedAt,
+            jobId: submitResult.jobId || '',
+            result
+          })
+        });
+
+        const raw = await response.text();
+        const payload = tryParseJson(raw);
+        if(!response.ok || !payload || !payload.ok){
+          throw new Error(extractHelperError(payload, raw || 'Supabase save failed.'));
+        }
+        return payload.result && typeof payload.result === 'object'
+          ? payload.result
+          : result;
+      }
+
       function isTransientHelperJobFailure(status, payload, raw, errorMessage){
         const normalizedError = String(errorMessage || '').trim().toLowerCase();
         if([502, 503, 504].includes(Number(status || 0))){
@@ -1320,6 +1362,15 @@
             completedFormat = 'typed-lambda-v1';
           }
 
+          setHelperProgress(92, 'Saving to Supabase', 'pending');
+          const savedResult = await persistProblemOnVercel(
+            proofPayload,
+            submitResult,
+            requestedFormat,
+            completedFormat || requestedFormat,
+            requestedAt
+          );
+
           await persistHelperResult({
             status: 'succeeded',
             requestedAt,
@@ -1330,7 +1381,8 @@
             title: proofPayload.title,
             format: completedFormat || requestedFormat,
             requestedFormat,
-            result: submitResult.result
+            problemId: savedResult && savedResult.problemId ? savedResult.problemId : null,
+            result: savedResult || submitResult.result
           });
           setHelperProgress(100, 'Problem saved', 'success');
           return;
