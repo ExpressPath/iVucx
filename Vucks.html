@@ -465,12 +465,24 @@
       flex-direction:column;
       align-items:center;
       justify-content:center;
-      padding:clamp(28px, 7vh, 72px) 16px clamp(42px, 11vh, 108px);
+      padding:clamp(18px, 4vh, 46px) 16px clamp(34px, 8vh, 82px);
     }
 
-    .upload-dropzone{
-      appearance:none;
+    .upload-source-stage{
+      position:relative;
       width:min(760px, 82vw);
+      height:clamp(340px, 47vh, 520px);
+      flex:0 0 auto;
+      overflow:visible;
+      touch-action:none;
+    }
+
+    .upload-source-panel{
+      appearance:none;
+      position:absolute;
+      left:0;
+      top:50%;
+      width:100%;
       min-height:clamp(170px, 28vh, 280px);
       border:0;
       border-radius:26px;
@@ -491,11 +503,53 @@
       cursor:pointer;
       text-align:center;
       padding:30px;
-      transition:transform .18s ease, box-shadow .22s ease, background-color .18s ease;
+      opacity:0;
+      pointer-events:none;
+      transform:translateY(-50%) scale(.7);
+      transition:
+        opacity .38s ease,
+        transform .46s cubic-bezier(.22,1,.36,1),
+        box-shadow .28s ease,
+        background-color .22s ease;
+      will-change:opacity,transform;
+      z-index:1;
     }
 
-    .upload-dropzone:hover,
-    .upload-dropzone.is-dragging{
+    .upload-source-panel.is-active{
+      opacity:1;
+      pointer-events:auto;
+      transform:translateY(-50%) scale(1);
+      z-index:4;
+    }
+
+    .upload-source-panel.is-before{
+      opacity:.74;
+      pointer-events:auto;
+      transform:translateY(calc(-50% - clamp(150px, 23vh, 230px))) scale(.78);
+      z-index:3;
+    }
+
+    .upload-source-panel.is-after{
+      opacity:.74;
+      pointer-events:auto;
+      transform:translateY(calc(-50% + clamp(150px, 23vh, 230px))) scale(.78);
+      z-index:3;
+    }
+
+    .upload-source-panel.is-far-before{
+      opacity:.2;
+      transform:translateY(calc(-50% - clamp(245px, 38vh, 390px))) scale(.64);
+      z-index:1;
+    }
+
+    .upload-source-panel.is-far-after{
+      opacity:.2;
+      transform:translateY(calc(-50% + clamp(245px, 38vh, 390px))) scale(.64);
+      z-index:1;
+    }
+
+    .upload-source-panel:hover,
+    .upload-source-panel.is-dragging{
       transform:translateY(-2px);
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.42),
@@ -504,11 +558,111 @@
       background-color:rgba(255,255,255,0.1);
     }
 
-    .upload-dropzone:focus-visible{
+    .upload-source-panel.is-active:hover,
+    .upload-source-panel.is-active.is-dragging{
+      transform:translateY(calc(-50% - 2px)) scale(1);
+    }
+
+    .upload-source-panel.is-before:hover,
+    .upload-source-panel.is-before.is-dragging{
+      transform:translateY(calc(-50% - clamp(154px, 23vh, 234px))) scale(.8);
+    }
+
+    .upload-source-panel.is-after:hover,
+    .upload-source-panel.is-after.is-dragging{
+      transform:translateY(calc(-50% + clamp(146px, 23vh, 226px))) scale(.8);
+    }
+
+    .upload-source-panel:focus-visible{
       outline:none;
       box-shadow:
         0 0 0 3px rgba(255,255,255,0.34),
         0 34px 82px rgba(2,13,47,0.34);
+    }
+
+    .upload-source-eyebrow{
+      font-size:11px;
+      font-weight:780;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.64);
+    }
+
+    .upload-source-brand{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:12px;
+      font-size:clamp(23px, 4vw, 36px);
+      font-weight:780;
+      line-height:1.08;
+    }
+
+    .upload-source-copy{
+      max-width:480px;
+      color:rgba(255,255,255,0.76);
+      font-size:14px;
+      line-height:1.55;
+    }
+
+    .upload-source-icon{
+      width:42px;
+      height:42px;
+      border-radius:13px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      flex:0 0 auto;
+      font-size:22px;
+      font-weight:800;
+      line-height:1;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.28), 0 14px 28px rgba(2,13,47,0.18);
+    }
+
+    .upload-source-icon.canva{
+      background:
+        radial-gradient(circle at 24% 18%, rgba(255,255,255,0.9), rgba(255,255,255,0) 27%),
+        linear-gradient(135deg, #00c4cc 0%, #7d2ae8 100%);
+    }
+
+    .upload-source-icon.local{
+      background:linear-gradient(135deg, #ffce5c 0%, #ff7a59 48%, #264de4 100%);
+    }
+
+    .canva-panel{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.12)),
+        linear-gradient(135deg, rgba(0,196,204,0.22), rgba(125,42,232,0.24)),
+        rgba(255,255,255,0.08);
+    }
+
+    .local-panel{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.12)),
+        linear-gradient(135deg, rgba(255,206,92,0.2), rgba(255,122,89,0.16) 48%, rgba(38,77,228,0.18)),
+        rgba(255,255,255,0.08);
+    }
+
+    .upload-source-dots{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      height:18px;
+      margin-top:2px;
+    }
+
+    .upload-source-dot{
+      width:6px;
+      height:6px;
+      border-radius:999px;
+      background:rgba(255,255,255,0.34);
+      transition:width .26s ease, background-color .26s ease;
+    }
+
+    .upload-source-dot.is-active{
+      width:22px;
+      background:#ffffff;
     }
 
     .upload-dropzone-title{
@@ -583,7 +737,7 @@
 
     .google-import{
       position:relative;
-      margin-top:20px;
+      margin-top:0;
       display:flex;
       flex-direction:column;
       align-items:center;
@@ -598,8 +752,8 @@
       display:inline-flex;
       align-items:center;
       gap:8px;
-      padding:8px 10px;
-      font-size:14px;
+      padding:10px 12px;
+      font-size:15px;
       font-weight:720;
       cursor:pointer;
     }
@@ -615,6 +769,18 @@
       height:18px;
       display:block;
       flex:0 0 auto;
+    }
+
+    .upload-source-brand .google-logo{
+      width:38px;
+      height:38px;
+    }
+
+    .google-panel{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.12)),
+        linear-gradient(135deg, rgba(66,133,244,0.24), rgba(52,168,83,0.16) 36%, rgba(251,188,5,0.18) 66%, rgba(234,67,53,0.22)),
+        rgba(255,255,255,0.08);
     }
 
     .google-menu{
@@ -923,11 +1089,15 @@
       }
 
       .upload-main{
-        padding:24px 6px 54px;
+        padding:18px 6px 46px;
       }
 
-      .upload-dropzone{
+      .upload-source-stage{
         width:100%;
+        height:390px;
+      }
+
+      .upload-source-panel{
         min-height:190px;
         padding:24px 18px;
       }
@@ -2283,28 +2453,47 @@
           <div class="upload-status-label" id="uploadStatusLabel">No file uploaded</div>
         </div>
         <div class="upload-main">
-          <button class="upload-dropzone" id="uploadDropzone" type="button">
-            <span class="upload-dropzone-title">Upload a file</span>
-            <span class="upload-dropzone-copy">Drop a presentation, PDF, image, spreadsheet, or document here.</span>
-          </button>
-          <div class="upload-file-list" id="uploadFileList" aria-live="polite"></div>
-          <div class="google-import">
-            <button class="google-trigger" id="googleMenuTrigger" type="button" aria-haspopup="menu" aria-expanded="false">
-              <svg class="google-logo" viewBox="0 0 24 24" aria-hidden="true">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.75h3.57c2.08-1.92 3.28-4.74 3.28-8.07z"></path>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.68l-3.57-2.75c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"></path>
-                <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"></path>
-                <path fill="#EA4335" d="M12 5.37c1.62 0 3.07.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06L5.84 9.9C6.71 7.3 9.14 5.37 12 5.37z"></path>
-              </svg>
-              <span>Google</span>
+          <div class="upload-source-stage" id="uploadSourceStage" aria-label="Upload sources">
+            <button class="upload-source-panel canva-panel" id="canvaUploadPanel" type="button" data-upload-source-panel="canva">
+              <span class="upload-source-eyebrow">Canva</span>
+              <span class="upload-source-brand"><span class="upload-source-icon canva">C</span><span>Canva upload</span></span>
+              <span class="upload-source-copy">Upload an exported Canva presentation, PDF, image, or document.</span>
             </button>
-            <div class="google-menu" id="googleMenu" role="menu" hidden>
-              <button type="button" role="menuitem" data-google-kind="drive">Drive</button>
-              <button type="button" role="menuitem" data-google-kind="slides">Slides</button>
-              <button type="button" role="menuitem" data-google-kind="sheets">Spreadsheets</button>
-              <button type="button" role="menuitem" data-google-kind="docs">Documents</button>
+            <button class="upload-dropzone upload-source-panel local-panel" id="uploadDropzone" type="button" data-upload-source-panel="local">
+              <span class="upload-source-eyebrow">Local</span>
+              <span class="upload-source-brand"><span class="upload-source-icon local">+</span><span>Local file upload</span></span>
+              <span class="upload-dropzone-copy">Drop a presentation, PDF, image, spreadsheet, or document here.</span>
+            </button>
+            <div class="upload-source-panel google-panel" data-upload-source-panel="google" role="group" aria-label="Google upload">
+              <span class="upload-source-eyebrow">Google</span>
+              <span class="upload-source-brand">
+                <svg class="google-logo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.75h3.57c2.08-1.92 3.28-4.74 3.28-8.07z"></path>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.68l-3.57-2.75c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"></path>
+                  <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"></path>
+                  <path fill="#EA4335" d="M12 5.37c1.62 0 3.07.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06L5.84 9.9C6.71 7.3 9.14 5.37 12 5.37z"></path>
+                </svg>
+                <span>Google upload</span>
+              </span>
+              <div class="google-import">
+                <button class="google-trigger" id="googleMenuTrigger" type="button" aria-haspopup="menu" aria-expanded="false">
+                  <span>Choose source</span>
+                </button>
+                <div class="google-menu" id="googleMenu" role="menu" hidden>
+                  <button type="button" role="menuitem" data-google-kind="drive">Drive</button>
+                  <button type="button" role="menuitem" data-google-kind="slides">Slides</button>
+                  <button type="button" role="menuitem" data-google-kind="sheets">Spreadsheets</button>
+                  <button type="button" role="menuitem" data-google-kind="docs">Documents</button>
+                </div>
+              </div>
             </div>
           </div>
+          <div class="upload-source-dots" id="uploadSourceDots" aria-hidden="true">
+            <span class="upload-source-dot" data-upload-source-dot="canva"></span>
+            <span class="upload-source-dot" data-upload-source-dot="local"></span>
+            <span class="upload-source-dot" data-upload-source-dot="google"></span>
+          </div>
+          <div class="upload-file-list" id="uploadFileList" aria-live="polite"></div>
           <div class="upload-message" id="uploadMessage" role="status" aria-live="polite"></div>
         </div>
       </div>
@@ -2333,6 +2522,7 @@
       </div>
     </form>
     <input id="slideFileInput" type="file" accept=".pdf,.txt,.md,.markdown,.json,.csv,.ppt,.pptx,.key,.doc,.docx,.xls,.xlsx,image/*,application/pdf,text/*" multiple hidden />
+    <input id="canvaFileInput" type="file" accept=".pdf,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.svg,.mp4,.txt,.doc,.docx,image/*,application/pdf,text/*" multiple hidden />
     <div class="attachment-list" id="attachmentList" aria-live="polite"></div>
 
     <div class="button-group">
@@ -2510,6 +2700,11 @@
   const slideTitlePopupCancel = document.getElementById('slideTitlePopupCancel');
   const slideTitlePopupSave = document.getElementById('slideTitlePopupSave');
   const uploadShell = document.getElementById('uploadShell');
+  const uploadSourceStage = document.getElementById('uploadSourceStage');
+  const uploadSourcePanels = Array.from(document.querySelectorAll('[data-upload-source-panel]'));
+  const uploadSourceDots = Array.from(document.querySelectorAll('[data-upload-source-dot]'));
+  const canvaUploadPanel = document.getElementById('canvaUploadPanel');
+  const canvaFileInput = document.getElementById('canvaFileInput');
   const uploadDropzone = document.getElementById('uploadDropzone');
   const uploadFileInput = document.getElementById('slideFileInput');
   const uploadFileList = document.getElementById('uploadFileList');
@@ -2588,8 +2783,16 @@
     sheets: 'Spreadsheets',
     docs: 'Documents'
   });
+  const UPLOAD_SOURCE_ORDER = Object.freeze(['canva', 'local', 'google']);
+  const UPLOAD_SOURCE_LABELS = Object.freeze({
+    canva: 'Canva export',
+    local: 'Local file',
+    google: 'Google'
+  });
   let uploadRecords = [];
   let uploadCurrentIndex = 0;
+  let uploadSourceIndex = 1;
+  let uploadSourceTouchY = null;
   let googlePickerKind = 'drive';
 
   function readEditorReturnContext(){
@@ -2731,6 +2934,74 @@
     if(value < 1024) return `${value} B`;
     if(value < 1024 * 1024) return `${Math.round(value / 102.4) / 10} KB`;
     return `${Math.round(value / 1024 / 102.4) / 10} MB`;
+  }
+
+  function clampUploadSourceIndex(index){
+    return Math.max(0, Math.min(Number(index) || 0, UPLOAD_SOURCE_ORDER.length - 1));
+  }
+
+  function getUploadSourceIndex(source){
+    const index = UPLOAD_SOURCE_ORDER.indexOf(String(source || '').toLowerCase());
+    return index >= 0 ? index : 1;
+  }
+
+  function getUploadSourceLabel(source){
+    return UPLOAD_SOURCE_LABELS[source] || UPLOAD_SOURCE_LABELS.local;
+  }
+
+  function isUploadSourceActive(source){
+    return UPLOAD_SOURCE_ORDER[uploadSourceIndex] === source;
+  }
+
+  function renderUploadSourceCarousel(){
+    const activeSource = UPLOAD_SOURCE_ORDER[uploadSourceIndex] || 'local';
+    if(uploadShell){
+      uploadShell.dataset.uploadSource = activeSource;
+    }
+
+    uploadSourcePanels.forEach(panel=>{
+      const source = panel.getAttribute('data-upload-source-panel') || '';
+      const index = getUploadSourceIndex(source);
+      const offset = index - uploadSourceIndex;
+      panel.classList.toggle('is-active', offset === 0);
+      panel.classList.toggle('is-before', offset === -1);
+      panel.classList.toggle('is-after', offset === 1);
+      panel.classList.toggle('is-far-before', offset < -1);
+      panel.classList.toggle('is-far-after', offset > 1);
+      panel.setAttribute('aria-current', offset === 0 ? 'true' : 'false');
+      panel.tabIndex = offset === 0 ? 0 : -1;
+    });
+
+    uploadSourceDots.forEach(dot=>{
+      const source = dot.getAttribute('data-upload-source-dot') || '';
+      dot.classList.toggle('is-active', source === activeSource);
+    });
+  }
+
+  function setUploadSourceIndex(index){
+    const next = clampUploadSourceIndex(index);
+    if(next === uploadSourceIndex){
+      renderUploadSourceCarousel();
+      return false;
+    }
+    uploadSourceIndex = next;
+    if(!isUploadSourceActive('google')){
+      closeGoogleMenu();
+    }
+    renderUploadSourceCarousel();
+    return true;
+  }
+
+  function canNavigateUploadSource(deltaY){
+    if(uploadSourcePanels.length < 2) return false;
+    if(deltaY > 0) return uploadSourceIndex < UPLOAD_SOURCE_ORDER.length - 1;
+    if(deltaY < 0) return uploadSourceIndex > 0;
+    return false;
+  }
+
+  function navigateUploadSource(deltaY){
+    if(!canNavigateUploadSource(deltaY)) return false;
+    return setUploadSourceIndex(uploadSourceIndex + (deltaY > 0 ? 1 : -1));
   }
 
   function getFileExtension(name){
@@ -2875,7 +3146,7 @@
       meta.className = 'upload-file-meta';
       const source = record.source === 'google'
         ? `Google ${GOOGLE_KIND_LABELS[record.providerKind] || ''}`.trim()
-        : 'Local file';
+        : getUploadSourceLabel(record.source);
       meta.textContent = [source, record.kind, record.size ? formatBytes(record.size) : ''].filter(Boolean).join(' - ');
       text.appendChild(name);
       text.appendChild(meta);
@@ -2905,11 +3176,12 @@
     }
   }
 
-  async function buildLocalUploadRecord(file){
+  async function buildLocalUploadRecord(file, source = 'local'){
     if(!file) return null;
     if(file.size > UPLOAD_FILE_SIZE_LIMIT){
       throw new Error(`${file.name} is larger than ${formatBytes(UPLOAD_FILE_SIZE_LIMIT)}.`);
     }
+    const uploadSource = source === 'canva' ? 'canva' : 'local';
     const kind = inferUploadKind(file.name, file.type);
     const url = await readFileAsDataUrl(file);
     const text = kind === 'text' && file.size <= UPLOAD_TEXT_PREVIEW_LIMIT
@@ -2917,7 +3189,9 @@
       : '';
     return {
       id: createUploadId(),
-      source: 'local',
+      source: uploadSource,
+      provider: uploadSource === 'canva' ? 'canva' : '',
+      providerKind: uploadSource === 'canva' ? 'export' : '',
       title: file.name || 'Uploaded file',
       kind,
       ext: getFileExtension(file.name),
@@ -2929,24 +3203,29 @@
     };
   }
 
-  async function handleUploadFiles(files){
+  async function handleUploadFiles(files, source = 'local'){
     const list = Array.from(files || []).filter(Boolean);
     if(!list.length) return;
-    setUploadMessage('Preparing upload...');
+    const uploadSource = source === 'canva' ? 'canva' : 'local';
+    const sourceLabel = getUploadSourceLabel(uploadSource);
+    setUploadMessage(uploadSource === 'canva' ? 'Preparing Canva upload...' : 'Preparing upload...');
     try{
       const records = [];
       for(const file of list){
-        const record = await buildLocalUploadRecord(file);
+        const record = await buildLocalUploadRecord(file, uploadSource);
         if(record) records.push(record);
       }
       uploadRecords = uploadRecords.concat(records);
       uploadCurrentIndex = Math.max(0, uploadRecords.length - 1);
-      setUploadMessage(records.length === 1 ? `${records[0].title} uploaded.` : `${records.length} files uploaded.`);
-      commitUploadState('local-upload');
+      setUploadMessage(records.length === 1
+        ? `${records[0].title} uploaded${uploadSource === 'canva' ? ' from Canva' : ''}.`
+        : `${records.length} ${sourceLabel.toLowerCase()}s uploaded.`);
+      commitUploadState(`${uploadSource}-upload`);
     }catch(err){
       setUploadMessage(err && err.message ? err.message : 'Upload failed.', true);
     }finally{
       if(uploadFileInput) uploadFileInput.value = '';
+      if(canvaFileInput) canvaFileInput.value = '';
     }
   }
 
@@ -3164,14 +3443,14 @@
       return JSON.parse(JSON.stringify(buildPersistedUploadRecord()));
     },
     getSnapshotSummary: buildUploadSnapshotSummary,
-    canCycleOutByScrollDirection(){
-      return true;
+    canCycleOutByScrollDirection(deltaY){
+      return !canNavigateUploadSource(deltaY);
     },
-    canNavigateSlidesByDirection(){
-      return false;
+    canNavigateSlidesByDirection(deltaY){
+      return canNavigateUploadSource(deltaY);
     },
-    navigateSlidesByDirection(){
-      return false;
+    navigateSlidesByDirection(deltaY){
+      return navigateUploadSource(deltaY);
     },
     requestClose(){
       if(typeof window.dispatchEvent === 'function'){
@@ -3185,22 +3464,97 @@
     }
   };
 
+  if(uploadSourcePanels.length){
+    uploadSourcePanels.forEach(panel=>{
+      panel.addEventListener('click', event=>{
+        const source = panel.getAttribute('data-upload-source-panel') || '';
+        if(!source || isUploadSourceActive(source)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setUploadSourceIndex(getUploadSourceIndex(source));
+      }, true);
+      panel.addEventListener('keydown', event=>{
+        if(event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+        const deltaY = event.key === 'ArrowDown' ? 1 : -1;
+        if(!navigateUploadSource(deltaY)) return;
+        event.preventDefault();
+      });
+    });
+    renderUploadSourceCarousel();
+  }
+
+  if(uploadSourceStage){
+    uploadSourceStage.addEventListener('touchstart', event=>{
+      if(event.touches.length !== 1) return;
+      uploadSourceTouchY = event.touches[0].clientY;
+    }, { passive:true });
+
+    uploadSourceStage.addEventListener('touchmove', event=>{
+      if(uploadSourceTouchY === null || event.touches.length !== 1) return;
+      const currentY = event.touches[0].clientY;
+      const deltaY = uploadSourceTouchY - currentY;
+      if(Math.abs(deltaY) < 54) return;
+      if(navigateUploadSource(deltaY)){
+        uploadSourceTouchY = currentY;
+        event.preventDefault();
+      }
+    }, { passive:false });
+
+    ['touchend','touchcancel'].forEach(type=>{
+      uploadSourceStage.addEventListener(type, ()=>{
+        uploadSourceTouchY = null;
+      }, { passive:true });
+    });
+  }
+
+  if(canvaUploadPanel && canvaFileInput){
+    canvaUploadPanel.addEventListener('click', ()=>{
+      if(!isUploadSourceActive('canva')) return;
+      canvaFileInput.click();
+    });
+    canvaFileInput.addEventListener('change', ()=>handleUploadFiles(canvaFileInput.files, 'canva'));
+    ['dragenter','dragover'].forEach(type=>{
+      canvaUploadPanel.addEventListener(type, event=>{
+        if(!isUploadSourceActive('canva')) return;
+        event.preventDefault();
+        canvaUploadPanel.classList.add('is-dragging');
+      });
+    });
+    ['dragleave','drop'].forEach(type=>{
+      canvaUploadPanel.addEventListener(type, event=>{
+        if(!isUploadSourceActive('canva')) return;
+        event.preventDefault();
+        canvaUploadPanel.classList.remove('is-dragging');
+      });
+    });
+    canvaUploadPanel.addEventListener('drop', event=>{
+      if(!isUploadSourceActive('canva')) return;
+      handleUploadFiles(event.dataTransfer ? event.dataTransfer.files : [], 'canva');
+    });
+  }
+
   if(uploadDropzone && uploadFileInput){
-    uploadDropzone.addEventListener('click', ()=>uploadFileInput.click());
+    uploadDropzone.addEventListener('click', ()=>{
+      if(!isUploadSourceActive('local')) return;
+      uploadFileInput.click();
+    });
     uploadFileInput.addEventListener('change', ()=>handleUploadFiles(uploadFileInput.files));
     ['dragenter','dragover'].forEach(type=>{
       uploadDropzone.addEventListener(type, event=>{
+        if(!isUploadSourceActive('local')) return;
         event.preventDefault();
         uploadDropzone.classList.add('is-dragging');
       });
     });
     ['dragleave','drop'].forEach(type=>{
       uploadDropzone.addEventListener(type, event=>{
+        if(!isUploadSourceActive('local')) return;
         event.preventDefault();
         uploadDropzone.classList.remove('is-dragging');
       });
     });
     uploadDropzone.addEventListener('drop', event=>{
+      if(!isUploadSourceActive('local')) return;
       handleUploadFiles(event.dataTransfer ? event.dataTransfer.files : []);
     });
   }
@@ -3256,6 +3610,7 @@
       const nextQuery = params.toString();
       const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
       window.history.replaceState(null, '', nextUrl);
+      setUploadSourceIndex(getUploadSourceIndex('google'));
       setTimeout(()=>openGooglePicker(googleConnected), 250);
     }else if(googleError){
       const nextQuery = params.toString();
