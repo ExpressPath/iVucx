@@ -341,19 +341,20 @@
 
     body.scrolled .search-container:not(.expanded) .upload-file-list{
       position:fixed;
-      left:16px;
-      top:88px;
-      bottom:22px;
+      left:0;
+      top:0;
+      bottom:0;
       z-index:880;
-      width:min(292px, calc(100vw - 36px));
+      width:min(300px, 82vw);
       max-height:none;
       transform:none;
-      border-color:rgba(15,23,42,0.16);
-      border-radius:8px;
-      padding:7px 5px;
+      border-width:0 1px 0 0;
+      border-color:#2b2b2b;
+      border-radius:0;
+      padding:12px 5px;
       background:#1e1e1e;
       color:#d4d4d4;
-      box-shadow:0 20px 50px rgba(15,23,42,0.24);
+      box-shadow:8px 0 24px rgba(15,23,42,0.18);
       backdrop-filter:none;
     }
 
@@ -1490,11 +1491,11 @@
 
       body.scrolled .search-container:not(.expanded) .upload-file-list{
         position:fixed;
-        left:10px;
-        top:auto;
-        bottom:14px;
-        width:calc(100vw - 20px);
-        max-height:34vh;
+        left:0;
+        top:0;
+        bottom:0;
+        width:min(280px, 82vw);
+        max-height:none;
         transform:none;
       }
     }
