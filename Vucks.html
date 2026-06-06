@@ -339,7 +339,7 @@
       box-shadow:0 18px 42px rgba(15,23,42,0.28);
     }
 
-    body.scrolled .search-container:not(.expanded) .upload-file-list{
+    body.scrolled .upload-file-list{
       position:fixed;
       left:0;
       top:0;
@@ -358,25 +358,25 @@
       backdrop-filter:none;
     }
 
-    body.scrolled .search-container:not(.expanded) .upload-folder-row,
-    body.scrolled .search-container:not(.expanded) .upload-file-item{
+    body.scrolled .upload-file-list .upload-folder-row,
+    body.scrolled .upload-file-list .upload-file-item{
       color:#d4d4d4;
     }
 
-    body.scrolled .search-container:not(.expanded) .upload-file-item:hover,
-    body.scrolled .search-container:not(.expanded) .upload-file-item:focus-within,
-    body.scrolled .search-container:not(.expanded) .upload-folder-row:hover,
-    body.scrolled .search-container:not(.expanded) .upload-folder-row:focus-visible{
+    body.scrolled .upload-file-list .upload-file-item:hover,
+    body.scrolled .upload-file-list .upload-file-item:focus-within,
+    body.scrolled .upload-file-list .upload-folder-row:hover,
+    body.scrolled .upload-file-list .upload-folder-row:focus-visible{
       color:#ffffff;
       background:#2a313d;
     }
 
-    body.scrolled .search-container:not(.expanded) .upload-file-meta,
-    body.scrolled .search-container:not(.expanded) .upload-folder-count{
+    body.scrolled .upload-file-list .upload-file-meta,
+    body.scrolled .upload-file-list .upload-folder-count{
       color:#8f98a7;
     }
 
-    body.scrolled .search-container:not(.expanded) .upload-file-icon::after{
+    body.scrolled .upload-file-list .upload-file-icon::after{
       background:#1e1e1e;
     }
 
@@ -839,7 +839,7 @@
       z-index:8;
       width:clamp(190px, 18vw, 270px);
       margin-top:0;
-      display:flex;
+      display:none;
       flex-direction:column;
       gap:1px;
       max-height:min(500px, calc(100% - 32px));
@@ -1489,7 +1489,7 @@
         min-height:96px;
       }
 
-      body.scrolled .search-container:not(.expanded) .upload-file-list{
+      body.scrolled .upload-file-list{
         position:fixed;
         left:0;
         top:0;
@@ -2848,7 +2848,6 @@
             <button class="upload-picker-option" type="button" role="menuitem" data-upload-pick="file">File</button>
             <button class="upload-picker-option" type="button" role="menuitem" data-upload-pick="folder">Folder</button>
           </div>
-          <div class="upload-file-list" id="uploadFileList" aria-live="polite"></div>
           <div class="upload-message" id="uploadMessage" role="status" aria-live="polite"></div>
         </div>
       </div>
@@ -2883,6 +2882,8 @@
 
   </div>
 </div>
+
+<div class="upload-file-list" id="uploadFileList" aria-live="polite"></div>
 
 <div class="editor-close-menu" id="editorCloseMenu" hidden>
   <div class="editor-close-card" role="dialog" aria-modal="true" aria-labelledby="editorCloseTitle">
