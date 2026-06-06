@@ -261,31 +261,31 @@
     }
 
     body.scrolled .search-container:not(.expanded){
-      max-width:min(760px, calc(100vw - 24px));
+      max-width:min(680px, calc(100vw - 24px));
     }
 
     body.scrolled .search-container:not(.expanded) .search-box{
-      flex-direction:column;
-      align-items:stretch;
-      gap:12px;
+      flex-direction:row;
+      align-items:flex-start;
+      gap:9px;
       max-height:none;
-      padding:14px;
-      border-radius:24px;
-      border:1px solid rgba(15,23,42,0.12);
-      background:rgba(255,255,255,0.76);
-      box-shadow:0 18px 48px rgba(15,23,42,0.16);
-      backdrop-filter:blur(14px) saturate(130%);
+      padding:0;
+      border-radius:0;
+      border:0;
+      background:transparent;
+      box-shadow:none;
+      backdrop-filter:none;
     }
 
     body.scrolled .search-container:not(.expanded) .search-input{
-      flex:0 0 auto;
+      flex:1 1 auto;
       min-height:54px;
       max-height:150px;
-      padding:15px 16px;
-      border-radius:16px;
-      background:rgba(255,255,255,0.94);
+      padding:15px 17px;
+      border-radius:18px;
+      background:rgba(255,255,255,0.95);
       color:#111827;
-      box-shadow:inset 0 0 0 1px rgba(15,23,42,0.09);
+      box-shadow:0 12px 34px rgba(15,23,42,0.14), inset 0 0 0 1px rgba(15,23,42,0.09);
       overflow:auto;
     }
 
@@ -294,38 +294,42 @@
     }
 
     body.scrolled .search-container:not(.expanded) .upload-shell{
-      display:block;
-      width:100%;
+      position:relative;
+      display:flex;
+      flex:0 0 auto;
+      align-items:flex-start;
+      justify-content:center;
+      width:auto;
     }
 
     body.scrolled .search-container:not(.expanded) .upload-main{
       display:flex;
       flex-direction:column;
-      align-items:stretch;
+      align-items:flex-end;
       justify-content:flex-start;
-      gap:10px;
+      gap:6px;
       min-height:0;
       padding:0;
     }
 
     .upload-dropzone{
       appearance:none;
-      border:0;
-      width:100%;
-      min-height:116px;
-      border-radius:18px;
-      background:#111827;
-      color:#ffffff;
+      border:1px solid rgba(15,23,42,0.1);
+      width:68px;
+      min-height:54px;
+      border-radius:17px;
+      background:rgba(255,255,255,0.96);
+      color:#111827;
       display:flex;
       flex-direction:column;
       align-items:center;
       justify-content:center;
-      gap:9px;
-      padding:22px 18px;
+      gap:0;
+      padding:0;
       text-align:center;
       cursor:pointer;
       font-family:inherit;
-      box-shadow:0 14px 34px rgba(15,23,42,0.24);
+      box-shadow:0 12px 30px rgba(15,23,42,0.15);
       transition:transform .18s ease, background-color .18s ease, box-shadow .18s ease;
     }
 
@@ -334,41 +338,60 @@
     .upload-dropzone.is-dragging{
       outline:none;
       transform:translateY(-1px);
-      background:#0b1220;
-      box-shadow:0 18px 42px rgba(15,23,42,0.28);
+      background:#ffffff;
+      box-shadow:0 16px 38px rgba(15,23,42,0.2);
     }
 
     body.scrolled .search-container:not(.expanded) .upload-file-list{
-      position:static;
-      width:100%;
-      max-height:150px;
-      transform:none;
-      border-color:rgba(15,23,42,0.11);
-      background:rgba(255,255,255,0.82);
-      color:#111827;
-      box-shadow:none;
+      position:fixed;
+      left:18px;
+      top:50%;
+      z-index:880;
+      width:min(292px, calc(100vw - 36px));
+      max-height:min(620px, calc(100vh - 132px));
+      transform:translateY(-50%);
+      border-color:rgba(15,23,42,0.16);
+      border-radius:8px;
+      padding:7px 5px;
+      background:#1f242d;
+      color:#d4d4d4;
+      box-shadow:0 20px 50px rgba(15,23,42,0.24);
       backdrop-filter:none;
     }
 
     body.scrolled .search-container:not(.expanded) .upload-folder-row,
     body.scrolled .search-container:not(.expanded) .upload-file-item{
-      color:#111827;
+      color:#d4d4d4;
+    }
+
+    body.scrolled .search-container:not(.expanded) .upload-file-item:hover,
+    body.scrolled .search-container:not(.expanded) .upload-file-item:focus-within,
+    body.scrolled .search-container:not(.expanded) .upload-folder-row:hover,
+    body.scrolled .search-container:not(.expanded) .upload-folder-row:focus-visible{
+      color:#ffffff;
+      background:#2a313d;
     }
 
     body.scrolled .search-container:not(.expanded) .upload-file-meta,
     body.scrolled .search-container:not(.expanded) .upload-folder-count{
-      color:#667085;
+      color:#8f98a7;
     }
 
     body.scrolled .search-container:not(.expanded) .upload-file-icon::after{
-      background:#ffffff;
+      background:#1f242d;
     }
 
     body.scrolled .search-container:not(.expanded) .upload-message{
+      position:absolute;
+      right:0;
+      top:calc(100% + 6px);
       min-height:18px;
+      width:max-content;
+      max-width:260px;
       margin-top:0;
       color:#475467;
-      text-align:left;
+      text-align:right;
+      pointer-events:none;
     }
 
     body.scrolled .search-container:not(.expanded) .upload-message.is-error{
@@ -376,14 +399,14 @@
     }
 
     body.scrolled .search-container:not(.expanded) .slide-actions{
-      align-self:flex-end;
-      margin-top:0;
+      align-self:flex-start;
+      margin-top:5px;
     }
 
     body.scrolled .search-container:not(.expanded) .send-button{
-      width:48px;
-      height:48px;
-      flex-basis:48px;
+      width:44px;
+      height:44px;
+      flex-basis:44px;
       background:#111827;
     }
 
@@ -803,17 +826,14 @@
     }
 
     .upload-dropzone-title{
-      font-size:clamp(22px, 4vw, 34px);
-      font-weight:760;
+      font-size:24px;
+      font-weight:720;
       letter-spacing:0;
       line-height:1.1;
     }
 
     .upload-dropzone-copy{
-      max-width:460px;
-      color:rgba(255,255,255,0.76);
-      font-size:14px;
-      line-height:1.55;
+      display:none;
     }
 
     .upload-file-list{
@@ -847,26 +867,33 @@
     }
 
     .upload-folder-row{
-      height:26px;
+      appearance:none;
+      width:100%;
+      border:0;
+      background:transparent;
+      font-family:inherit;
+      text-align:left;
+      height:24px;
       display:flex;
       align-items:center;
-      gap:7px;
-      padding:0 8px;
+      gap:6px;
+      padding:0 7px 0 calc(7px + (var(--depth, 0) * 14px));
       color:#c7d4e8;
       font-size:12px;
-      font-weight:700;
+      font-weight:620;
       letter-spacing:0;
       user-select:none;
+      border-radius:4px;
+      cursor:pointer;
     }
 
     .upload-folder-row::before{
-      content:'';
-      width:0;
-      height:0;
-      border-left:4px solid transparent;
-      border-right:4px solid transparent;
-      border-top:5px solid #8ea5c8;
-      transform:translateY(1px);
+      content:attr(data-twisty);
+      width:12px;
+      color:#9aa4b2;
+      font-size:11px;
+      line-height:1;
+      transform:none;
       flex:0 0 auto;
     }
 
@@ -903,9 +930,9 @@
       display:flex;
       align-items:center;
       gap:8px;
-      min-height:28px;
+      min-height:24px;
       border-radius:5px;
-      padding:4px 6px 4px 26px;
+      padding:3px 6px 3px calc(25px + (var(--depth, 0) * 14px));
       color:#dbe5f5;
       background:transparent;
       position:relative;
@@ -915,7 +942,7 @@
     .upload-file-item::before{
       content:'';
       position:absolute;
-      left:13px;
+      left:calc(13px + (var(--depth, 0) * 14px));
       top:-1px;
       bottom:50%;
       width:1px;
@@ -925,7 +952,7 @@
     .upload-file-item::after{
       content:'';
       position:absolute;
-      left:13px;
+      left:calc(13px + (var(--depth, 0) * 14px));
       top:50%;
       width:8px;
       height:1px;
@@ -944,8 +971,8 @@
     }
 
     .upload-file-icon{
-      width:14px;
-      height:16px;
+      width:13px;
+      height:15px;
       flex:0 0 auto;
       border:1px solid rgba(125,168,232,0.48);
       border-radius:2px;
@@ -986,6 +1013,44 @@
       overflow:hidden;
       text-overflow:ellipsis;
       white-space:nowrap;
+    }
+
+    .upload-picker-menu{
+      position:absolute;
+      right:0;
+      top:calc(100% + 7px);
+      z-index:930;
+      display:flex;
+      flex-direction:column;
+      min-width:112px;
+      padding:5px;
+      border-radius:8px;
+      border:1px solid rgba(15,23,42,0.12);
+      background:#ffffff;
+      box-shadow:0 18px 40px rgba(15,23,42,0.18);
+    }
+
+    .upload-picker-menu[hidden]{
+      display:none;
+    }
+
+    .upload-picker-option{
+      appearance:none;
+      border:0;
+      border-radius:6px;
+      background:transparent;
+      color:#111827;
+      padding:8px 10px;
+      text-align:left;
+      font:inherit;
+      font-size:12px;
+      cursor:pointer;
+    }
+
+    .upload-picker-option:hover,
+    .upload-picker-option:focus-visible{
+      outline:none;
+      background:#eef2f7;
     }
 
     .upload-file-remove{
@@ -1412,6 +1477,28 @@
 
       body.scrolled .search-container.expanded .slide-actions{
         justify-self:stretch;
+      }
+
+      body.scrolled .search-container:not(.expanded){
+        max-width:calc(100vw - 20px);
+      }
+
+      body.scrolled .search-container:not(.expanded) .search-box{
+        gap:7px;
+      }
+
+      body.scrolled .search-container:not(.expanded) .upload-dropzone{
+        width:58px;
+      }
+
+      body.scrolled .search-container:not(.expanded) .upload-file-list{
+        position:fixed;
+        left:10px;
+        top:auto;
+        bottom:14px;
+        width:calc(100vw - 20px);
+        max-height:34vh;
+        transform:none;
       }
     }
 
@@ -2755,10 +2842,14 @@
       ></textarea>
       <div class="upload-shell" id="uploadShell">
         <div class="upload-main">
-          <button class="upload-dropzone" id="uploadDropzone" type="button">
-            <span class="upload-dropzone-title">Upload a file</span>
-            <span class="upload-dropzone-copy">Drop a presentation, PDF, image, spreadsheet, or document here.</span>
+          <button class="upload-dropzone" id="uploadDropzone" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Upload files or folders" title="Upload files or folders">
+            <span class="upload-dropzone-title">+📁</span>
+            <span class="upload-dropzone-copy">Upload files or folders</span>
           </button>
+          <div class="upload-picker-menu" id="uploadPickerMenu" role="menu" hidden>
+            <button class="upload-picker-option" type="button" role="menuitem" data-upload-pick="file">File</button>
+            <button class="upload-picker-option" type="button" role="menuitem" data-upload-pick="folder">Folder</button>
+          </div>
           <div class="upload-file-list" id="uploadFileList" aria-live="polite"></div>
           <div class="upload-message" id="uploadMessage" role="status" aria-live="polite"></div>
         </div>
@@ -2781,7 +2872,8 @@
         </button>
       </div>
     </form>
-    <input id="slideFileInput" type="file" accept=".pdf,.txt,.md,.markdown,.json,.csv,.ppt,.pptx,.key,.doc,.docx,.xls,.xlsx,image/*,application/pdf,text/*" multiple hidden />
+    <input id="slideFileInput" type="file" multiple hidden />
+    <input id="slideFolderInput" type="file" webkitdirectory directory multiple hidden />
     <div class="attachment-list" id="attachmentList" aria-live="polite"></div>
 
     <div class="button-group">
@@ -2955,9 +3047,11 @@
   const canvaFileInput = document.getElementById('canvaFileInput');
   const uploadDropzone = document.getElementById('uploadDropzone');
   const uploadFileInput = document.getElementById('slideFileInput');
+  const uploadFolderInput = document.getElementById('slideFolderInput');
   const uploadFileList = document.getElementById('uploadFileList');
   const uploadStatusLabel = document.getElementById('uploadStatusLabel');
   const uploadMessage = document.getElementById('uploadMessage');
+  const uploadPickerMenu = document.getElementById('uploadPickerMenu');
   const googleMenuTrigger = document.getElementById('googleMenuTrigger');
   const googleMenu = document.getElementById('googleMenu');
   const googlePicker = document.getElementById('googlePicker');
@@ -3023,8 +3117,19 @@
   const depositBtn = document.getElementById('depositBtn');
   const editorReturnContext = readEditorReturnContext();
   const theoremDraftStore = window.ivucxTheoremDraftStore || null;
-  const UPLOAD_FILE_SIZE_LIMIT = 35 * 1024 * 1024;
+  const ZENODO_RECORD_SIZE_LIMIT = 50 * 1000 * 1000 * 1000;
+  const ZENODO_RECORD_SIZE_LABEL = '50 GB';
+  const ZENODO_FILE_COUNT_LIMIT = 100;
+  const UPLOAD_FILE_SIZE_LIMIT = ZENODO_RECORD_SIZE_LIMIT;
+  const UPLOAD_INLINE_PREVIEW_LIMIT = 35 * 1024 * 1024;
   const UPLOAD_TEXT_PREVIEW_LIMIT = 1024 * 1024;
+  const UPLOAD_MAGIC_SCAN_BYTES = 16;
+  const UPLOAD_BLOCKED_EXTENSIONS = new Set([
+    'ade','adp','apk','app','appx','bat','cmd','com','cpl','dll','dmg','exe','gadget','hta','ins','isp',
+    'jar','jse','lib','lnk','mde','msc','msi','msp','mst','pif','ps1','ps1xml','ps2','ps2xml','psc1',
+    'psc2','reg','scr','sct','shb','sys','vb','vbe','vbs','ws','wsc','wsf','wsh','docm','dotm','xlsm',
+    'xltm','xlam','pptm','potm','ppam'
+  ]);
   const GOOGLE_KIND_LABELS = Object.freeze({
     drive: 'Drive',
     slides: 'Slides',
@@ -3039,6 +3144,7 @@
   });
   let uploadRecords = [];
   let uploadCurrentIndex = 0;
+  let uploadExpandedFolders = new Set(['']);
   let uploadSourceIndex = 1;
   let uploadSourceTouchY = null;
   let googlePickerKind = 'drive';
@@ -3181,7 +3287,8 @@
     const value = Number(bytes) || 0;
     if(value < 1024) return `${value} B`;
     if(value < 1024 * 1024) return `${Math.round(value / 102.4) / 10} KB`;
-    return `${Math.round(value / 1024 / 102.4) / 10} MB`;
+    if(value < 1024 * 1024 * 1024) return `${Math.round(value / 1024 / 102.4) / 10} MB`;
+    return `${Math.round(value / 1024 / 1024 / 102.4) / 10} GB`;
   }
 
   function clampUploadSourceIndex(index){
@@ -3287,20 +3394,127 @@
     });
   }
 
+  function readFileSliceAsBytes(file, length = UPLOAD_MAGIC_SCAN_BYTES){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = () => resolve(new Uint8Array(reader.result || new ArrayBuffer(0)));
+      reader.onerror = () => reject(reader.error || new Error('File scan failed'));
+      reader.readAsArrayBuffer(file.slice(0, length));
+    });
+  }
+
+  function normalizeUploadPath(path){
+    const raw = String(path || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    const parts = raw.split('/').filter(part => part && part !== '.' && part !== '..');
+    return parts.join('/');
+  }
+
+  function getUploadFilePath(file){
+    return normalizeUploadPath(
+      (file && (file.ivucxRelativePath || file.webkitRelativePath || file.relativePath))
+      || (file && file.name)
+      || 'Uploaded file'
+    );
+  }
+
+  function getRecordPath(record){
+    return normalizeUploadPath(record && (record.relativePath || record.path || record.title || record.name));
+  }
+
+  function getRecordDisplayName(record){
+    const path = getRecordPath(record);
+    const parts = path.split('/').filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : (record && record.title) || 'Untitled file';
+  }
+
+  function getRecordFolderPath(record){
+    const path = getRecordPath(record);
+    const parts = path.split('/').filter(Boolean);
+    parts.pop();
+    return parts.join('/');
+  }
+
+  function getUploadTotalSize(records = uploadRecords){
+    return records.reduce((sum, record)=>sum + (Number(record && record.size) || 0), 0);
+  }
+
+  function describeUploadQuota(){
+    return `${ZENODO_FILE_COUNT_LIMIT} files / ${ZENODO_RECORD_SIZE_LABEL}`;
+  }
+
+  function ensureUploadQuota(files){
+    const incoming = Array.from(files || []).filter(Boolean);
+    const nextCount = uploadRecords.length + incoming.length;
+    if(nextCount > ZENODO_FILE_COUNT_LIMIT){
+      throw new Error(`Zenodo-style limit is ${ZENODO_FILE_COUNT_LIMIT} files per record.`);
+    }
+    const incomingSize = incoming.reduce((sum, file)=>sum + (Number(file.size) || 0), 0);
+    const nextSize = getUploadTotalSize() + incomingSize;
+    if(nextSize > ZENODO_RECORD_SIZE_LIMIT){
+      throw new Error(`Zenodo-style limit is ${ZENODO_RECORD_SIZE_LABEL} per record.`);
+    }
+    const oversized = incoming.find(file => (Number(file.size) || 0) > UPLOAD_FILE_SIZE_LIMIT);
+    if(oversized){
+      throw new Error(`${oversized.name} is larger than ${ZENODO_RECORD_SIZE_LABEL}.`);
+    }
+  }
+
+  function isExecutableSignature(bytes){
+    if(!bytes || bytes.length < 4) return false;
+    const hex = Array.from(bytes.slice(0, 4)).map(byte=>byte.toString(16).padStart(2, '0')).join('');
+    return bytes[0] === 0x4d && bytes[1] === 0x5a
+      || bytes[0] === 0x7f && bytes[1] === 0x45 && bytes[2] === 0x4c && bytes[3] === 0x46
+      || ['feedface','cefaedfe','feedfacf','cffaedfe'].includes(hex);
+  }
+
+  async function runStandardUploadSafetyCheck(file){
+    const name = String(file && file.name || '').trim();
+    const ext = getFileExtension(name);
+    if(UPLOAD_BLOCKED_EXTENSIONS.has(ext)){
+      throw new Error(`${name || 'This file'} uses a blocked executable or macro-enabled file type.`);
+    }
+    const bytes = await readFileSliceAsBytes(file);
+    if(isExecutableSignature(bytes)){
+      throw new Error(`${name || 'This file'} looks like an executable binary.`);
+    }
+    return {
+      status: 'passed',
+      label: 'checked',
+      checkedAt: new Date().toISOString()
+    };
+  }
+
+  function rememberExpandedUploadFolders(path){
+    const parts = normalizeUploadPath(path).split('/').filter(Boolean);
+    let current = '';
+    uploadExpandedFolders.add('');
+    parts.slice(0, -1).forEach(part=>{
+      current = current ? `${current}/${part}` : part;
+      uploadExpandedFolders.add(current);
+    });
+  }
+
   function serializeUploadRecord(record){
     if(!record || typeof record !== 'object') return null;
+    const relativePath = getRecordPath(record);
     return {
       id: record.id || createUploadId(),
       source: record.source || 'local',
       provider: record.provider || '',
       providerKind: record.providerKind || '',
-      title: record.title || 'Untitled file',
+      title: record.title || getRecordDisplayName(record),
+      path: relativePath,
+      relativePath,
       kind: record.kind || 'file',
       ext: record.ext || '',
       mime: record.mime || '',
       size: Number(record.size) || 0,
       url: record.url || '',
       text: record.text || '',
+      previewAvailable: record.previewAvailable !== false,
+      scanStatus: record.scanStatus || 'passed',
+      scanLabel: record.scanLabel || 'checked',
+      scanCheckedAt: record.scanCheckedAt || record.checkedAt || '',
       webViewLink: record.webViewLink || '',
       googleFileId: record.googleFileId || '',
       importedAt: record.importedAt || record.uploadedAt || new Date().toISOString()
@@ -3312,11 +3526,17 @@
     if(!serialized) return null;
     return {
       title: serialized.title,
+      path: serialized.path,
+      relativePath: serialized.relativePath,
       kind: serialized.kind,
       ext: serialized.ext,
       mime: serialized.mime,
       size: serialized.size,
       checked: true,
+      scanStatus: serialized.scanStatus,
+      scanLabel: serialized.scanLabel,
+      scanCheckedAt: serialized.scanCheckedAt,
+      previewAvailable: serialized.previewAvailable,
       url: serialized.url,
       text: serialized.text,
       source: serialized.source,
@@ -3379,53 +3599,107 @@
     window.uploadState.hasContent = count > 0;
   }
 
+  function createUploadTree(records){
+    const root = { name: 'Uploads', path: '', folders: new Map(), files: [] };
+    records.forEach((record, index)=>{
+      const path = getRecordPath(record);
+      const parts = path.split('/').filter(Boolean);
+      const fileName = parts.pop() || getRecordDisplayName(record);
+      let node = root;
+      let currentPath = '';
+      parts.forEach(part=>{
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        if(!node.folders.has(part)){
+          node.folders.set(part, { name: part, path: currentPath, folders: new Map(), files: [] });
+        }
+        node = node.folders.get(part);
+      });
+      node.files.push({ record, index, name: fileName });
+    });
+    return root;
+  }
+
+  function countUploadTreeFiles(node){
+    if(!node) return 0;
+    let count = node.files.length;
+    node.folders.forEach(child=>{
+      count += countUploadTreeFiles(child);
+    });
+    return count;
+  }
+
+  function appendUploadFolderNode(node, depth){
+    const row = document.createElement('button');
+    row.className = 'upload-folder-row';
+    row.type = 'button';
+    row.style.setProperty('--depth', String(depth));
+    const isExpanded = uploadExpandedFolders.has(node.path);
+    row.dataset.twisty = isExpanded ? '⌄' : '›';
+    row.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    const folderIcon = document.createElement('span');
+    folderIcon.className = 'upload-folder-icon';
+    const folderName = document.createElement('span');
+    folderName.textContent = node.name;
+    const folderCount = document.createElement('span');
+    folderCount.className = 'upload-folder-count';
+    folderCount.textContent = String(countUploadTreeFiles(node));
+    row.append(folderIcon, folderName, folderCount);
+    row.addEventListener('click', ()=>{
+      if(uploadExpandedFolders.has(node.path)){
+        if(node.path) uploadExpandedFolders.delete(node.path);
+      }else{
+        uploadExpandedFolders.add(node.path);
+      }
+      renderUploadList();
+    });
+    uploadFileList.appendChild(row);
+
+    if(!isExpanded) return;
+
+    Array.from(node.folders.values())
+      .sort((a, b)=>a.name.localeCompare(b.name))
+      .forEach(child=>appendUploadFolderNode(child, depth + 1));
+
+    node.files.forEach(fileNode=>appendUploadFileNode(fileNode, depth + 1));
+  }
+
+  function appendUploadFileNode(fileNode, depth){
+    const record = fileNode.record;
+    const item = document.createElement('div');
+    item.className = 'upload-file-item';
+    item.style.setProperty('--depth', String(depth));
+    const icon = document.createElement('span');
+    icon.className = 'upload-file-icon';
+    const text = document.createElement('div');
+    text.className = 'upload-file-label';
+    const name = document.createElement('span');
+    name.className = 'upload-file-name';
+    name.textContent = fileNode.name || getRecordDisplayName(record);
+    const meta = document.createElement('span');
+    meta.className = 'upload-file-meta';
+    meta.textContent = [record.kind, record.size ? formatBytes(record.size) : '', record.scanLabel || 'checked'].filter(Boolean).join(' - ');
+    text.appendChild(name);
+    text.appendChild(meta);
+    const remove = document.createElement('button');
+    remove.className = 'upload-file-remove';
+    remove.type = 'button';
+    remove.setAttribute('aria-label', 'Remove uploaded file');
+    remove.textContent = '×';
+    remove.addEventListener('click', ()=>{
+      uploadRecords.splice(fileNode.index, 1);
+      uploadCurrentIndex = Math.max(0, Math.min(uploadCurrentIndex, uploadRecords.length - 1));
+      commitUploadState('remove-upload');
+    });
+    item.append(icon, text, remove);
+    uploadFileList.appendChild(item);
+  }
+
   function renderUploadList(){
     if(!uploadFileList) return;
     uploadFileList.innerHTML = '';
     if(uploadRecords.length){
-      const folderRow = document.createElement('div');
-      folderRow.className = 'upload-folder-row';
-      const folderIcon = document.createElement('span');
-      folderIcon.className = 'upload-folder-icon';
-      const folderName = document.createElement('span');
-      folderName.textContent = 'Uploads';
-      const folderCount = document.createElement('span');
-      folderCount.className = 'upload-folder-count';
-      folderCount.textContent = String(uploadRecords.length);
-      folderRow.append(folderIcon, folderName, folderCount);
-      uploadFileList.appendChild(folderRow);
+      appendUploadFolderNode(createUploadTree(uploadRecords), 0);
     }
-    uploadRecords.forEach((record, index)=>{
-      const item = document.createElement('div');
-      item.className = 'upload-file-item';
-      const icon = document.createElement('span');
-      icon.className = 'upload-file-icon';
-      const text = document.createElement('div');
-      text.className = 'upload-file-label';
-      const name = document.createElement('span');
-      name.className = 'upload-file-name';
-      name.textContent = record.title || 'Untitled file';
-      const meta = document.createElement('span');
-      meta.className = 'upload-file-meta';
-      const source = record.source === 'google'
-        ? `Google ${GOOGLE_KIND_LABELS[record.providerKind] || ''}`.trim()
-        : getUploadSourceLabel(record.source);
-      meta.textContent = [source, record.kind, record.size ? formatBytes(record.size) : ''].filter(Boolean).join(' - ');
-      text.appendChild(name);
-      text.appendChild(meta);
-      const remove = document.createElement('button');
-      remove.className = 'upload-file-remove';
-      remove.type = 'button';
-      remove.setAttribute('aria-label', 'Remove uploaded file');
-      remove.textContent = '×';
-      remove.addEventListener('click', ()=>{
-        uploadRecords.splice(index, 1);
-        uploadCurrentIndex = Math.max(0, Math.min(uploadCurrentIndex, uploadRecords.length - 1));
-        commitUploadState('remove-upload');
-      });
-      item.append(icon, text, remove);
-      uploadFileList.appendChild(item);
-    });
     updateUploadStatus();
   }
 
@@ -3438,14 +3712,17 @@
     }
   }
 
-  async function buildLocalUploadRecord(file, source = 'local'){
+  async function buildLocalUploadRecord(file, source = 'local', scanResult = null){
     if(!file) return null;
     if(file.size > UPLOAD_FILE_SIZE_LIMIT){
-      throw new Error(`${file.name} is larger than ${formatBytes(UPLOAD_FILE_SIZE_LIMIT)}.`);
+      throw new Error(`${file.name} is larger than ${ZENODO_RECORD_SIZE_LABEL}.`);
     }
     const uploadSource = 'local';
+    const relativePath = getUploadFilePath(file);
+    const title = relativePath.split('/').filter(Boolean).pop() || file.name || 'Uploaded file';
     const kind = inferUploadKind(file.name, file.type);
-    const url = await readFileAsDataUrl(file);
+    const canInlinePreview = file.size <= UPLOAD_INLINE_PREVIEW_LIMIT;
+    const url = canInlinePreview ? await readFileAsDataUrl(file) : '';
     const text = kind === 'text' && file.size <= UPLOAD_TEXT_PREVIEW_LIMIT
       ? await readFileAsText(file)
       : '';
@@ -3454,13 +3731,19 @@
       source: uploadSource,
       provider: '',
       providerKind: '',
-      title: file.name || 'Uploaded file',
+      title,
+      path: relativePath,
+      relativePath,
       kind,
       ext: getFileExtension(file.name),
       mime: file.type || '',
       size: Number(file.size) || 0,
       url,
       text,
+      previewAvailable: canInlinePreview,
+      scanStatus: scanResult && scanResult.status ? scanResult.status : 'passed',
+      scanLabel: scanResult && scanResult.label ? scanResult.label : 'checked',
+      scanCheckedAt: scanResult && scanResult.checkedAt ? scanResult.checkedAt : new Date().toISOString(),
       uploadedAt: new Date().toISOString()
     };
   }
@@ -3470,23 +3753,29 @@
     if(!list.length) return;
     const uploadSource = 'local';
     const sourceLabel = getUploadSourceLabel(uploadSource);
-    setUploadMessage('Preparing upload...');
+    setUploadMessage(`Checking upload (${describeUploadQuota()})...`);
     try{
+      ensureUploadQuota(list);
       const records = [];
       for(const file of list){
-        const record = await buildLocalUploadRecord(file, uploadSource);
-        if(record) records.push(record);
+        const scanResult = await runStandardUploadSafetyCheck(file);
+        const record = await buildLocalUploadRecord(file, uploadSource, scanResult);
+        if(record){
+          rememberExpandedUploadFolders(record.relativePath || record.path || record.title);
+          records.push(record);
+        }
       }
       uploadRecords = uploadRecords.concat(records);
       uploadCurrentIndex = Math.max(0, uploadRecords.length - 1);
       setUploadMessage(records.length === 1
-        ? `${records[0].title} uploaded.`
-        : `${records.length} ${sourceLabel.toLowerCase()}s uploaded.`);
+        ? `${records[0].title} uploaded and checked.`
+        : `${records.length} ${sourceLabel.toLowerCase()}s uploaded and checked.`);
       commitUploadState(`${uploadSource}-upload`);
     }catch(err){
       setUploadMessage(err && err.message ? err.message : 'Upload failed.', true);
     }finally{
       if(uploadFileInput) uploadFileInput.value = '';
+      if(uploadFolderInput) uploadFolderInput.value = '';
       if(canvaFileInput) canvaFileInput.value = '';
     }
   }
@@ -3512,6 +3801,8 @@
     }else{
       uploadRecords = [];
     }
+    uploadExpandedFolders = new Set(['']);
+    uploadRecords.forEach(upload=>rememberExpandedUploadFolders(upload.relativePath || upload.path || upload.title));
     uploadCurrentIndex = Math.max(0, Math.min(Number(record && record.currentSlideIndex) || 0, Math.max(0, uploadRecords.length - 1)));
     renderUploadList();
   }
@@ -3673,6 +3964,68 @@
     }
   };
 
+  function setUploadPickerMenuOpen(open){
+    if(!uploadPickerMenu || !uploadDropzone) return;
+    uploadPickerMenu.hidden = !open;
+    uploadDropzone.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function readDirectoryEntries(reader){
+    return new Promise((resolve, reject)=>{
+      reader.readEntries(resolve, reject);
+    });
+  }
+
+  function readEntryFile(entry){
+    return new Promise((resolve, reject)=>{
+      entry.file(resolve, reject);
+    });
+  }
+
+  async function walkDroppedEntry(entry, parentPath, output){
+    if(!entry) return;
+    const currentPath = normalizeUploadPath(parentPath ? `${parentPath}/${entry.name}` : entry.name);
+    if(entry.isFile){
+      const file = await readEntryFile(entry);
+      try{
+        Object.defineProperty(file, 'ivucxRelativePath', {
+          value: currentPath,
+          configurable: true
+        });
+      }catch(err){
+        file.ivucxRelativePath = currentPath;
+      }
+      output.push(file);
+      return;
+    }
+    if(entry.isDirectory){
+      const reader = entry.createReader();
+      let batch = [];
+      do{
+        batch = await readDirectoryEntries(reader);
+        for(const child of batch){
+          await walkDroppedEntry(child, currentPath, output);
+        }
+      }while(batch.length);
+    }
+  }
+
+  async function collectDroppedUploadFiles(dataTransfer){
+    if(!dataTransfer) return [];
+    const items = Array.from(dataTransfer.items || []);
+    const entries = items
+      .map(item => item && typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null)
+      .filter(Boolean);
+    if(entries.length){
+      const files = [];
+      for(const entry of entries){
+        await walkDroppedEntry(entry, '', files);
+      }
+      return files;
+    }
+    return Array.from(dataTransfer.files || []);
+  }
+
   if(uploadSourcePanels.length){
     uploadSourcePanels.forEach(panel=>{
       panel.addEventListener('click', event=>{
@@ -3743,13 +4096,31 @@
   }
 
   if(uploadDropzone && uploadFileInput){
-    uploadDropzone.addEventListener('click', ()=>{
-      uploadFileInput.click();
+    uploadDropzone.addEventListener('click', event=>{
+      event.stopPropagation();
+      setUploadPickerMenuOpen(!uploadPickerMenu || uploadPickerMenu.hidden);
     });
     uploadFileInput.addEventListener('change', ()=>handleUploadFiles(uploadFileInput.files));
+    if(uploadFolderInput){
+      uploadFolderInput.addEventListener('change', ()=>handleUploadFiles(uploadFolderInput.files));
+    }
+    if(uploadPickerMenu){
+      uploadPickerMenu.addEventListener('click', event=>{
+        const option = event.target && event.target.closest ? event.target.closest('[data-upload-pick]') : null;
+        if(!option) return;
+        event.stopPropagation();
+        setUploadPickerMenuOpen(false);
+        if(option.dataset.uploadPick === 'folder' && uploadFolderInput){
+          uploadFolderInput.click();
+          return;
+        }
+        uploadFileInput.click();
+      });
+    }
     ['dragenter','dragover'].forEach(type=>{
       uploadDropzone.addEventListener(type, event=>{
         event.preventDefault();
+        setUploadPickerMenuOpen(false);
         uploadDropzone.classList.add('is-dragging');
       });
     });
@@ -3759,8 +4130,9 @@
         uploadDropzone.classList.remove('is-dragging');
       });
     });
-    uploadDropzone.addEventListener('drop', event=>{
-      handleUploadFiles(event.dataTransfer ? event.dataTransfer.files : []);
+    uploadDropzone.addEventListener('drop', async event=>{
+      const files = await collectDroppedUploadFiles(event.dataTransfer);
+      handleUploadFiles(files);
     });
   }
 
@@ -3790,6 +4162,11 @@
   }
 
   document.addEventListener('click', event=>{
+    if(uploadPickerMenu && !uploadPickerMenu.hidden){
+      if(!(event.target && event.target.closest && event.target.closest('#uploadShell'))){
+        setUploadPickerMenuOpen(false);
+      }
+    }
     if(!googleMenu || googleMenu.hidden) return;
     if(event.target && event.target.closest && event.target.closest('.google-import')) return;
     closeGoogleMenu();
@@ -3797,6 +4174,7 @@
 
   document.addEventListener('keydown', event=>{
     if(event.key === 'Escape'){
+      setUploadPickerMenuOpen(false);
       closeGoogleMenu();
       if(googlePicker && googlePicker.classList.contains('is-open')) closeGooglePicker();
     }
