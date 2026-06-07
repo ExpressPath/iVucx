@@ -17,6 +17,7 @@
       --gray-sidebar-width:22vw;
       --gray-content-width:78vw;
       --gray-title-center-x:61.803vw;
+      --gray-title-y-offset:-36px;
       --gray-title-row-height:68px;
       --gray-title-panel-width:min(720px, calc(78vw - 24px));
     }
@@ -277,7 +278,7 @@
     body.compact-gray-mode .search-container:not(.expanded){
       position:fixed;
       left:var(--gray-title-center-x);
-      top:calc(var(--visible-center-y) - (var(--gray-title-row-height) / 2));
+      top:calc(var(--visible-center-y) - (var(--gray-title-row-height) / 2) + var(--gray-title-y-offset));
       width:var(--gray-title-panel-width);
       max-width:var(--gray-title-panel-width);
       padding:0;
@@ -1379,77 +1380,6 @@
       color:#536173;
     }
 
-    .cookie-consent{
-      position:fixed;
-      left:20px;
-      right:20px;
-      bottom:20px;
-      z-index:1350;
-      display:none;
-      justify-content:center;
-      pointer-events:none;
-    }
-
-    .cookie-consent.is-open{
-      display:flex;
-    }
-
-    .cookie-consent-card{
-      width:min(560px, 100%);
-      border-radius:18px;
-      border:1px solid rgba(15,23,42,0.12);
-      background:rgba(255,255,255,0.96);
-      box-shadow:0 24px 54px rgba(15,23,42,0.2);
-      padding:18px 18px 16px;
-      color:#111;
-      pointer-events:auto;
-    }
-
-    .cookie-consent-title{
-      margin:0 0 8px;
-      font-size:16px;
-      font-weight:700;
-      letter-spacing:.01em;
-    }
-
-    .cookie-consent-copy{
-      margin:0;
-      font-size:13px;
-      line-height:1.65;
-      color:#536173;
-    }
-
-    .cookie-consent-actions{
-      display:flex;
-      flex-wrap:wrap;
-      justify-content:flex-end;
-      gap:10px;
-      margin-top:16px;
-    }
-
-    .cookie-consent-btn{
-      appearance:none;
-      border:1px solid rgba(15,23,42,0.12);
-      border-radius:12px;
-      background:#fff;
-      color:#111;
-      font-size:13px;
-      font-weight:700;
-      padding:10px 14px;
-      cursor:pointer;
-      transition:transform .18s ease,background-color .18s ease,color .18s ease,border-color .18s ease;
-    }
-
-    .cookie-consent-btn:hover{
-      transform:translateY(-1px);
-    }
-
-    .cookie-consent-btn.accept{
-      background:#111827;
-      border-color:#111827;
-      color:#fff;
-    }
-
     .title-decision-actions{
       display:flex;
       justify-content:flex-end;
@@ -2409,7 +2339,7 @@
       ></textarea>
       <div class="upload-shell" id="uploadShell">
         <div class="upload-main">
-          <button class="upload-dropzone" id="uploadDropzone" type="button" aria-label="Upload files or folders" title="Upload files or folders">
+          <button class="upload-dropzone" id="uploadDropzone" type="button" aria-label="Upload files or folders" title="Click to upload files. Right-click or drop a folder to upload a folder.">
             <span class="upload-dropzone-title">+📁</span>
             <span class="upload-dropzone-copy">Upload files or folders</span>
           </button>
@@ -2484,17 +2414,6 @@
     <div class="slide-title-popup-actions">
       <button class="slide-title-popup-btn" id="slideTitlePopupCancel" type="button">Cancel</button>
       <button class="slide-title-popup-btn confirm" id="slideTitlePopupSave" type="button">Save</button>
-    </div>
-  </div>
-</div>
-
-<div class="cookie-consent" id="cookieConsent" hidden>
-  <div class="cookie-consent-card" role="dialog" aria-modal="false" aria-labelledby="cookieConsentTitle">
-    <h2 class="cookie-consent-title" id="cookieConsentTitle">Cookie を受け入れますか？</h2>
-    <p class="cookie-consent-copy">このデバイスで直近 6 件の編集チェックポイントを残すために、軽量な編集履歴 Cookie を使えます。許可すると現在のモードや入力内容の要約を保存します。アップロード本体の最新状態は引き続き IndexedDB に保存します。</p>
-    <div class="cookie-consent-actions">
-      <button class="cookie-consent-btn" id="cookieConsentDecline" type="button">今はしない</button>
-      <button class="cookie-consent-btn accept" id="cookieConsentAccept" type="button">Cookie を受け入れる</button>
     </div>
   </div>
 </div>
@@ -2612,9 +2531,6 @@
   const uploadMessage = document.getElementById('uploadMessage');
   const slideStatusLabel = document.getElementById('slideStatusLabel');
   const slideMetaLabel = document.getElementById('slideMetaLabel');
-  const cookieConsent = document.getElementById('cookieConsent');
-  const cookieConsentAccept = document.getElementById('cookieConsentAccept');
-  const cookieConsentDecline = document.getElementById('cookieConsentDecline');
   const suggestionPane = document.getElementById('suggestionPane');
   const suggestionBody = document.getElementById('suggestionBody');
   const suggestionPanel = suggestionPane ? suggestionPane.querySelector('.suggestion-panel') : null;
@@ -2717,6 +2633,7 @@
     rootStyle.setProperty('--gray-sidebar-width', `${sidebarWidth}px`);
     rootStyle.setProperty('--gray-content-width', `${contentWidth}px`);
     rootStyle.setProperty('--gray-title-center-x', `${rect.offsetLeft + rect.width * GOLDEN_RATIO_RIGHT_X}px`);
+    rootStyle.setProperty('--gray-title-y-offset', `${-Math.min(56, Math.max(24, rect.height * 0.055))}px`);
     rootStyle.setProperty('--gray-title-panel-width', `${panelWidth}px`);
   }
 
@@ -3451,10 +3368,6 @@
   }
 
   function openNativeUploadPicker(){
-    if(uploadFolderInput && ('webkitdirectory' in uploadFolderInput || 'directory' in uploadFolderInput)){
-      uploadFolderInput.click();
-      return;
-    }
     uploadFileInput.click();
   }
 
@@ -3462,6 +3375,11 @@
     uploadDropzone.addEventListener('click', event=>{
       event.stopPropagation();
       openNativeUploadPicker();
+    });
+    uploadDropzone.addEventListener('contextmenu', event=>{
+      if(!uploadFolderInput) return;
+      event.preventDefault();
+      uploadFolderInput.click();
     });
     uploadFileInput.addEventListener('change', ()=>handleUploadFiles(uploadFileInput.files));
     if(uploadFolderInput){
@@ -3908,28 +3826,6 @@
     positionSlideTitlePopup();
   }, true);
 
-  if(cookieConsent){
-    cookieConsent.addEventListener('click', e=>{
-      if(e.target === cookieConsent){
-        closeCookieConsentBanner();
-      }
-    });
-  }
-
-  if(cookieConsentAccept){
-    cookieConsentAccept.addEventListener('click', ()=>{
-      applyCookieConsentState('accepted');
-      persistCookieConsentPreference('accepted');
-    });
-  }
-
-  if(cookieConsentDecline){
-    cookieConsentDecline.addEventListener('click', ()=>{
-      applyCookieConsentState('declined');
-      persistCookieConsentPreference('declined');
-    });
-  }
-
   if(editorCloseKeep){
     editorCloseKeep.addEventListener('click', ()=>{
       resetSearchModeDraft();
@@ -4289,11 +4185,7 @@
   }
 
   function normalizeCookieConsentStatus(value){
-    const normalized = String(value || '').trim().toLowerCase();
-    if(normalized === 'accepted' || normalized === 'declined'){
-      return normalized;
-    }
-    return '';
+    return 'accepted';
   }
 
   function readStoredCookieConsentState(){
@@ -4336,9 +4228,11 @@
 
   {
     const storedConsentState = readStoredCookieConsentState();
-    cookieHistoryConsent = storedConsentState.status;
+    cookieHistoryConsent = 'accepted';
     cookieConsentOwnerId = storedConsentState.accountId;
-    cookieConsentHydrated = !!storedConsentState.status;
+    cookieConsentHydrated = true;
+    writeStoredCookieConsentState('accepted', cookieConsentOwnerId);
+    setCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`, 'accepted', COOKIE_HISTORY_MAX_AGE_DAYS);
   }
 
   function patchTheoremDraftRecord(partial){
@@ -4718,22 +4612,18 @@
     const timeoutId = setTimeout(()=>controller.abort(), COOKIE_CONSENT_SYNC_TIMEOUT_MS);
     try{
       const payload = await requestCookieConsentPreference('GET', null, controller.signal);
-      const remoteStatus = normalizeCookieConsentStatus(payload && payload.consent);
       const accountId = payload && typeof payload.accountId === 'string'
         ? payload.accountId.trim()
         : '';
       if(accountId){
         saveBlueAccountHint(accountId);
       }
-      if(remoteStatus){
-        applyCookieConsentState(remoteStatus, {
-          accountId,
-          closeBanner: true
-        });
-      }else{
-        cookieConsentHydrated = true;
-      }
-      return !!remoteStatus;
+      applyCookieConsentState('accepted', {
+        accountId,
+        closeBanner: true
+      });
+      persistCookieConsentPreference('accepted');
+      return true;
     }catch(err){
       if(err && err.status === 404){
         cookieConsentApiUnavailable = true;
@@ -4746,7 +4636,7 @@
       clearTimeout(timeoutId);
       cookieConsentSyncPending = false;
       if(!cookieHistoryConsent && pendingCookieHistorySnapshot){
-        openCookieConsentBanner();
+        applyCookieConsentState('accepted');
       }
     }
   }
@@ -5608,19 +5498,12 @@
   }
 
   function openCookieConsentBanner(){
-    if(!cookieConsent || cookieHistoryConsent || cookieConsentSyncPending) return false;
-    cookieConsent.hidden = false;
-    cookieConsent.classList.add('is-open');
-    if(cookieConsentAccept){
-      requestAnimationFrame(()=>cookieConsentAccept.focus());
-    }
-    return true;
+    applyCookieConsentState('accepted');
+    persistCookieConsentPreference('accepted');
+    return false;
   }
 
   function closeCookieConsentBanner(){
-    if(!cookieConsent) return;
-    cookieConsent.classList.remove('is-open');
-    cookieConsent.hidden = true;
   }
 
   function getSlideCookieSummary(){
@@ -5710,7 +5593,9 @@
   }
 
   function scheduleCookieHistorySnapshot(reason = 'edit'){
-    if(cookieHistoryConsent === 'declined') return;
+    if(cookieHistoryConsent !== 'accepted'){
+      applyCookieConsentState('accepted');
+    }
     if(cookieHistoryTimer){
       clearTimeout(cookieHistoryTimer);
     }
@@ -5721,12 +5606,8 @@
         appendCookieHistorySnapshot(snapshot);
         return;
       }
-      pendingCookieHistorySnapshot = snapshot;
-      if(!cookieConsentHydrated){
-        hydrateCookieConsentFromServer();
-        return;
-      }
-      openCookieConsentBanner();
+      applyCookieConsentState('accepted');
+      appendCookieHistorySnapshot(snapshot);
     }, 520);
   }
 
