@@ -9,6 +9,15 @@
       --bg-white:#ffffff;
       --bg-black:#111111;
       --bg-navy:#0b1e3d;
+      --visible-vw:100vw;
+      --visible-vh:100vh;
+      --visible-left:0px;
+      --visible-top:0px;
+      --visible-center-y:50vh;
+      --gray-sidebar-width:22vw;
+      --gray-content-width:78vw;
+      --gray-title-center-x:61.803vw;
+      --gray-title-panel-width:min(720px, calc(78vw - 24px));
     }
 
     *,*::before,*::after{box-sizing:border-box}
@@ -264,6 +273,16 @@
       max-width:min(720px, calc(100vw - 24px));
     }
 
+    body.compact-gray-mode .search-container:not(.expanded){
+      position:fixed;
+      left:var(--gray-title-center-x);
+      top:var(--visible-center-y);
+      width:var(--gray-title-panel-width);
+      max-width:var(--gray-title-panel-width);
+      padding:0;
+      transform:translate(-50%, -50%);
+    }
+
     body.scrolled .search-container:not(.expanded) .search-box{
       display:grid;
       grid-template-columns:minmax(0, 1fr) 58px;
@@ -369,6 +388,15 @@
       color:#d4d4d4;
       box-shadow:8px 0 24px rgba(15,23,42,0.18);
       backdrop-filter:none;
+    }
+
+    body.compact-gray-mode .upload-file-list{
+      left:var(--visible-left);
+      top:var(--visible-top);
+      bottom:auto;
+      width:var(--gray-sidebar-width);
+      height:var(--visible-vh);
+      max-height:var(--visible-vh);
     }
 
     body.scrolled .upload-file-list .upload-folder-row,
@@ -822,45 +850,6 @@
       white-space:nowrap;
     }
 
-    .upload-picker-menu{
-      position:absolute;
-      left:50%;
-      top:calc(100% + 8px);
-      z-index:930;
-      display:flex;
-      flex-direction:column;
-      min-width:140px;
-      padding:5px;
-      border-radius:8px;
-      border:1px solid rgba(15,23,42,0.12);
-      background:#ffffff;
-      box-shadow:0 18px 40px rgba(15,23,42,0.18);
-      transform:translateX(-50%);
-    }
-
-    .upload-picker-menu[hidden]{
-      display:none;
-    }
-
-    .upload-picker-option{
-      appearance:none;
-      border:0;
-      border-radius:6px;
-      background:transparent;
-      color:#111827;
-      padding:8px 10px;
-      text-align:left;
-      font:inherit;
-      font-size:12px;
-      cursor:pointer;
-    }
-
-    .upload-picker-option:hover,
-    .upload-picker-option:focus-visible{
-      outline:none;
-      background:#eef2f7;
-    }
-
     .upload-file-remove{
       appearance:none;
       border:0;
@@ -1053,7 +1042,7 @@
       }
 
       body.scrolled .search-container:not(.expanded){
-        max-width:calc(100vw - 20px);
+        max-width:var(--gray-title-panel-width, calc(100vw - 20px));
       }
 
       body.scrolled .search-container:not(.expanded) .search-box{
@@ -1066,12 +1055,13 @@
         min-height:96px;
       }
 
-      body.scrolled .upload-file-list{
+      body.compact-gray-mode .upload-file-list{
         position:fixed;
-        left:0;
-        top:0;
-        bottom:0;
-        width:min(280px, 82vw);
+        left:var(--visible-left, 0);
+        top:var(--visible-top, 0);
+        bottom:auto;
+        width:var(--gray-sidebar-width, min(280px, 82vw));
+        height:var(--visible-vh, 100dvh);
         max-height:none;
         transform:none;
       }
@@ -2417,14 +2407,10 @@
       ></textarea>
       <div class="upload-shell" id="uploadShell">
         <div class="upload-main">
-          <button class="upload-dropzone" id="uploadDropzone" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Upload files or folders" title="Upload files or folders">
+          <button class="upload-dropzone" id="uploadDropzone" type="button" aria-label="Upload files or folders" title="Upload files or folders">
             <span class="upload-dropzone-title">+📁</span>
             <span class="upload-dropzone-copy">Upload files or folders</span>
           </button>
-          <div class="upload-picker-menu" id="uploadPickerMenu" role="menu" hidden>
-            <button class="upload-picker-option" type="button" role="menuitem" data-upload-pick="file">File</button>
-            <button class="upload-picker-option" type="button" role="menuitem" data-upload-pick="folder">Folder</button>
-          </div>
           <div class="upload-message" id="uploadMessage" role="status" aria-live="polite"></div>
         </div>
       </div>
@@ -2622,7 +2608,6 @@
   const uploadFileList = document.getElementById('uploadFileList');
   const uploadStatusLabel = document.getElementById('uploadStatusLabel');
   const uploadMessage = document.getElementById('uploadMessage');
-  const uploadPickerMenu = document.getElementById('uploadPickerMenu');
   const slideStatusLabel = document.getElementById('slideStatusLabel');
   const slideMetaLabel = document.getElementById('slideMetaLabel');
   const cookieConsent = document.getElementById('cookieConsent');
@@ -2697,6 +2682,41 @@
   let uploadRecords = [];
   let uploadCurrentIndex = 0;
   let uploadExpandedFolders = new Set(['']);
+  const GRAY_SIDEBAR_RATIO = 0.22;
+  const GOLDEN_RATIO_RIGHT_X = 0.61803398875;
+
+  function getVisibleViewportRect(){
+    const viewport = window.visualViewport || null;
+    const width = viewport && viewport.width
+      ? viewport.width
+      : (window.innerWidth || document.documentElement.clientWidth || 0);
+    const height = viewport && viewport.height
+      ? viewport.height
+      : (window.innerHeight || document.documentElement.clientHeight || 0);
+    return {
+      width: Math.max(0, width),
+      height: Math.max(0, height),
+      offsetLeft: viewport && typeof viewport.offsetLeft === 'number' ? viewport.offsetLeft : 0,
+      offsetTop: viewport && typeof viewport.offsetTop === 'number' ? viewport.offsetTop : 0
+    };
+  }
+
+  function syncVisibleViewportMetrics(){
+    const rect = getVisibleViewportRect();
+    const sidebarWidth = rect.width * GRAY_SIDEBAR_RATIO;
+    const contentWidth = Math.max(0, rect.width - sidebarWidth);
+    const panelWidth = Math.max(0, Math.min(720, contentWidth - 24));
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty('--visible-vw', `${rect.width}px`);
+    rootStyle.setProperty('--visible-vh', `${rect.height}px`);
+    rootStyle.setProperty('--visible-left', `${rect.offsetLeft}px`);
+    rootStyle.setProperty('--visible-top', `${rect.offsetTop}px`);
+    rootStyle.setProperty('--visible-center-y', `${rect.offsetTop + rect.height * 0.5}px`);
+    rootStyle.setProperty('--gray-sidebar-width', `${sidebarWidth}px`);
+    rootStyle.setProperty('--gray-content-width', `${contentWidth}px`);
+    rootStyle.setProperty('--gray-title-center-x', `${rect.offsetLeft + rect.width * GOLDEN_RATIO_RIGHT_X}px`);
+    rootStyle.setProperty('--gray-title-panel-width', `${panelWidth}px`);
+  }
 
   function readEditorReturnContext(){
     try{
@@ -3338,12 +3358,6 @@
     }
   };
 
-  function setUploadPickerMenuOpen(open){
-    if(!uploadPickerMenu || !uploadDropzone) return;
-    uploadPickerMenu.hidden = !open;
-    uploadDropzone.setAttribute('aria-expanded', open ? 'true' : 'false');
-  }
-
   function readDirectoryEntries(reader){
     return new Promise((resolve, reject)=>{
       reader.readEntries(resolve, reject);
@@ -3356,20 +3370,40 @@
     });
   }
 
+  async function assignRelativeUploadPath(file, relativePath){
+    const normalizedPath = normalizeUploadPath(relativePath);
+    if(!file || !normalizedPath) return file;
+    try{
+      Object.defineProperty(file, 'ivucxRelativePath', {
+        value: normalizedPath,
+        configurable: true
+      });
+    }catch(err){
+      file.ivucxRelativePath = normalizedPath;
+    }
+    return file;
+  }
+
+  async function walkFileSystemHandle(handle, parentPath, output){
+    if(!handle) return;
+    const currentPath = normalizeUploadPath(parentPath ? `${parentPath}/${handle.name}` : handle.name);
+    if(handle.kind === 'file' && typeof handle.getFile === 'function'){
+      output.push(await assignRelativeUploadPath(await handle.getFile(), currentPath));
+      return;
+    }
+    if(handle.kind === 'directory' && handle.values){
+      for await (const child of handle.values()){
+        await walkFileSystemHandle(child, currentPath, output);
+      }
+    }
+  }
+
   async function walkDroppedEntry(entry, parentPath, output){
     if(!entry) return;
     const currentPath = normalizeUploadPath(parentPath ? `${parentPath}/${entry.name}` : entry.name);
     if(entry.isFile){
       const file = await readEntryFile(entry);
-      try{
-        Object.defineProperty(file, 'ivucxRelativePath', {
-          value: currentPath,
-          configurable: true
-        });
-      }catch(err){
-        file.ivucxRelativePath = currentPath;
-      }
-      output.push(file);
+      output.push(await assignRelativeUploadPath(file, currentPath));
       return;
     }
     if(entry.isDirectory){
@@ -3387,6 +3421,20 @@
   async function collectDroppedUploadFiles(dataTransfer){
     if(!dataTransfer) return [];
     const items = Array.from(dataTransfer.items || []);
+    const handlePromises = items
+      .filter(item => item && typeof item.getAsFileSystemHandle === 'function')
+      .map(item => item.getAsFileSystemHandle().catch(()=>null));
+    if(handlePromises.length){
+      const handles = (await Promise.all(handlePromises)).filter(Boolean);
+      if(handles.length){
+        const files = [];
+        for(const handle of handles){
+          await walkFileSystemHandle(handle, '', files);
+        }
+        return files;
+      }
+    }
+
     const entries = items
       .map(item => item && typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null)
       .filter(Boolean);
@@ -3403,29 +3451,15 @@
   if(uploadDropzone && uploadFileInput){
     uploadDropzone.addEventListener('click', event=>{
       event.stopPropagation();
-      setUploadPickerMenuOpen(!uploadPickerMenu || uploadPickerMenu.hidden);
+      uploadFileInput.click();
     });
     uploadFileInput.addEventListener('change', ()=>handleUploadFiles(uploadFileInput.files));
     if(uploadFolderInput){
       uploadFolderInput.addEventListener('change', ()=>handleUploadFiles(uploadFolderInput.files));
     }
-    if(uploadPickerMenu){
-      uploadPickerMenu.addEventListener('click', event=>{
-        const option = event.target && event.target.closest ? event.target.closest('[data-upload-pick]') : null;
-        if(!option) return;
-        event.stopPropagation();
-        setUploadPickerMenuOpen(false);
-        if(option.dataset.uploadPick === 'folder' && uploadFolderInput){
-          uploadFolderInput.click();
-          return;
-        }
-        uploadFileInput.click();
-      });
-    }
     ['dragenter','dragover'].forEach(type=>{
       uploadDropzone.addEventListener(type, event=>{
         event.preventDefault();
-        setUploadPickerMenuOpen(false);
         uploadDropzone.classList.add('is-dragging');
       });
     });
@@ -3441,17 +3475,9 @@
     });
   }
 
-  document.addEventListener('click', event=>{
-    if(uploadPickerMenu && !uploadPickerMenu.hidden){
-      if(!(event.target && event.target.closest && event.target.closest('#uploadShell'))){
-        setUploadPickerMenuOpen(false);
-      }
-    }
-  });
-
   document.addEventListener('keydown', event=>{
-    if(event.key === 'Escape'){
-      setUploadPickerMenuOpen(false);
+    if(event.key === 'Escape' && uploadDropzone && document.activeElement === uploadDropzone){
+      uploadDropzone.blur();
     }
   });
 
@@ -3482,6 +3508,7 @@
     rememberedFiles = [...attachedFiles];
     fixedWrapper.style.display = 'none';
     selectionModeEl.style.display = 'flex';
+    syncCompactGrayLayoutState();
     saveSelectionNavigation('selection', selectionReturnScreen);
   }
 
@@ -3502,6 +3529,7 @@
       forceExpandedEditor = false;
       expandedTransitionHoldUntil = 0;
       selectionReturnScreen = 'gray-compact';
+      syncCompactGrayLayoutState();
     }
     renderAttachments();
     fixedWrapper.style.removeProperty('display');
@@ -4004,6 +4032,19 @@
   let popupAuthView = AUTH_VIEW_LOGIN;
   let generatedCredentials = null;
   blueModeAccountId = readBlueAccountHint();
+  syncCompactGrayLayoutState();
+  window.addEventListener('resize', syncCompactGrayLayoutState);
+  window.addEventListener('orientationchange', syncCompactGrayLayoutState);
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', syncCompactGrayLayoutState);
+    window.visualViewport.addEventListener('scroll', syncCompactGrayLayoutState);
+  }
+  if(window.MutationObserver && container){
+    new MutationObserver(syncCompactGrayLayoutState).observe(container, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+  }
 
   function setModeDraft(modeId, text = input.value, files = attachedFiles){
     if(modeId !== 0 && modeId !== 1) return;
@@ -4197,6 +4238,12 @@
 
   function isCompactGrayMode(){
     return state === 1 && !container.classList.contains('expanded');
+  }
+
+  function syncCompactGrayLayoutState(){
+    syncVisibleViewportMetrics();
+    const active = bodyEl.classList.contains('scrolled') && isCompactGrayMode() && !selectionMode;
+    bodyEl.classList.toggle('compact-gray-mode', active);
   }
 
   window.resetGrayModeDraft = resetGrayModeDraft;
@@ -4411,6 +4458,7 @@
         fixedWrapper.style.display = 'none';
         selectionModeEl.style.display = 'flex';
         bodyEl.classList.add('scrolled');
+        syncCompactGrayLayoutState();
         input.placeholder = 'Problem or theorem title';
       }
       return true;
@@ -5474,6 +5522,7 @@
       fixedWrapper.style.removeProperty('display');
       saveSelectionNavigation('gray-compact', 'proof-editor', editorReturnContext.proofAssistant || '');
     }
+    syncCompactGrayLayoutState();
     adjustTextarea();
     persistModeState();
   }
@@ -5733,6 +5782,7 @@
         bodyEl.classList.add('scrolled');
         input.placeholder = 'Problem or theorem title';
         restoreModeDraft(1);
+        syncCompactGrayLayoutState();
         adjustTextarea();
       }
       requestAnimationFrame(adjustTextarea);
@@ -5937,6 +5987,7 @@
     expandedFixedHeight = null;
     bodyEl.classList.add('scrolled');
     container.classList.remove('expanded','editor-ui-ready');
+    syncCompactGrayLayoutState();
     setModeDraft(1, input.value, attachedFiles);
     adjustTextarea({ immediate: true });
     persistModeState();
@@ -6320,6 +6371,7 @@
     }
 
     state = next;
+    syncCompactGrayLayoutState();
 
     if(next !== 0){
       clearSuggestionPane();
