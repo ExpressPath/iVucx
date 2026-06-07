@@ -17,6 +17,7 @@
       --gray-sidebar-width:22vw;
       --gray-content-width:78vw;
       --gray-title-center-x:61.803vw;
+      --gray-title-row-height:68px;
       --gray-title-panel-width:min(720px, calc(78vw - 24px));
     }
 
@@ -276,16 +277,16 @@
     body.compact-gray-mode .search-container:not(.expanded){
       position:fixed;
       left:var(--gray-title-center-x);
-      top:var(--visible-center-y);
+      top:calc(var(--visible-center-y) - (var(--gray-title-row-height) / 2));
       width:var(--gray-title-panel-width);
       max-width:var(--gray-title-panel-width);
       padding:0;
-      transform:translate(-50%, -50%);
+      transform:translateX(-50%);
     }
 
     body.scrolled .search-container:not(.expanded) .search-box{
       display:grid;
-      grid-template-columns:minmax(0, 1fr) 58px;
+      grid-template-columns:minmax(0, 1fr) var(--gray-title-row-height);
       grid-template-areas:
         "title actions"
         "upload upload";
@@ -304,7 +305,8 @@
     body.scrolled .search-container:not(.expanded) .search-input{
       grid-area:title;
       flex:0 0 auto;
-      min-height:54px;
+      height:var(--gray-title-row-height);
+      min-height:var(--gray-title-row-height);
       max-height:150px;
       padding:15px 17px;
       border-radius:18px 0 0 18px;
@@ -439,10 +441,10 @@
       grid-area:actions;
       align-self:start;
       justify-self:end;
-      width:58px;
-      height:54px;
+      width:var(--gray-title-row-height);
+      height:var(--gray-title-row-height);
       margin-top:0;
-      padding:5px 6px 5px 0;
+      padding:12px 12px 12px 0;
       gap:0;
       border-radius:0 18px 18px 0;
       background:rgba(255,255,255,0.95);
@@ -458,9 +460,9 @@
     }
 
     body.scrolled .search-container:not(.expanded) .send-button{
-      width:38px;
-      height:38px;
-      flex-basis:38px;
+      width:44px;
+      height:44px;
+      flex-basis:44px;
       background:#111827;
     }
 
@@ -3448,10 +3450,18 @@
     return Array.from(dataTransfer.files || []);
   }
 
+  function openNativeUploadPicker(){
+    if(uploadFolderInput && ('webkitdirectory' in uploadFolderInput || 'directory' in uploadFolderInput)){
+      uploadFolderInput.click();
+      return;
+    }
+    uploadFileInput.click();
+  }
+
   if(uploadDropzone && uploadFileInput){
     uploadDropzone.addEventListener('click', event=>{
       event.stopPropagation();
-      uploadFileInput.click();
+      openNativeUploadPicker();
     });
     uploadFileInput.addEventListener('change', ()=>handleUploadFiles(uploadFileInput.files));
     if(uploadFolderInput){
@@ -6019,6 +6029,21 @@
     }
 
     container.style.height = '';
+    if(bodyEl.classList.contains('scrolled') && !container.classList.contains('expanded')){
+      input.style.overflow = 'auto';
+      input.style.height = '';
+      input.scrollTop = 0;
+
+      if(wasExpanded){
+        const targetHeight = container.getBoundingClientRect().height;
+        transitionContainerHeight(startHeight, targetHeight, true);
+      }else{
+        clearContainerHeightCleanup();
+        container.style.height = '';
+      }
+      return;
+    }
+
     if(input.value.length === 0){
       input.style.overflow = 'hidden';
       input.style.height = getSingleLineInputHeight() + 'px';
