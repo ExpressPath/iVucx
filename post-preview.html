@@ -1078,6 +1078,50 @@
         });
       }
 
+      function hasVercelPersistenceStatus(info){
+        return !!(
+          info
+          && typeof info === 'object'
+          && (
+            (info.vercelPersistence && typeof info.vercelPersistence === 'object')
+            || (
+              info.capabilities
+              && typeof info.capabilities === 'object'
+              && Object.prototype.hasOwnProperty.call(info.capabilities, 'vercelProblemPersistence')
+            )
+          )
+        );
+      }
+
+      function isVercelPersistenceConfigured(info){
+        if(!hasVercelPersistenceStatus(info)) return true;
+        const persistence = info.vercelPersistence && typeof info.vercelPersistence === 'object'
+          ? info.vercelPersistence
+          : {};
+        if(persistence.supabaseConfigured === false) return false;
+        if(persistence.urlConfigured === false || persistence.serviceRoleConfigured === false) return false;
+        if(info.capabilities && info.capabilities.vercelProblemPersistence === false) return false;
+        return true;
+      }
+
+      function withSkippedVercelPersistence(result, options = {}){
+        const reason = String(options.reason || 'unavailable').trim();
+        const message = String(options.message || 'Vercel persistence is unavailable.').trim();
+        return {
+          ...result,
+          storage: {
+            ...(result && result.storage && typeof result.storage === 'object' ? result.storage : {}),
+            persisted: false,
+            source: 'vercel-proxy',
+            skipped: true,
+            reason,
+            status: Number(options.status || 0) || null,
+            message
+          },
+          persistenceWarning: message
+        };
+      }
+
       async function persistProblemOnVercel(proofPayload, submitResult, requestedFormat, completedFormat, requestedAt){
         const result = submitResult && submitResult.result && typeof submitResult.result === 'object'
           ? submitResult.result
@@ -1087,6 +1131,14 @@
         }
         if(result.storage && result.storage.persisted && result.problemId){
           return result;
+        }
+
+        const info = helperInfoCache || await fetchHelperInfo();
+        if(!isVercelPersistenceConfigured(info)){
+          return withSkippedVercelPersistence(result, {
+            reason: 'supabase-unconfigured',
+            message: 'CIC conversion completed, but Vercel Supabase persistence is not configured.'
+          });
         }
 
         const response = await fetch('/api/helper/persist', {
@@ -1113,7 +1165,11 @@
         const raw = await response.text();
         const payload = tryParseJson(raw);
         if(!response.ok || !payload || !payload.ok){
-          throw new Error(extractHelperError(payload, raw || 'Supabase save failed.'));
+          return withSkippedVercelPersistence(result, {
+            reason: 'persist-request-failed',
+            status: response.status,
+            message: extractHelperError(payload, raw || 'Supabase save failed.')
+          });
         }
         return payload.result && typeof payload.result === 'object'
           ? payload.result
@@ -1362,7 +1418,7 @@
             completedFormat = 'typed-lambda-v1';
           }
 
-          setHelperProgress(92, 'Saving to Supabase', 'pending');
+          setHelperProgress(92, 'Finalizing result', 'pending');
           const savedResult = await persistProblemOnVercel(
             proofPayload,
             submitResult,
@@ -1384,7 +1440,19 @@
             problemId: savedResult && savedResult.problemId ? savedResult.problemId : null,
             result: savedResult || submitResult.result
           });
-          setHelperProgress(100, 'Problem saved', 'success');
+          const persisted = !!(
+            savedResult
+            && savedResult.storage
+            && savedResult.storage.persisted
+          );
+          const completedLabel = String(completedFormat || requestedFormat || '').toLowerCase().includes('cic')
+            ? 'CIC converted'
+            : 'Conversion completed';
+          setHelperProgress(
+            100,
+            persisted ? 'Problem saved' : `${completedLabel} (save skipped)`,
+            'success'
+          );
           return;
         }catch(err){
           const message = err && err.message ? err.message : String(err);
