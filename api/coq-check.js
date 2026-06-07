@@ -1,7 +1,7 @@
 import {
   canUseLocalExecutionFallback,
   isExecutionConfigured,
-  proxyExecutionApiRequest,
+  proxyExecutionProofCheckRequest,
   sendMethodNotAllowed,
   sendRemoteConfigurationError
 } from '../lib/helper-proxy.js';
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   }
 
   if (isExecutionConfigured()) {
-    await proxyExecutionApiRequest(req, res, '/api/coq-check');
+    await proxyExecutionProofCheckRequest(req, res, '/api/coq-check');
     return;
   }
 
