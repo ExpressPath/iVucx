@@ -26,6 +26,42 @@ function readBody(req) {
   return {};
 }
 
+function isMissingColumnError(error) {
+  return error && error.code === '42703';
+}
+
+function isMissingTableError(error) {
+  return error && error.code === '42P01';
+}
+
+async function insertBlueAccount(supabase, account) {
+  const preferred = await supabase.from('blue_accounts').insert(account);
+  if (!isMissingColumnError(preferred.error)) {
+    return preferred;
+  }
+
+  return supabase.from('blue_accounts').insert({
+    account_id: account.account_id,
+    account_id_normalized: account.account_id_normalized,
+    recovery_hash: account.recovery_hash,
+    rewards: account.rewards
+  });
+}
+
+async function insertBlueSession(supabase, session) {
+  const preferred = await supabase.from('blue_sessions').insert(session);
+  if (!isMissingColumnError(preferred.error)) {
+    return preferred;
+  }
+
+  return supabase.from('blue_sessions').insert({
+    session_token_hash: session.session_token_hash,
+    account_id: session.account_id,
+    expires_at: session.expires_at,
+    revoked_at: session.revoked_at
+  });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
@@ -35,7 +71,7 @@ export default async function handler(req, res) {
 
   const { client: supabase, error: envError } = getSupabaseAdmin();
   if (!supabase) {
-    res.status(500).json({ error: envError || 'Supabase is not configured' });
+    res.status(503).json({ error: envError || 'Supabase is not configured' });
     return;
   }
 
@@ -65,7 +101,7 @@ export default async function handler(req, res) {
   const recoveryHash = hashRecoverySecret(normalizedRecovery.canonical);
   const now = new Date().toISOString();
 
-  const { error: insertError } = await supabase.from('blue_accounts').insert({
+  const { error: insertError } = await insertBlueAccount(supabase, {
     account_id: normalizedAccount.display,
     account_id_normalized: normalizedAccount.canonical,
     recovery_hash: recoveryHash,
@@ -78,7 +114,7 @@ export default async function handler(req, res) {
   });
 
   if (insertError) {
-    const missingTable = insertError.code === '42P01';
+    const missingTable = isMissingTableError(insertError);
     const isDuplicate =
       insertError.code === '23505' ||
       String(insertError.message || '').toLowerCase().includes('duplicate');
@@ -87,6 +123,8 @@ export default async function handler(req, res) {
         ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
         : isDuplicate
         ? 'Account ID already exists. Generate again.'
+        : isMissingColumnError(insertError)
+        ? 'BlueMode auth schema is incomplete. Run supabase/blue_mode_auth.sql again.'
         : 'Could not create account',
       detail: insertError.message || null
     });
@@ -97,7 +135,7 @@ export default async function handler(req, res) {
   const tokenHash = hashSessionToken(sessionToken);
   const expiresAt = secondsFromNowIso(SESSION_MAX_AGE_SECONDS);
 
-  const { error: sessionError } = await supabase.from('blue_sessions').insert({
+  const { error: sessionError } = await insertBlueSession(supabase, {
     session_token_hash: tokenHash,
     account_id: normalizedAccount.display,
     created_at: now,
@@ -114,8 +152,10 @@ export default async function handler(req, res) {
 
     res.status(500).json({
       error:
-        sessionError.code === '42P01'
+        isMissingTableError(sessionError)
           ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
+          : isMissingColumnError(sessionError)
+          ? 'BlueMode session schema is incomplete. Run supabase/blue_mode_auth.sql again.'
           : 'Could not create login session',
       detail: sessionError.message || null
     });

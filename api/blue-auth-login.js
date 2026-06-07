@@ -28,6 +28,84 @@ function readBody(req) {
   return {};
 }
 
+function isMissingColumnError(error) {
+  return error && error.code === '42703';
+}
+
+function isMissingTableError(error) {
+  return error && error.code === '42P01';
+}
+
+async function readBlueAccountForLogin(supabase, normalizedAccountId) {
+  const preferred = await supabase
+    .from('blue_accounts')
+    .select(
+      'account_id, account_id_normalized, recovery_hash, rewards, status, failed_attempts, locked_until'
+    )
+    .eq('account_id_normalized', normalizedAccountId)
+    .maybeSingle();
+
+  if (!isMissingColumnError(preferred.error)) {
+    return preferred;
+  }
+
+  const fallback = await supabase
+    .from('blue_accounts')
+    .select('account_id, account_id_normalized, recovery_hash, rewards')
+    .eq('account_id_normalized', normalizedAccountId)
+    .maybeSingle();
+
+  return {
+    data: fallback.data
+      ? {
+          ...fallback.data,
+          status: 'active',
+          failed_attempts: 0,
+          locked_until: null
+        }
+      : null,
+    error: fallback.error
+  };
+}
+
+async function bestEffortUpdateAccount(supabase, normalizedAccountId, preferredUpdate, fallbackUpdate = null) {
+  const preferred = await supabase
+    .from('blue_accounts')
+    .update(preferredUpdate)
+    .eq('account_id_normalized', normalizedAccountId);
+
+  if (!isMissingColumnError(preferred.error) || !fallbackUpdate) {
+    return preferred;
+  }
+
+  return supabase
+    .from('blue_accounts')
+    .update(fallbackUpdate)
+    .eq('account_id_normalized', normalizedAccountId);
+}
+
+async function bestEffortRevokeSessions(supabase, accountId, revokedAt) {
+  return supabase
+    .from('blue_sessions')
+    .update({ revoked_at: revokedAt })
+    .eq('account_id', accountId)
+    .is('revoked_at', null);
+}
+
+async function insertBlueSession(supabase, session) {
+  const preferred = await supabase.from('blue_sessions').insert(session);
+  if (!isMissingColumnError(preferred.error)) {
+    return preferred;
+  }
+
+  return supabase.from('blue_sessions').insert({
+    session_token_hash: session.session_token_hash,
+    account_id: session.account_id,
+    expires_at: session.expires_at,
+    revoked_at: session.revoked_at
+  });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
@@ -37,7 +115,7 @@ export default async function handler(req, res) {
 
   const { client: supabase, error: envError } = getSupabaseAdmin();
   if (!supabase) {
-    res.status(500).json({ error: envError || 'Supabase is not configured' });
+    res.status(503).json({ error: envError || 'Supabase is not configured' });
     return;
   }
 
@@ -61,19 +139,18 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { data: account, error: accountError } = await supabase
-    .from('blue_accounts')
-    .select(
-      'account_id, account_id_normalized, recovery_hash, rewards, status, failed_attempts, locked_until'
-    )
-    .eq('account_id_normalized', normalizedAccount.canonical)
-    .maybeSingle();
+  const { data: account, error: accountError } = await readBlueAccountForLogin(
+    supabase,
+    normalizedAccount.canonical
+  );
 
   if (accountError) {
     res.status(500).json({
       error:
-        accountError.code === '42P01'
+        isMissingTableError(accountError)
           ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
+          : isMissingColumnError(accountError)
+          ? 'BlueMode auth schema is incomplete. Run supabase/blue_mode_auth.sql again.'
           : 'Could not read account',
       detail: accountError.message || null
     });
@@ -106,14 +183,18 @@ export default async function handler(req, res) {
     const shouldLock = failures >= MAX_LOGIN_FAILURES;
     const lockUntil = shouldLock ? minutesFromNowIso(LOCKOUT_MINUTES) : null;
 
-    await supabase
-      .from('blue_accounts')
-      .update({
+    await bestEffortUpdateAccount(
+      supabase,
+      normalizedAccount.canonical,
+      {
         failed_attempts: shouldLock ? 0 : failures,
         locked_until: lockUntil,
         updated_at: now.toISOString()
-      })
-      .eq('account_id_normalized', normalizedAccount.canonical);
+      },
+      {
+        rewards: Array.isArray(account.rewards) ? account.rewards : []
+      }
+    );
 
     res.status(401).json({
       error: 'Account ID or Recovery Password is not correct',
@@ -124,27 +205,27 @@ export default async function handler(req, res) {
 
   const nowIso = now.toISOString();
 
-  await supabase
-    .from('blue_accounts')
-    .update({
+  await bestEffortUpdateAccount(
+    supabase,
+    normalizedAccount.canonical,
+    {
       failed_attempts: 0,
       locked_until: null,
       last_login_at: nowIso,
       updated_at: nowIso
-    })
-    .eq('account_id_normalized', normalizedAccount.canonical);
+    },
+    {
+      rewards: Array.isArray(account.rewards) ? account.rewards : []
+    }
+  );
 
-  await supabase
-    .from('blue_sessions')
-    .update({ revoked_at: nowIso })
-    .eq('account_id', account.account_id)
-    .is('revoked_at', null);
+  await bestEffortRevokeSessions(supabase, account.account_id, nowIso);
 
   const sessionToken = issueSessionToken();
   const sessionHash = hashSessionToken(sessionToken);
   const expiresAt = secondsFromNowIso(SESSION_MAX_AGE_SECONDS);
 
-  const { error: sessionError } = await supabase.from('blue_sessions').insert({
+  const { error: sessionError } = await insertBlueSession(supabase, {
     session_token_hash: sessionHash,
     account_id: account.account_id,
     created_at: nowIso,
@@ -156,8 +237,10 @@ export default async function handler(req, res) {
   if (sessionError) {
     res.status(500).json({
       error:
-        sessionError.code === '42P01'
+        isMissingTableError(sessionError)
           ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
+          : isMissingColumnError(sessionError)
+          ? 'BlueMode session schema is incomplete. Run supabase/blue_mode_auth.sql again.'
           : 'Could not create login session',
       detail: sessionError.message || null
     });

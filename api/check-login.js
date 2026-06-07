@@ -21,21 +21,42 @@ async function readAccountWithConsentFallback(supabase, accountId) {
     };
   }
 
-  const fallback = await supabase
+  const consentFallback = await supabase
     .from('blue_accounts')
     .select('account_id, rewards, status')
     .eq('account_id', accountId)
     .maybeSingle();
 
+  if (!consentFallback.error || consentFallback.error.code !== '42703') {
+    return {
+      data: consentFallback.data
+        ? {
+            ...consentFallback.data,
+            cookie_history_consent: 'unknown',
+            cookie_history_consent_updated_at: null
+          }
+        : null,
+      error: consentFallback.error,
+      schemaMissing: true
+    };
+  }
+
+  const authFallback = await supabase
+    .from('blue_accounts')
+    .select('account_id, rewards')
+    .eq('account_id', accountId)
+    .maybeSingle();
+
   return {
-    data: fallback.data
+    data: authFallback.data
       ? {
-          ...fallback.data,
+          ...authFallback.data,
+          status: 'active',
           cookie_history_consent: 'unknown',
           cookie_history_consent_updated_at: null
         }
       : null,
-    error: fallback.error,
+    error: authFallback.error,
     schemaMissing: true
   };
 }
@@ -59,7 +80,7 @@ export default async function handler(req, res) {
 
   const { client: supabase, error: envError } = getSupabaseAdmin();
   if (!supabase) {
-    res.status(500).json({
+    res.status(503).json({
       error: envError || 'Supabase is not configured',
       loggedIn: false,
       rewards: []
@@ -118,6 +139,8 @@ export default async function handler(req, res) {
       error:
         accountError.code === '42P01'
           ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
+          : accountError.code === '42703'
+          ? 'BlueMode auth schema is incomplete. Run supabase/blue_mode_auth.sql again.'
           : 'Could not read account',
       detail: accountError.message || null
     });
