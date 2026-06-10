@@ -1242,24 +1242,6 @@
         return true;
       }
 
-      function withSkippedVercelPersistence(result, options = {}){
-        const reason = String(options.reason || 'unavailable').trim();
-        const message = String(options.message || 'Vercel persistence is unavailable.').trim();
-        return {
-          ...result,
-          storage: {
-            ...(result && result.storage && typeof result.storage === 'object' ? result.storage : {}),
-            persisted: false,
-            source: 'vercel-proxy',
-            skipped: true,
-            reason,
-            status: Number(options.status || 0) || null,
-            message
-          },
-          persistenceWarning: message
-        };
-      }
-
       async function persistProblemOnVercel(proofPayload, submitResult, requestedFormat, completedFormat, requestedAt){
         const result = submitResult && submitResult.result && typeof submitResult.result === 'object'
           ? submitResult.result
@@ -1273,10 +1255,7 @@
 
         const info = helperInfoCache || await fetchHelperInfo();
         if(!isVercelPersistenceConfigured(info)){
-          return withSkippedVercelPersistence(result, {
-            reason: 'supabase-unconfigured',
-            message: 'CIC conversion completed, but Vercel Supabase persistence is not configured.'
-          });
+          throw new Error('CIC conversion completed, but Vercel Supabase persistence is not configured.');
         }
 
         const response = await fetch('/api/helper/persist', {
@@ -1303,15 +1282,30 @@
         const raw = await response.text();
         const payload = tryParseJson(raw);
         if(!response.ok || !payload || !payload.ok){
-          return withSkippedVercelPersistence(result, {
-            reason: 'persist-request-failed',
-            status: response.status,
-            message: extractHelperError(payload, raw || 'Supabase save failed.')
-          });
+          throw new Error(extractHelperError(payload, raw || 'Supabase save failed.'));
         }
-        return payload.result && typeof payload.result === 'object'
+        const saved = payload.result && typeof payload.result === 'object'
           ? payload.result
           : result;
+        const persisted = !!(
+          saved
+          && saved.storage
+          && saved.storage.persisted
+        );
+        if(!persisted){
+          const storage = saved && saved.storage && typeof saved.storage === 'object' ? saved.storage : {};
+          const warning = saved && typeof saved.persistenceWarning === 'string' && saved.persistenceWarning.trim()
+            ? saved.persistenceWarning.trim()
+            : '';
+          const storageError = typeof storage.error === 'string' && storage.error.trim()
+            ? storage.error.trim()
+            : '';
+          const storageMessage = typeof storage.message === 'string' && storage.message.trim()
+            ? storage.message.trim()
+            : '';
+          throw new Error(warning || storageError || storageMessage || 'CIC conversion completed, but Supabase save did not persist.');
+        }
+        return saved;
       }
 
       function isTransientHelperJobFailure(status, payload, raw, errorMessage){
@@ -1583,12 +1577,12 @@
             && savedResult.storage
             && savedResult.storage.persisted
           );
-          const completedLabel = String(completedFormat || requestedFormat || '').toLowerCase().includes('cic')
-            ? 'CIC converted'
-            : 'Conversion completed';
+          if(!persisted){
+            throw new Error('CIC conversion completed, but Supabase save did not persist.');
+          }
           setHelperProgress(
             100,
-            persisted ? 'Problem saved' : `${completedLabel} (save skipped)`,
+            'Problem saved',
             'success'
           );
           if(persisted && isCicFormat(completedFormat || requestedFormat)){

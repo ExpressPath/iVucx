@@ -6,7 +6,7 @@ import {
   proxyHelperRequest,
   sendMethodNotAllowed
 } from '../lib/helper-proxy.js';
-import { sendPersistedProblemResponse } from '../lib/problem-store.js';
+import { sendPersistedProblemResponse, sendProblemPersistenceStatusResponse } from '../lib/problem-store.js';
 
 function getRouteSegments(req) {
   const raw = req && req.query ? req.query.route : undefined;
@@ -87,6 +87,11 @@ export default async function handler(req, res) {
       return;
     }
     await sendPersistedProblemResponse(req, res);
+    return;
+  }
+
+  if (segments.length === 1 && segments[0] === 'persist-check') {
+    await sendProblemPersistenceStatusResponse(req, res);
     return;
   }
 
