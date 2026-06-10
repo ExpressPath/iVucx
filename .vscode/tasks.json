@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Supabase: start",
+      "type": "shell",
+      "command": "supabase start",
+      "problemMatcher": []
+    },
+    {
+      "label": "Supabase: db reset",
+      "type": "shell",
+      "command": "supabase db reset",
+      "problemMatcher": []
+    },
+    {
+      "label": "Supabase: status",
+      "type": "shell",
+      "command": "supabase status",
+      "problemMatcher": []
+    }
+  ]
+}

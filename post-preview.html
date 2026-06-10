@@ -179,6 +179,65 @@
       color:#ffb4ad;
       background:rgba(248,81,73,0.08);
     }
+    .cic-success-popup{
+      position:fixed;
+      inset:0;
+      z-index:80;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      background:rgba(3,7,12,0.54);
+      opacity:0;
+      visibility:hidden;
+      pointer-events:none;
+      transition:opacity .18s ease, visibility .18s ease;
+    }
+    .cic-success-popup.is-visible{
+      opacity:1;
+      visibility:visible;
+      pointer-events:auto;
+    }
+    .cic-success-card{
+      width:min(360px, 100%);
+      border:1px solid rgba(111,255,154,0.36);
+      border-radius:18px;
+      padding:24px 22px;
+      background:linear-gradient(180deg, rgba(16,26,20,0.98), rgba(8,14,20,0.98));
+      box-shadow:0 24px 80px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04) inset;
+      text-align:center;
+      transform:translateY(8px) scale(.98);
+      transition:transform .2s ease;
+    }
+    .cic-success-popup.is-visible .cic-success-card{
+      transform:translateY(0) scale(1);
+    }
+    .cic-success-mark{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:42px;
+      height:42px;
+      margin-bottom:14px;
+      border-radius:999px;
+      background:rgba(63,185,80,0.18);
+      border:1px solid rgba(111,255,154,0.42);
+      color:#8ef0a4;
+      font-size:24px;
+      font-weight:800;
+    }
+    .cic-success-title{
+      color:#f0f6fc;
+      font-size:18px;
+      font-weight:800;
+      line-height:1.35;
+    }
+    .cic-success-copy{
+      margin-top:8px;
+      color:rgba(230,237,243,0.68);
+      font-size:13px;
+      line-height:1.5;
+    }
     .layout{
       flex:1;
       min-height:0;
@@ -579,6 +638,13 @@
       </section>
     </div>
   </main>
+  <div class="cic-success-popup" id="cicSuccessPopup" role="status" aria-live="polite" aria-hidden="true">
+    <div class="cic-success-card">
+      <div class="cic-success-mark" aria-hidden="true">✓</div>
+      <div class="cic-success-title">CIC変換成功</div>
+      <div class="cic-success-copy">Supabaseに保存しました。初期画面に戻ります。</div>
+    </div>
+  </div>
 
   <script src="theorem-draft-store.js"></script>
   <script>
@@ -598,7 +664,14 @@
       const sourceLanguageEl = document.getElementById('sourceLanguage');
       const sourceGutterEl = document.getElementById('sourceGutter');
       const sourceCodeEl = document.getElementById('sourceCode');
+      const cicSuccessPopupEl = document.getElementById('cicSuccessPopup');
       const store = window.ivucxTheoremDraftStore || null;
+      const MODE_PERSIST_KEY = 'ivucxModeSnapshotV1';
+      const COOKIE_HISTORY_CONSENT_KEY = 'ivucxCookieHistoryConsentV1';
+      const COOKIE_HISTORY_COOKIE = 'ivucxEditHistoryV1';
+      const EDITOR_INIT_KEY = 'ivucxEditorInit';
+      const EDITOR_RETURN_KEY = 'ivucxEditorReturn';
+      const CIC_SUCCESS_RETURN_URL = 'Vucks.html?cicSaved=1';
 
       let slides = [];
       let slideIndex = 0;
@@ -612,6 +685,7 @@
       let helperInfoRequest = null;
       let helperInfoCache = null;
       let helperPollTicks = 0;
+      let cicSuccessRedirecting = false;
 
       function resolveLanguage(value){
         const input = String(value || '').trim().toLowerCase();
@@ -659,6 +733,70 @@
 
       function setHelperProgress(progress, message, tone){
         setHelperStatus(formatHelperProgress(progress, message), tone);
+      }
+
+      function isCicFormat(value){
+        const normalized = String(value || '').trim().toLowerCase();
+        return normalized === 'cic' || normalized === 'cic-v1' || normalized.includes('cic');
+      }
+
+      function removeLocalValue(key){
+        try{
+          localStorage.removeItem(key);
+        }catch(err){
+          // Ignore storage access failures during navigation cleanup.
+        }
+      }
+
+      function removeSessionValue(key){
+        try{
+          sessionStorage.removeItem(key);
+        }catch(err){
+          // Ignore storage access failures during navigation cleanup.
+        }
+      }
+
+      function removeCookieValue(name){
+        try{
+          document.cookie = `${name}=; max-age=0; path=/; SameSite=Lax`;
+        }catch(err){
+          // Ignore cookie cleanup failures.
+        }
+      }
+
+      async function clearWorkflowBeforeInitialSearch(){
+        removeLocalValue(MODE_PERSIST_KEY);
+        removeLocalValue(COOKIE_HISTORY_CONSENT_KEY);
+        removeSessionValue(EDITOR_INIT_KEY);
+        removeSessionValue(EDITOR_RETURN_KEY);
+        removeCookieValue(COOKIE_HISTORY_COOKIE);
+        removeCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`);
+
+        if(store && typeof store.clear === 'function'){
+          try{
+            await store.clear();
+          }catch(err){
+            // The remote save already succeeded; local cleanup should not block navigation.
+          }
+        }
+      }
+
+      async function showCicSuccessPopup(){
+        if(!cicSuccessPopupEl){
+          window.alert('CIC変換成功');
+          return;
+        }
+        cicSuccessPopupEl.classList.add('is-visible');
+        cicSuccessPopupEl.setAttribute('aria-hidden', 'false');
+        await delay(1150);
+      }
+
+      async function returnToInitialSearchAfterCicSave(){
+        if(cicSuccessRedirecting) return;
+        cicSuccessRedirecting = true;
+        await showCicSuccessPopup();
+        await clearWorkflowBeforeInitialSearch();
+        window.location.href = CIC_SUCCESS_RETURN_URL;
       }
 
       function summarizeProxyFailure(response, raw){
@@ -1453,6 +1591,9 @@
             persisted ? 'Problem saved' : `${completedLabel} (save skipped)`,
             'success'
           );
+          if(persisted && isCicFormat(completedFormat || requestedFormat)){
+            await returnToInitialSearchAfterCicSave();
+          }
           return;
         }catch(err){
           const message = err && err.message ? err.message : String(err);
