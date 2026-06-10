@@ -391,6 +391,26 @@
       color:#d4d4d4;
       box-shadow:8px 0 24px rgba(15,23,42,0.18);
       backdrop-filter:none;
+      opacity:0;
+      visibility:hidden;
+      pointer-events:none;
+      transform:translateX(-16px);
+      transition:
+        opacity .14s ease,
+        transform .18s cubic-bezier(.22,1,.36,1),
+        visibility 0s linear .18s;
+      will-change:opacity,transform;
+    }
+
+    body.scrolled .upload-file-list.has-uploads{
+      opacity:1;
+      visibility:visible;
+      pointer-events:auto;
+      transform:translateX(0);
+      transition:
+        opacity .12s ease,
+        transform .18s cubic-bezier(.22,1,.36,1),
+        visibility 0s linear 0s;
     }
 
     body.compact-gray-mode .upload-file-list{
@@ -1030,10 +1050,14 @@
 
       .upload-file-list{
         position:static;
-        transform:none;
         width:100%;
         max-height:150px;
         margin-top:14px;
+      }
+
+      body.scrolled .upload-file-list,
+      body.scrolled .upload-file-list.has-uploads{
+        transform:none;
       }
 
       body.scrolled .search-container.expanded .send-button{
@@ -2621,9 +2645,13 @@
 
   function syncVisibleViewportMetrics(){
     const rect = getVisibleViewportRect();
-    const sidebarWidth = rect.width * GRAY_SIDEBAR_RATIO;
+    const hasUploads = uploadRecords.length > 0;
+    const sidebarWidth = hasUploads ? rect.width * GRAY_SIDEBAR_RATIO : 0;
     const contentWidth = Math.max(0, rect.width - sidebarWidth);
     const panelWidth = Math.max(0, Math.min(720, contentWidth - 24));
+    const titleCenterX = hasUploads
+      ? rect.offsetLeft + rect.width * GOLDEN_RATIO_RIGHT_X
+      : rect.offsetLeft + rect.width * 0.5;
     const rootStyle = document.documentElement.style;
     rootStyle.setProperty('--visible-vw', `${rect.width}px`);
     rootStyle.setProperty('--visible-vh', `${rect.height}px`);
@@ -2632,7 +2660,7 @@
     rootStyle.setProperty('--visible-center-y', `${rect.offsetTop + rect.height * 0.5}px`);
     rootStyle.setProperty('--gray-sidebar-width', `${sidebarWidth}px`);
     rootStyle.setProperty('--gray-content-width', `${contentWidth}px`);
-    rootStyle.setProperty('--gray-title-center-x', `${rect.offsetLeft + rect.width * GOLDEN_RATIO_RIGHT_X}px`);
+    rootStyle.setProperty('--gray-title-center-x', `${titleCenterX}px`);
     rootStyle.setProperty('--gray-title-y-offset', `${-Math.min(56, Math.max(24, rect.height * 0.055))}px`);
     rootStyle.setProperty('--gray-title-panel-width', `${panelWidth}px`);
   }
@@ -3000,6 +3028,7 @@
 
   function updateUploadStatus(){
     const count = uploadRecords.length;
+    const hasUploads = count > 0;
     const label = count === 0
       ? 'No file uploaded'
       : count === 1
@@ -3008,8 +3037,12 @@
     if(uploadStatusLabel) uploadStatusLabel.textContent = label;
     if(slideStatusLabel) slideStatusLabel.textContent = label;
     if(slideMetaLabel) slideMetaLabel.textContent = count ? 'External upload ready' : 'External upload';
+    if(uploadFileList) uploadFileList.classList.toggle('has-uploads', hasUploads);
+    if(uploadShell) uploadShell.classList.toggle('has-uploads', hasUploads);
+    bodyEl.classList.toggle('has-upload-content', hasUploads);
     window.uploadState = window.uploadState || {};
-    window.uploadState.hasContent = count > 0;
+    window.uploadState.hasContent = hasUploads;
+    syncCompactGrayLayoutState();
   }
 
   function createUploadTree(records){
