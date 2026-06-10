@@ -73,6 +73,10 @@ If the UI says `Problem saved`, Vercel returned `storage.persisted: true` and a 
 If `POST /api/helper/persist` returns a schema-cache error after the tables were created, run this in the same Supabase SQL Editor:
 
 ```sql
+grant usage on schema public to service_role;
+grant select, insert, update, delete on public.problems to service_role;
+grant select, insert, update, delete on public.helper_jobs to service_role;
+grant select, insert, update, delete on public.helper_conversion_plans to service_role;
 NOTIFY pgrst, 'reload schema';
 ```
 

@@ -175,6 +175,11 @@ alter table public.problems enable row level security;
 alter table public.helper_jobs enable row level security;
 alter table public.helper_conversion_plans enable row level security;
 
+grant usage on schema public to service_role;
+grant select, insert, update, delete on public.problems to service_role;
+grant select, insert, update, delete on public.helper_jobs to service_role;
+grant select, insert, update, delete on public.helper_conversion_plans to service_role;
+
 -- No policies are created intentionally.
 -- Service role key bypasses RLS; anon/authenticated cannot query these tables.
 
