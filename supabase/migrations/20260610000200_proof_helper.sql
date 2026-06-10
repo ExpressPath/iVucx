@@ -177,3 +177,7 @@ alter table public.helper_conversion_plans enable row level security;
 
 -- No policies are created intentionally.
 -- Service role key bypasses RLS; anon/authenticated cannot query these tables.
+
+-- Refresh Supabase/PostgREST's schema cache so newly created tables can be used
+-- by the REST API immediately.
+notify pgrst, 'reload schema';

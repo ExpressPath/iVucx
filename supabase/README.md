@@ -69,4 +69,11 @@ supabase/cic_persistence_smoke_test.sql
 ```
 
 If the UI says `Problem saved`, Vercel returned `storage.persisted: true` and a row should exist in `public.problems`.
-If it says `CIC converted (save skipped)`, conversion succeeded but no Supabase row was written.
+
+If `POST /api/helper/persist` returns a schema-cache error after the tables were created, run this in the same Supabase SQL Editor:
+
+```sql
+NOTIFY pgrst, 'reload schema';
+```
+
+Then retry the CIC conversion. The UI should only show CIC success after Supabase returns `storage.persisted: true`.
