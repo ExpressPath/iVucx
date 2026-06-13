@@ -472,8 +472,12 @@
       color:#0f172a;
     }
     .doc-title{
+      min-width:0;
       font-size:20px;
       font-weight:700;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
     }
     .doc-kind{
       font-size:13px;
@@ -483,9 +487,13 @@
       flex:1;
       min-height:0;
       background:#fff;
+      position:relative;
+      overflow:hidden;
     }
     .doc-frame,
     .doc-image,
+    .doc-video,
+    .doc-object,
     .doc-text,
     .doc-empty{
       width:100%;
@@ -495,6 +503,43 @@
     }
     .doc-image{
       object-fit:contain;
+    }
+    .doc-video{
+      background:#020617;
+      object-fit:contain;
+    }
+    .doc-audio-wrap{
+      width:100%;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:18px;
+      padding:34px;
+      background:
+        linear-gradient(135deg, rgba(63,185,80,0.08), transparent 34%),
+        #f8fafc;
+      color:#0f172a;
+    }
+    .doc-audio-mark{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      width:86px;
+      height:86px;
+      border-radius:50%;
+      border:1px solid rgba(15,23,42,0.12);
+      background:#ffffff;
+      color:#0f172a;
+      font-size:38px;
+      box-shadow:0 14px 34px rgba(15,23,42,0.08);
+    }
+    .doc-audio{
+      width:min(680px, 88%);
+    }
+    .doc-object{
+      background:#ffffff;
     }
     .doc-text{
       margin:0;
@@ -517,6 +562,51 @@
       font-size:24px;
       color:#475569;
       text-align:center;
+    }
+    .doc-preview-fallback{
+      width:100%;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:16px;
+      padding:30px;
+      background:#f8fafc;
+      color:#475569;
+      text-align:center;
+    }
+    .doc-preview-fallback-title{
+      max-width:760px;
+      color:#0f172a;
+      font-size:24px;
+      font-weight:800;
+      line-height:1.25;
+      word-break:break-word;
+    }
+    .doc-preview-fallback-note{
+      max-width:760px;
+      color:#64748b;
+      font-size:14px;
+      line-height:1.55;
+    }
+    .doc-facts{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:center;
+      gap:8px;
+      max-width:820px;
+    }
+    .doc-fact{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(15,23,42,0.1);
+      background:#ffffff;
+      color:#475569;
+      font-size:12px;
+      font-weight:700;
+      line-height:1;
+      white-space:nowrap;
     }
     .doc-empty small{
       display:block;
@@ -686,6 +776,8 @@
       let helperInfoCache = null;
       let helperPollTicks = 0;
       let cicSuccessRedirecting = false;
+      let slideRenderToken = 0;
+      let previewObjectUrls = [];
 
       function resolveLanguage(value){
         const input = String(value || '').trim().toLowerCase();
@@ -1643,11 +1735,19 @@
               hidden: false,
               document: {
                 title: upload.title || 'Uploaded file',
+                id: upload.id || '',
+                blobId: upload.blobId || upload.id || '',
+                blobBacked: !!upload.blobBacked,
+                path: upload.path || upload.relativePath || upload.title || '',
+                relativePath: upload.relativePath || upload.path || upload.title || '',
                 kind: upload.kind || 'file',
                 ext: upload.ext || '',
                 mime: upload.mime || '',
                 size: Number(upload.size) || 0,
                 checked: true,
+                scanStatus: upload.scanStatus || '',
+                scanLabel: upload.scanLabel || '',
+                scanCheckedAt: upload.scanCheckedAt || '',
                 url: upload.url || '',
                 text: upload.text || '',
                 source: upload.source || 'local',
@@ -1835,68 +1935,282 @@
         container.appendChild(stage);
       }
 
-      function renderDocumentSlide(container, slide){
+      function getPreviewExtension(value){
+        const match = String(value || '').toLowerCase().match(/\.([a-z0-9][a-z0-9+_-]{0,16})($|[?#])/);
+        return match ? match[1] : '';
+      }
+
+      function getDocumentTitle(documentInfo){
+        return documentInfo && documentInfo.title ? String(documentInfo.title) : 'Uploaded file';
+      }
+
+      function getDocumentExt(documentInfo){
+        return String(
+          documentInfo && (
+            documentInfo.ext
+            || getPreviewExtension(documentInfo.title)
+            || getPreviewExtension(documentInfo.path)
+            || getPreviewExtension(documentInfo.relativePath)
+            || getPreviewExtension(documentInfo.url)
+          )
+          || ''
+        ).toLowerCase();
+      }
+
+      function getDocumentMime(documentInfo){
+        return String(documentInfo && documentInfo.mime || '').toLowerCase();
+      }
+
+      function getDocumentUrl(documentInfo){
+        return String(documentInfo && (documentInfo.url || documentInfo.webViewLink) || '').trim();
+      }
+
+      function formatBytes(bytes){
+        const value = Number(bytes) || 0;
+        if(value < 1024) return `${value} B`;
+        if(value < 1024 * 1024) return `${Math.round(value / 102.4) / 10} KB`;
+        if(value < 1024 * 1024 * 1024) return `${Math.round(value / 1024 / 102.4) / 10} MB`;
+        return `${Math.round(value / 1024 / 1024 / 102.4) / 10} GB`;
+      }
+
+      function inferDocumentKind(documentInfo){
+        const explicit = String(documentInfo && documentInfo.kind || '').toLowerCase();
+        const ext = getDocumentExt(documentInfo);
+        const mime = getDocumentMime(documentInfo);
+        if(mime === 'application/pdf' || ext === 'pdf') return 'pdf';
+        if(mime.startsWith('image/')) return 'image';
+        if(mime.startsWith('video/')) return 'video';
+        if(mime.startsWith('audio/')) return 'audio';
+        if(mime === 'text/html' || ['html','htm','xhtml'].includes(ext)) return 'html';
+        if(mime.startsWith('text/') || [
+          'txt','md','markdown','json','jsonl','csv','tsv','xml','yaml','yml','toml','ini','log',
+          'lean','v','coq','tex','bib','js','jsx','ts','tsx','css','scss','sass','less','py','rb',
+          'rs','go','java','c','cc','cpp','h','hpp','cs','php','swift','kt','kts','r','sql','sh','bash','zsh'
+        ].includes(ext)) return 'text';
+        if(['ppt','pptx','key'].includes(ext)) return 'presentation';
+        if(['doc','docx','odt','rtf'].includes(ext)) return 'document';
+        if(['xls','xlsx','ods'].includes(ext)) return 'spreadsheet';
+        if(['zip','7z','rar','tar','gz','bz2','xz'].includes(ext)) return 'archive';
+        return explicit || 'file';
+      }
+
+      function formatDocumentKind(documentInfo, kind){
+        const parts = [kind || 'file'];
+        const ext = getDocumentExt(documentInfo);
+        const size = Number(documentInfo && documentInfo.size) || 0;
+        if(ext) parts.push(ext.toUpperCase());
+        if(size) parts.push(formatBytes(size));
+        return parts.join(' - ');
+      }
+
+      function clearPreviewObjectUrls(){
+        previewObjectUrls.forEach(url=>{
+          try{
+            URL.revokeObjectURL(url);
+          }catch(err){
+            // Ignore stale preview URL cleanup failures.
+          }
+        });
+        previewObjectUrls = [];
+      }
+
+      async function resolveDocumentPreviewSource(documentInfo){
+        const inlineUrl = getDocumentUrl(documentInfo);
+        if(inlineUrl){
+          return { url: inlineUrl, mime: getDocumentMime(documentInfo), revoke: false };
+        }
+        const blobId = documentInfo && (documentInfo.blobId || documentInfo.id);
+        if(!blobId || !store || typeof store.getUploadBlob !== 'function'){
+          return { url: '', mime: getDocumentMime(documentInfo), revoke: false };
+        }
+        const blob = await store.getUploadBlob(blobId);
+        if(!blob){
+          return { url: '', mime: getDocumentMime(documentInfo), revoke: false };
+        }
+        return {
+          url: URL.createObjectURL(blob),
+          mime: blob.type || getDocumentMime(documentInfo),
+          revoke: true
+        };
+      }
+
+      function appendDocumentFacts(parent, documentInfo, kind, mime){
+        const facts = document.createElement('div');
+        facts.className = 'doc-facts';
+        const ext = getDocumentExt(documentInfo);
+        const size = Number(documentInfo && documentInfo.size) || 0;
+        [
+          kind || 'file',
+          ext ? ext.toUpperCase() : '',
+          mime || getDocumentMime(documentInfo),
+          size ? formatBytes(size) : '',
+          documentInfo && documentInfo.scanLabel ? documentInfo.scanLabel : ''
+        ].filter(Boolean).forEach(value=>{
+          const fact = document.createElement('span');
+          fact.className = 'doc-fact';
+          fact.textContent = value;
+          facts.appendChild(fact);
+        });
+        if(facts.childNodes.length){
+          parent.appendChild(facts);
+        }
+      }
+
+      function createDocumentFallback(documentInfo, kind, source, noteText){
+        const fallback = document.createElement('div');
+        fallback.className = 'doc-preview-fallback';
+        const title = document.createElement('div');
+        title.className = 'doc-preview-fallback-title';
+        title.textContent = getDocumentTitle(documentInfo);
+        const note = document.createElement('div');
+        note.className = 'doc-preview-fallback-note';
+        note.textContent = noteText || 'This browser does not provide a native preview for this file type.';
+        fallback.append(title, note);
+        appendDocumentFacts(fallback, documentInfo, kind, source && source.mime);
+        const href = documentInfo && (source && source.url || documentInfo.webViewLink || documentInfo.url);
+        if(href){
+          const link = document.createElement('a');
+          link.className = 'doc-link';
+          link.href = href;
+          link.rel = 'noopener';
+          link.target = documentInfo && documentInfo.webViewLink ? '_blank' : '_self';
+          link.download = documentInfo && !documentInfo.webViewLink ? getDocumentTitle(documentInfo) : '';
+          link.textContent = documentInfo && documentInfo.webViewLink ? 'Open original' : 'Open file';
+          fallback.appendChild(link);
+        }
+        return fallback;
+      }
+
+      function renderDocumentBody(body, documentInfo, source){
+        const kind = inferDocumentKind(documentInfo);
+        const title = getDocumentTitle(documentInfo);
+        const url = source && source.url ? source.url : '';
+        const mime = source && source.mime ? source.mime : getDocumentMime(documentInfo);
+        if(kind === 'pdf' && url){
+          const frame = document.createElement('iframe');
+          frame.className = 'doc-frame';
+          frame.src = url;
+          frame.title = title;
+          body.appendChild(frame);
+          return;
+        }
+        if(kind === 'image' && url){
+          const image = document.createElement('img');
+          image.className = 'doc-image';
+          image.src = url;
+          image.alt = title;
+          body.appendChild(image);
+          return;
+        }
+        if(kind === 'video' && url){
+          const video = document.createElement('video');
+          video.className = 'doc-video';
+          video.controls = true;
+          video.playsInline = true;
+          video.preload = 'metadata';
+          video.src = url;
+          body.appendChild(video);
+          return;
+        }
+        if(kind === 'audio' && url){
+          const wrap = document.createElement('div');
+          wrap.className = 'doc-audio-wrap';
+          const mark = document.createElement('div');
+          mark.className = 'doc-audio-mark';
+          mark.textContent = 'A';
+          const audio = document.createElement('audio');
+          audio.className = 'doc-audio';
+          audio.controls = true;
+          audio.preload = 'metadata';
+          audio.src = url;
+          wrap.append(mark, audio);
+          appendDocumentFacts(wrap, documentInfo, kind, mime);
+          body.appendChild(wrap);
+          return;
+        }
+        if(kind === 'html' && (documentInfo && documentInfo.text || url)){
+          const frame = document.createElement('iframe');
+          frame.className = 'doc-frame';
+          frame.title = title;
+          frame.setAttribute('sandbox', '');
+          if(documentInfo && documentInfo.text){
+            frame.srcdoc = documentInfo.text;
+          }else{
+            frame.src = url;
+          }
+          body.appendChild(frame);
+          return;
+        }
+        if(kind === 'text' && documentInfo && typeof documentInfo.text === 'string' && documentInfo.text.length){
+          const pre = document.createElement('pre');
+          pre.className = 'doc-text';
+          pre.textContent = documentInfo.text;
+          body.appendChild(pre);
+          return;
+        }
+        if(url){
+          const object = document.createElement('object');
+          object.className = 'doc-object';
+          object.data = url;
+          if(mime) object.type = mime;
+          object.appendChild(createDocumentFallback(documentInfo, kind, source));
+          body.appendChild(object);
+          return;
+        }
+        body.appendChild(createDocumentFallback(
+          documentInfo,
+          kind,
+          source,
+          'Preview data is not available for this file in this browser session.'
+        ));
+      }
+
+      function renderDocumentSlide(container, slide, token){
         const shell = document.createElement('div');
         shell.className = 'doc';
+        const documentInfo = slide && slide.document ? slide.document : null;
+        const previewKind = inferDocumentKind(documentInfo);
         const meta = document.createElement('div');
         meta.className = 'doc-meta';
         const title = document.createElement('div');
         title.className = 'doc-title';
-        title.textContent = slide && slide.document && slide.document.title ? slide.document.title : 'Document slide';
+        title.textContent = getDocumentTitle(documentInfo);
         const kind = document.createElement('div');
         kind.className = 'doc-kind';
-        kind.textContent = slide && slide.document && slide.document.kind ? slide.document.kind : 'document';
+        kind.textContent = formatDocumentKind(documentInfo, previewKind);
         meta.appendChild(title);
         meta.appendChild(kind);
         shell.appendChild(meta);
 
         const body = document.createElement('div');
         body.className = 'doc-body';
-        const documentInfo = slide && slide.document ? slide.document : null;
-        if(documentInfo && documentInfo.kind === 'pdf' && documentInfo.url){
-          const frame = document.createElement('iframe');
-          frame.className = 'doc-frame';
-          frame.src = documentInfo.url;
-          frame.title = documentInfo.title || 'Document preview';
-          body.appendChild(frame);
-        }else if(documentInfo && documentInfo.kind === 'image' && documentInfo.url){
-          const image = document.createElement('img');
-          image.className = 'doc-image';
-          image.src = documentInfo.url;
-          image.alt = documentInfo.title || 'Document preview';
-          body.appendChild(image);
-        }else if(documentInfo && documentInfo.kind === 'text'){
-          const pre = document.createElement('pre');
-          pre.className = 'doc-text';
-          pre.textContent = documentInfo.text || '';
-          body.appendChild(pre);
-        }else{
-          const empty = document.createElement('div');
-          empty.className = 'doc-empty';
-          const title = document.createElement('div');
-          title.textContent = documentInfo && documentInfo.title
-            ? documentInfo.title
-            : 'Uploaded file';
-          const note = document.createElement('small');
-          note.textContent = documentInfo && documentInfo.source === 'google'
-            ? 'This Google file is linked to the post. Open it in Google to inspect the original file.'
-            : 'This file is saved with the post, but this browser preview cannot render the format directly.';
-          empty.appendChild(title);
-          empty.appendChild(note);
-          const href = documentInfo && (documentInfo.webViewLink || documentInfo.url);
-          if(href){
-            const link = document.createElement('a');
-            link.className = 'doc-link';
-            link.href = href;
-            link.target = documentInfo && documentInfo.webViewLink ? '_blank' : '_self';
-            link.rel = 'noopener';
-            link.textContent = documentInfo && documentInfo.webViewLink ? 'Open in Google' : 'Download file';
-            empty.appendChild(link);
-          }
-          body.appendChild(empty);
-        }
+        body.appendChild(createDocumentFallback(documentInfo, previewKind, null, 'Loading preview...'));
         shell.appendChild(body);
         container.appendChild(shell);
+        resolveDocumentPreviewSource(documentInfo).then(source=>{
+          if(token !== slideRenderToken){
+            if(source && source.revoke && source.url){
+              URL.revokeObjectURL(source.url);
+            }
+            return;
+          }
+          if(source && source.revoke && source.url){
+            previewObjectUrls.push(source.url);
+          }
+          body.innerHTML = '';
+          renderDocumentBody(body, documentInfo, source);
+          syncStageScale();
+        }).catch(()=>{
+          if(token !== slideRenderToken) return;
+          body.innerHTML = '';
+          body.appendChild(createDocumentFallback(
+            documentInfo,
+            previewKind,
+            null,
+            'Preview data could not be loaded for this file.'
+          ));
+          syncStageScale();
+        });
       }
 
       function syncStageScale(){
@@ -1908,6 +2222,9 @@
       }
 
       function renderCurrentSlide(){
+        slideRenderToken += 1;
+        const token = slideRenderToken;
+        clearPreviewObjectUrls();
         stageEl.innerHTML = '';
         const visible = clampSlideIndex();
         counterEl.textContent = visible.length
@@ -1925,7 +2242,7 @@
 
         const current = visible[slideIndex];
         if(current && current.type === 'document'){
-          renderDocumentSlide(stageEl, current);
+          renderDocumentSlide(stageEl, current, token);
         }else{
           renderCanvasSlide(stageEl, current || {});
         }
@@ -2019,6 +2336,7 @@
           goToNextSlide();
         }
       });
+      window.addEventListener('pagehide', clearPreviewObjectUrls);
       if(isMobileLikeDevice()){
         stageViewport.addEventListener('touchstart', (event)=>{
           if(currentView !== 'slide') return;

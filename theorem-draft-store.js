@@ -1,7 +1,8 @@
 (function(){
   const DB_NAME = 'ivucxTheoremDraftDB';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   const STORE_NAME = 'drafts';
+  const UPLOAD_BLOB_STORE_NAME = 'uploadBlobs';
   const ACTIVE_KEY = 'active';
 
   let dbPromise = null;
@@ -51,6 +52,9 @@
         const db = request.result;
         if (!db.objectStoreNames.contains(STORE_NAME)){
           db.createObjectStore(STORE_NAME);
+        }
+        if (!db.objectStoreNames.contains(UPLOAD_BLOB_STORE_NAME)){
+          db.createObjectStore(UPLOAD_BLOB_STORE_NAME);
         }
       };
 
@@ -128,6 +132,53 @@
     return patchQueue;
   }
 
+  async function putUploadBlob(id, blob){
+    const key = typeof id === 'string' ? id.trim() : '';
+    if (!key || !blob) return false;
+    const db = await openDb();
+    if (!db || !db.objectStoreNames.contains(UPLOAD_BLOB_STORE_NAME)) return false;
+
+    return new Promise(resolve => {
+      const tx = db.transaction(UPLOAD_BLOB_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(UPLOAD_BLOB_STORE_NAME);
+      store.put(blob, key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
+    });
+  }
+
+  async function getUploadBlob(id){
+    const key = typeof id === 'string' ? id.trim() : '';
+    if (!key) return null;
+    const db = await openDb();
+    if (!db || !db.objectStoreNames.contains(UPLOAD_BLOB_STORE_NAME)) return null;
+
+    return new Promise(resolve => {
+      const tx = db.transaction(UPLOAD_BLOB_STORE_NAME, 'readonly');
+      const store = tx.objectStore(UPLOAD_BLOB_STORE_NAME);
+      const request = store.get(key);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => resolve(null);
+    });
+  }
+
+  async function deleteUploadBlob(id){
+    const key = typeof id === 'string' ? id.trim() : '';
+    if (!key) return false;
+    const db = await openDb();
+    if (!db || !db.objectStoreNames.contains(UPLOAD_BLOB_STORE_NAME)) return false;
+
+    return new Promise(resolve => {
+      const tx = db.transaction(UPLOAD_BLOB_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(UPLOAD_BLOB_STORE_NAME);
+      store.delete(key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
+    });
+  }
+
   async function destroy(){
     patchQueue = patchQueue.then(async () => {
       const db = await openDb();
@@ -158,8 +209,12 @@
     patch,
     clear,
     destroy,
+    putUploadBlob,
+    getUploadBlob,
+    deleteUploadBlob,
     dbName: DB_NAME,
     storeName: STORE_NAME,
+    uploadBlobStoreName: UPLOAD_BLOB_STORE_NAME,
     activeKey: ACTIVE_KEY
   };
 })();

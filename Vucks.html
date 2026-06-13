@@ -2817,7 +2817,15 @@
     const type = String(mime || '').toLowerCase();
     if(type === 'application/pdf' || ext === 'pdf') return 'pdf';
     if(type.startsWith('image/')) return 'image';
-    if(type.startsWith('text/') || ['txt','md','markdown','json','csv'].includes(ext)) return 'text';
+    if(type.startsWith('video/')) return 'video';
+    if(type.startsWith('audio/')) return 'audio';
+    if(type === 'text/html' || ['html','htm','xhtml'].includes(ext)) return 'html';
+    if(type.startsWith('text/') || [
+      'txt','md','markdown','json','jsonl','csv','tsv','xml','yaml','yml','toml','ini','log',
+      'lean','v','coq','tex','bib','js','jsx','ts','tsx','css','scss','sass','less','html','htm',
+      'py','rb','rs','go','java','c','cc','cpp','h','hpp','cs','php','swift','kt','kts','r','sql',
+      'sh','bash','zsh','ps1','bat','cmd'
+    ].includes(ext)) return 'text';
     if(['ppt','pptx','key'].includes(ext)) return 'presentation';
     if(['doc','docx'].includes(ext)) return 'document';
     if(['xls','xlsx'].includes(ext)) return 'spreadsheet';
@@ -2940,6 +2948,8 @@
     const relativePath = getRecordPath(record);
     return {
       id: record.id || createUploadId(),
+      blobId: record.blobId || record.id || '',
+      blobBacked: !!record.blobBacked,
       source: record.source || 'local',
       provider: record.provider || '',
       providerKind: record.providerKind || '',
@@ -2967,6 +2977,9 @@
     if(!serialized) return null;
     return {
       title: serialized.title,
+      id: serialized.id,
+      blobId: serialized.blobId,
+      blobBacked: serialized.blobBacked,
       path: serialized.path,
       relativePath: serialized.relativePath,
       kind: serialized.kind,
@@ -3132,6 +3145,11 @@
     remove.setAttribute('aria-label', 'Remove uploaded file');
     remove.textContent = '×';
     remove.addEventListener('click', ()=>{
+      const removed = uploadRecords[fileNode.index];
+      const blobId = removed && (removed.blobId || removed.id);
+      if(blobId && theoremDraftStore && typeof theoremDraftStore.deleteUploadBlob === 'function'){
+        theoremDraftStore.deleteUploadBlob(blobId);
+      }
       uploadRecords.splice(fileNode.index, 1);
       uploadCurrentIndex = Math.max(0, Math.min(uploadCurrentIndex, uploadRecords.length - 1));
       commitUploadState('remove-upload');
@@ -3163,16 +3181,23 @@
     if(file.size > UPLOAD_FILE_SIZE_LIMIT){
       throw new Error(`${file.name} is larger than ${ZENODO_RECORD_SIZE_LABEL}.`);
     }
+    const id = createUploadId();
     const relativePath = getUploadFilePath(file);
     const title = relativePath.split('/').filter(Boolean).pop() || file.name || 'Uploaded file';
     const kind = inferUploadKind(file.name, file.type);
+    let blobBacked = false;
+    if(theoremDraftStore && typeof theoremDraftStore.putUploadBlob === 'function'){
+      blobBacked = await theoremDraftStore.putUploadBlob(id, file);
+    }
     const canInlinePreview = file.size <= UPLOAD_INLINE_PREVIEW_LIMIT;
-    const url = canInlinePreview ? await readFileAsDataUrl(file) : '';
-    const text = kind === 'text' && file.size <= UPLOAD_TEXT_PREVIEW_LIMIT
+    const url = !blobBacked && canInlinePreview ? await readFileAsDataUrl(file) : '';
+    const text = (kind === 'text' || kind === 'html') && file.size <= UPLOAD_TEXT_PREVIEW_LIMIT
       ? await readFileAsText(file)
       : '';
     return {
-      id: createUploadId(),
+      id,
+      blobId: id,
+      blobBacked,
       source: 'local',
       provider: '',
       providerKind: '',
@@ -3265,6 +3290,12 @@
   }
 
   function clearUploadState(){
+    uploadRecords.forEach(record=>{
+      const blobId = record && (record.blobId || record.id);
+      if(blobId && theoremDraftStore && typeof theoremDraftStore.deleteUploadBlob === 'function'){
+        theoremDraftStore.deleteUploadBlob(blobId);
+      }
+    });
     uploadRecords = [];
     uploadCurrentIndex = 0;
     setUploadMessage('');
