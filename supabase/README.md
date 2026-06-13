@@ -41,6 +41,47 @@ Studio should be available at:
 http://127.0.0.1:54323
 ```
 
+## Production access contract
+
+Use two separate Supabase access paths:
+
+- App path: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` in Vercel. This is for runtime REST access.
+- Admin SQL path: `SUPABASE_DB_URL` on the local machine or CI. This is for migrations, grants, schema-cache reloads, and direct diagnostics.
+
+The Vercel app currently reports this production Supabase project ref:
+
+```text
+luuhqruederztcljorvk
+```
+
+The Supabase Dashboard SQL Editor or `SUPABASE_DB_URL` must target that same project.
+
+To apply the schema, service-role grants, and PostgREST reload to production from PowerShell:
+
+```powershell
+$env:SUPABASE_PROJECT_REF="luuhqruederztcljorvk"
+$env:SUPABASE_DB_URL="postgresql://..."
+powershell -ExecutionPolicy Bypass -File scripts\supabase-remote-access.ps1
+```
+
+To run only diagnostics:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\supabase-remote-access.ps1 -CheckOnly
+```
+
+To additionally verify the Vercel persistence route by creating or reusing one smoke-test row:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\supabase-remote-access.ps1 -RestSmoke
+```
+
+The SQL-only diagnostic file is:
+
+```text
+supabase/remote_access_check.sql
+```
+
 ## Check CIC rows
 
 Final saved CIC rows are stored in:
