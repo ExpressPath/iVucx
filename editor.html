@@ -682,6 +682,10 @@
       langBadgeEl.textContent = selectedLanguage;
       fileNameEl.textContent = selectedConfig.fileName;
 
+      function getProblemKindFromInit(){
+        const normalized = String(initPayload && initPayload.problemKind || '').trim().toLowerCase();
+        return normalized === 'problem' || normalized === 'theorem' ? normalized : 'theorem';
+      }
 
 
       let summaryText = typeof initPayload.summary === 'string'
@@ -1144,6 +1148,7 @@
         }
 
         await patchTheoremDraftRecord({
+          problemKind: getProblemKindFromInit(),
           title: {
             text: summaryText || '',
             updatedAt: new Date().toISOString()
@@ -1167,6 +1172,7 @@
         const returnPayload = {
           summary: summaryText,
           proofAssistant: selectedLanguage,
+          problemKind: getProblemKindFromInit(),
           returnToSelection: true,
           returnedAt: new Date().toISOString()
         };
@@ -1532,6 +1538,7 @@
 
       function buildProofDraftSnapshot(reason = 'proof-editor'){
         return {
+          problemKind: getProblemKindFromInit(),
           title: {
             text: summaryText || '',
             updatedAt: new Date().toISOString()

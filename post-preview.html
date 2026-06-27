@@ -1553,8 +1553,23 @@
           fileName: typeof proof.fileName === 'string' && proof.fileName.trim()
             ? proof.fileName.trim()
             : currentFileName,
-          code: proof.code
+          code: proof.code,
+          problemKind: getDraftProblemKind(draft)
         };
+      }
+
+      function getDraftProblemKind(draft){
+        const candidates = [
+          draft && draft.problemKind,
+          draft && draft.postKind,
+          draft && draft.navigation && draft.navigation.problemKind,
+          draft && draft.navigation && draft.navigation.postKind
+        ];
+        for(const candidate of candidates){
+          const normalized = String(candidate || '').trim().toLowerCase();
+          if(normalized === 'problem' || normalized === 'theorem') return normalized;
+        }
+        return 'theorem';
       }
 
       function normalizeAttachmentPath(path){
@@ -1758,6 +1773,7 @@
               language: proofPayload.language,
               fileName: proofPayload.fileName,
               code: proofPayload.code,
+              problemKind: proofPayload.problemKind,
               verify: true,
               async: true,
               format

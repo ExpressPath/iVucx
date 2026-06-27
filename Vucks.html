@@ -2132,6 +2132,78 @@
       color:#9bb0d4;
     }
 
+    .chat-answer{
+      margin:0 0 12px;
+      color:inherit;
+      font-size:14px;
+      line-height:1.62;
+      white-space:pre-wrap;
+      overflow-wrap:anywhere;
+    }
+
+    .citation-list{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      margin:10px 0 0;
+    }
+
+    .citation-item{
+      border:1px solid rgba(15,23,42,0.08);
+      border-radius:12px;
+      padding:10px 11px;
+      background:#f8fafc;
+      color:#0f172a;
+    }
+
+    body.mode-q .citation-item{
+      border-color:rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.04);
+      color:#edf2ff;
+    }
+
+    .citation-title{
+      display:flex;
+      gap:8px;
+      align-items:baseline;
+      font-size:13px;
+      font-weight:800;
+      line-height:1.35;
+    }
+
+    .citation-id{
+      color:#1a73e8;
+      white-space:nowrap;
+    }
+
+    body.mode-q .citation-id{
+      color:#9fc3ff;
+    }
+
+    .citation-quote{
+      margin-top:6px;
+      color:#52637f;
+      font-size:12px;
+      line-height:1.55;
+      white-space:pre-wrap;
+      overflow-wrap:anywhere;
+    }
+
+    body.mode-q .citation-quote{
+      color:#b8c7e7;
+    }
+
+    .citation-meta{
+      margin-top:6px;
+      color:#6b7280;
+      font-size:11px;
+      line-height:1.35;
+    }
+
+    body.mode-q .citation-meta{
+      color:#9bb0d4;
+    }
+
     .suggestion-loading{
       min-height:74px;
       display:flex;
@@ -2691,6 +2763,10 @@
   }
 
   setMode(false);
+
+  function getCurrentProblemKind(){
+    return bodyEl.classList.contains('mode-q') ? 'problem' : 'theorem';
+  }
 
   qBtn.addEventListener('click',e=>{
     e.preventDefault();
@@ -3551,6 +3627,7 @@
       setModeDraft(1, rememberedContent || compactGrayAcceptedValue, rememberedFiles);
       const initPayload = {
         proofAssistant: choice,
+        problemKind: getCurrentProblemKind(),
         summary: rememberedContent || compactGrayAcceptedValue || '',
         draft: '',
         keepSummaryBackground: true,
@@ -4343,6 +4420,7 @@
     const titleText = getTheoremTitleText();
     if(!titleText && state !== 1 && !selectionMode) return Promise.resolve(null);
     return patchTheoremDraftRecord({
+      problemKind: getCurrentProblemKind(),
       title: {
         text: titleText,
         updatedAt: new Date().toISOString(),
@@ -4357,6 +4435,7 @@
 
   function saveSelectionNavigation(currentScreen, previousScreen, proofAssistant = ''){
     return patchTheoremDraftRecord({
+      problemKind: getCurrentProblemKind(),
       title: {
         text: getTheoremTitleText(),
         updatedAt: new Date().toISOString()
@@ -4379,6 +4458,7 @@
       ? window.uploadControls.getSnapshotSummary()
       : null;
     return patchTheoremDraftRecord({
+      problemKind: getCurrentProblemKind(),
       title: {
         text: getTheoremTitleText(),
         updatedAt: new Date().toISOString()
@@ -4999,6 +5079,26 @@
     return normalized;
   }
 
+  function normalizeCitationBatch(rawCitations){
+    const source = Array.isArray(rawCitations) ? rawCitations : [];
+    return source.map((item, index)=>{
+      const citation = item && typeof item === 'object' ? item : {};
+      const fallbackId = `P${index + 1}`;
+      return {
+        id: String(citation.id || fallbackId).trim() || fallbackId,
+        title: String(citation.title || 'Untitled').trim() || 'Untitled',
+        quote: String(citation.quote || '').trim(),
+        fileName: String(citation.fileName || '').trim(),
+        language: String(citation.language || '').trim(),
+        kind: String(citation.kind || '').trim(),
+        normalizedFormat: String(citation.normalizedFormat || '').trim(),
+        attachments: Array.isArray(citation.attachments)
+          ? citation.attachments.map(name=>String(name || '').trim()).filter(Boolean)
+          : []
+      };
+    });
+  }
+
   function buildSuggestionTurnKey(query, fileNames){
     const normalizedQuery = String(query || '').trim().toLowerCase();
     const normalizedFiles = Array.isArray(fileNames)
@@ -5041,7 +5141,7 @@
 
       const head = document.createElement('div');
       head.className = 'chat-assistant-head';
-      head.textContent = 'Suggestions';
+      head.textContent = turn.targetKind === 'problem' ? 'Problem search' : 'Theorem search';
       assistantCard.appendChild(head);
 
       if(turn.loading && turn.suggestions.length === 0){
@@ -5050,8 +5150,61 @@
         loading.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span><span>Collecting suggestions...</span>';
         assistantCard.appendChild(loading);
       }else{
+        if(turn.answer){
+          const answer = document.createElement('div');
+          answer.className = 'chat-answer';
+          answer.textContent = turn.answer;
+          assistantCard.appendChild(answer);
+        }
+
+        if(Array.isArray(turn.citations) && turn.citations.length > 0){
+          const citationList = document.createElement('div');
+          citationList.className = 'citation-list';
+
+          turn.citations.forEach(citation=>{
+            const item = document.createElement('article');
+            item.className = 'citation-item';
+
+            const title = document.createElement('div');
+            title.className = 'citation-title';
+
+            const id = document.createElement('span');
+            id.className = 'citation-id';
+            id.textContent = `[${citation.id}]`;
+
+            const titleText = document.createElement('span');
+            titleText.textContent = citation.title;
+            title.append(id, titleText);
+            item.appendChild(title);
+
+            if(citation.quote){
+              const quote = document.createElement('div');
+              quote.className = 'citation-quote';
+              quote.textContent = citation.quote;
+              item.appendChild(quote);
+            }
+
+            const metaParts = [];
+            if(citation.fileName) metaParts.push(citation.fileName);
+            if(citation.language) metaParts.push(citation.language);
+            if(citation.normalizedFormat) metaParts.push(citation.normalizedFormat);
+            if(citation.attachments.length) metaParts.push(`files: ${citation.attachments.join(', ')}`);
+            if(metaParts.length){
+              const meta = document.createElement('div');
+              meta.className = 'citation-meta';
+              meta.textContent = metaParts.join(' / ');
+              item.appendChild(meta);
+            }
+
+            citationList.appendChild(item);
+          });
+
+          assistantCard.appendChild(citationList);
+        }
+
         const list = document.createElement('ol');
         list.className = 'suggestion-list';
+        list.hidden = !!turn.answer;
 
         turn.suggestions.forEach((text, index)=>{
           const item = document.createElement('li');
@@ -5079,7 +5232,11 @@
         assistantCard.appendChild(error);
       }
 
-      const canShowMore = turn.hasMore && turn.suggestions.length >= SUGGESTION_COUNT && !turn.error;
+      const renderedResultCount = Math.max(
+        Array.isArray(turn.suggestions) ? turn.suggestions.length : 0,
+        Array.isArray(turn.citations) ? turn.citations.length : 0
+      );
+      const canShowMore = turn.hasMore && renderedResultCount > 0 && !turn.error;
       if(canShowMore){
         const moreWrap = document.createElement('div');
         moreWrap.className = 'show-more-wrap';
@@ -5114,7 +5271,12 @@
     const controller = new AbortController();
     suggestionAbortController = controller;
 
-    const offset = append ? turn.suggestions.length : 0;
+    const offset = append
+      ? Math.max(
+          Array.isArray(turn.suggestions) ? turn.suggestions.length : 0,
+          Array.isArray(turn.citations) ? turn.citations.length : 0
+        )
+      : 0;
 
     if(append){
       turn.loadingMore = true;
@@ -5154,13 +5316,20 @@
       if(controller !== suggestionAbortController) return;
 
       const normalized = normalizeSuggestionBatch(data && data.suggestions, turn.query, offset);
+      const normalizedCitations = normalizeCitationBatch(data && data.citations);
       if(append){
         turn.suggestions = turn.suggestions.concat(normalized);
+        turn.citations = turn.citations.concat(normalizedCitations);
       }else{
         turn.suggestions = normalized;
+        turn.answer = String(data && data.answer || '').trim();
+        turn.citations = normalizedCitations;
+        turn.targetKind = String(data && data.targetKind || turn.targetKind || '').trim();
       }
 
-      turn.hasMore = normalized.length >= SUGGESTION_COUNT;
+      turn.hasMore = typeof (data && data.hasMore) === 'boolean'
+        ? data.hasMore
+        : normalized.length >= SUGGESTION_COUNT;
       turn.error = '';
     }catch(err){
       if(err && err.name === 'AbortError') return;
@@ -5196,6 +5365,9 @@
       files: Array.isArray(fileNames) ? [...fileNames] : [],
       key: turnKey,
       suggestions:[],
+      answer:'',
+      citations:[],
+      targetKind:getCurrentProblemKind(),
       loading:true,
       loadingMore:false,
       hasMore:true,
