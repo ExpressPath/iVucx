@@ -21,6 +21,7 @@ import {
   proxyHelperRequest as proxyHelperRouteRequest,
   sendRemoteConfigurationError
 } from './lib/helper-proxy.js';
+import { sendAttachmentCompleteResponse, sendAttachmentUploadPlanResponse } from './lib/problem-attachments.js';
 import { sendPersistedProblemResponse } from './lib/problem-store.js';
 import { sendProofConversionResponse } from './lib/proof-convert.js';
 import { sendProofCheckResponse } from './lib/proof-check.js';
@@ -99,6 +100,8 @@ app.post('/api/helper/check', wrap((req, res) => proxyDistributedCheck(req, res)
 app.post('/api/helper/submit', wrap((req, res) => proxyDistributedHelperOperation(req, res, '/api/helper/submit')));
 app.post('/api/helper/convert', wrap((req, res) => proxyDistributedHelperOperation(req, res, '/api/helper/convert')));
 app.post('/api/helper/persist', wrap((req, res) => sendPersistedProblemResponse(req, res)));
+app.post('/api/helper/attachments/sign', wrap((req, res) => sendAttachmentUploadPlanResponse(req, res)));
+app.post('/api/helper/attachments/complete', wrap((req, res) => sendAttachmentCompleteResponse(req, res)));
 app.post('/api/helper/jobs', wrap((req, res) => proxyHelperRouteRequest(req, res, '/api/helper/jobs')));
 app.get('/api/helper/jobs', wrap((req, res) => proxyHelperRouteRequest(req, res, req.originalUrl)));
 app.get('/api/helper/jobs/:id', wrap((req, res) => proxyHelperRouteRequest(req, res, req.originalUrl)));

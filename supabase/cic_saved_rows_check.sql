@@ -36,6 +36,10 @@ select
   count(*) filter (where normalized_format = 'cic-v1') as saved_cic_rows,
   count(*) filter (where request_meta->>'requestedFormat' = 'cic-v1') as requested_cic_rows,
   count(*) filter (
+    where request_meta->'attachmentStorage'->>'count' is not null
+      and (request_meta->'attachmentStorage'->>'count')::int > 0
+  ) as rows_with_saved_attachments,
+  count(*) filter (
     where request_meta->>'requestedFormat' = 'cic-v1'
       and normalized_format <> 'cic-v1'
   ) as cic_requested_but_fell_back_rows
@@ -58,6 +62,8 @@ select
   normalized_term->>'kind' as normalized_term_kind,
   jsonb_typeof(adapter_meta->'context') as context_type,
   jsonb_typeof(adapter_meta->'metadata') as metadata_type,
+  request_meta->'attachmentStorage' as attachment_storage,
+  request_meta->'attachments' as attachments,
   left(normalized_term::text, 600) as normalized_term_preview
 from public.problems
 where normalized_format = 'cic-v1'

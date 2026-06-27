@@ -6,6 +6,7 @@ import {
   proxyHelperRequest,
   sendMethodNotAllowed
 } from '../lib/helper-proxy.js';
+import { sendAttachmentCompleteResponse, sendAttachmentUploadPlanResponse } from '../lib/problem-attachments.js';
 import { sendPersistedProblemResponse, sendProblemPersistenceStatusResponse } from '../lib/problem-store.js';
 
 function getRouteSegments(req) {
@@ -92,6 +93,24 @@ export default async function handler(req, res) {
 
   if (segments.length === 1 && segments[0] === 'persist-check') {
     await sendProblemPersistenceStatusResponse(req, res);
+    return;
+  }
+
+  if (segments.length === 2 && segments[0] === 'attachments' && segments[1] === 'sign') {
+    if (req.method !== 'POST') {
+      sendMethodNotAllowed(res, ['POST']);
+      return;
+    }
+    await sendAttachmentUploadPlanResponse(req, res);
+    return;
+  }
+
+  if (segments.length === 2 && segments[0] === 'attachments' && segments[1] === 'complete') {
+    if (req.method !== 'POST') {
+      sendMethodNotAllowed(res, ['POST']);
+      return;
+    }
+    await sendAttachmentCompleteResponse(req, res);
     return;
   }
 

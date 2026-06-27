@@ -1557,6 +1557,176 @@
         };
       }
 
+      function normalizeAttachmentPath(path){
+        return String(path || '')
+          .replace(/\\/g, '/')
+          .split('/')
+          .filter(part=>part && part !== '.' && part !== '..')
+          .join('/');
+      }
+
+      function collectDraftAttachments(draft){
+        const record = draft
+          && draft.summarySlide
+          && draft.summarySlide.record
+          && typeof draft.summarySlide.record === 'object'
+          ? draft.summarySlide.record
+          : null;
+        const editorState = record && record.editorState && typeof record.editorState === 'object'
+          ? record.editorState
+          : null;
+        const uploads = editorState && Array.isArray(editorState.uploads)
+          ? editorState.uploads
+          : (editorState && Array.isArray(editorState.slides)
+            ? editorState.slides
+              .map(slide=>slide && slide.document && typeof slide.document === 'object' ? slide.document : null)
+              .filter(Boolean)
+            : []);
+        return uploads
+          .map((upload, index)=>{
+            if(!upload || typeof upload !== 'object') return null;
+            const title = String(upload.title || upload.name || `attachment-${index + 1}`).trim();
+            const relativePath = normalizeAttachmentPath(upload.relativePath || upload.path || title);
+            const id = String(upload.blobId || upload.id || `attachment-${index + 1}`).trim();
+            return {
+              id,
+              blobId: id,
+              title,
+              path: relativePath,
+              relativePath,
+              kind: String(upload.kind || 'file').trim(),
+              ext: String(upload.ext || '').trim(),
+              mime: String(upload.mime || '').trim(),
+              size: Number(upload.size) || 0,
+              scanStatus: String(upload.scanStatus || '').trim(),
+              scanLabel: String(upload.scanLabel || '').trim(),
+              scanCheckedAt: String(upload.scanCheckedAt || '').trim(),
+              importedAt: String(upload.importedAt || '').trim(),
+              source: String(upload.source || 'local').trim(),
+              url: typeof upload.url === 'string' ? upload.url : '',
+              text: typeof upload.text === 'string' ? upload.text : ''
+            };
+          })
+          .filter(Boolean);
+      }
+
+      function dataUrlToBlob(dataUrl){
+        const raw = String(dataUrl || '');
+        const match = raw.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+        if(!match) return null;
+        const mime = match[1] || 'application/octet-stream';
+        const isBase64 = !!match[2];
+        const payload = match[3] || '';
+        try{
+          const binary = isBase64 ? atob(payload) : decodeURIComponent(payload);
+          const bytes = new Uint8Array(binary.length);
+          for(let index = 0; index < binary.length; index += 1){
+            bytes[index] = binary.charCodeAt(index);
+          }
+          return new Blob([bytes], { type: mime });
+        }catch(err){
+          return null;
+        }
+      }
+
+      async function resolveAttachmentBlob(attachment){
+        const blobId = attachment && (attachment.blobId || attachment.id);
+        if(blobId && store && typeof store.getUploadBlob === 'function'){
+          const blob = await store.getUploadBlob(blobId);
+          if(blob) return blob;
+        }
+        if(attachment && attachment.url && attachment.url.startsWith('data:')){
+          return dataUrlToBlob(attachment.url);
+        }
+        if(attachment && attachment.text){
+          return new Blob([attachment.text], { type: attachment.mime || 'text/plain' });
+        }
+        return null;
+      }
+
+      async function postJson(url, body){
+        const response = await fetch(url, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+        const raw = await response.text();
+        const payload = tryParseJson(raw);
+        if(!response.ok || !payload || payload.ok === false){
+          throw new Error(extractHelperError(payload, raw || 'Request failed.'));
+        }
+        return payload;
+      }
+
+      async function uploadToSignedSupabaseUrl(upload, blob){
+        const form = new FormData();
+        form.append('cacheControl', '3600');
+        form.append('', blob);
+        const headers = upload && upload.uploadHeaders && typeof upload.uploadHeaders === 'object'
+          ? upload.uploadHeaders
+          : {};
+        const response = await fetch(upload.signedUrl, {
+          method: 'PUT',
+          headers,
+          body: form
+        });
+        if(!response.ok){
+          const raw = await response.text().catch(()=>'');
+          throw new Error(raw || `Attachment upload failed (${response.status}).`);
+        }
+      }
+
+      async function persistProblemAttachmentsOnSupabase(problemId, draft){
+        const attachments = collectDraftAttachments(draft);
+        if(!problemId || attachments.length === 0){
+          return { persisted: true, count: 0, attachments: [] };
+        }
+
+        setHelperProgress(96, 'Preparing attachments', 'pending');
+        const plan = await postJson('/api/helper/attachments/sign', {
+          problemId,
+          attachments
+        });
+        const uploads = Array.isArray(plan.uploads) ? plan.uploads : [];
+        const completed = [];
+
+        for(let index = 0; index < uploads.length; index += 1){
+          const upload = uploads[index];
+          const original = attachments.find(item=>item.id === upload.clientId || item.id === upload.id)
+            || attachments[index];
+          const blob = await resolveAttachmentBlob(original);
+          if(!blob){
+            throw new Error(`${original && original.title ? original.title : 'Attachment'} cannot be saved permanently because its file data is missing.`);
+          }
+          setHelperProgress(
+            Math.min(99, 96 + Math.round(((index + 1) / Math.max(1, uploads.length)) * 3)),
+            `Uploading attachments ${index + 1}/${uploads.length}`,
+            'pending'
+          );
+          await uploadToSignedSupabaseUrl(upload, blob);
+          completed.push({
+            ...original,
+            bucket: upload.bucket,
+            storagePath: upload.storagePath
+          });
+        }
+
+        const saved = await postJson('/api/helper/attachments/complete', {
+          problemId,
+          attachments: completed
+        });
+        return {
+          persisted: true,
+          count: Array.isArray(saved.attachments) ? saved.attachments.length : completed.length,
+          attachments: saved.attachments || completed,
+          bucket: saved.bucket || plan.bucket || ''
+        };
+      }
+
       async function runHelperConversion(){
         if(helperBusy) return;
 
@@ -1651,6 +1821,22 @@
             requestedAt
           );
 
+          const persisted = !!(
+            savedResult
+            && savedResult.storage
+            && savedResult.storage.persisted
+          );
+          if(!persisted){
+            throw new Error('CIC conversion completed, but Supabase save did not persist.');
+          }
+          const problemId = savedResult && savedResult.problemId ? savedResult.problemId : null;
+          const attachmentResult = await persistProblemAttachmentsOnSupabase(problemId, draft);
+          const finalResult = savedResult && typeof savedResult === 'object'
+            ? {
+              ...savedResult,
+              attachments: attachmentResult
+            }
+            : savedResult;
           await persistHelperResult({
             status: 'succeeded',
             requestedAt,
@@ -1661,20 +1847,14 @@
             title: proofPayload.title,
             format: completedFormat || requestedFormat,
             requestedFormat,
-            problemId: savedResult && savedResult.problemId ? savedResult.problemId : null,
-            result: savedResult || submitResult.result
+            problemId,
+            result: finalResult || submitResult.result
           });
-          const persisted = !!(
-            savedResult
-            && savedResult.storage
-            && savedResult.storage.persisted
-          );
-          if(!persisted){
-            throw new Error('CIC conversion completed, but Supabase save did not persist.');
-          }
           setHelperProgress(
             100,
-            'Problem saved',
+            attachmentResult && attachmentResult.count
+              ? 'Problem and attachments saved'
+              : 'Problem saved',
             'success'
           );
           if(persisted && isCicFormat(completedFormat || requestedFormat)){
