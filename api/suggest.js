@@ -277,7 +277,12 @@ async function askGemini({ query, targetKind, citations, history }) {
     const message = payload && payload.error && payload.error.message
       ? payload.error.message
       : `Gemini API failed: ${response.status}`;
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    error.code = payload && payload.error && payload.error.code
+      ? payload.error.code
+      : response.status;
+    throw error;
   }
 
   const text = parseGeminiText(payload);
@@ -296,10 +301,25 @@ async function askGemini({ query, targetKind, citations, history }) {
   return { answer: text, suggestions: [], usedCitationIds: [] };
 }
 
-function buildFallbackAnswer(query, targetKind, citations) {
+function describeGeminiFallbackReason(error) {
+  const status = Number(error && (error.status || error.code));
+  if (status === 429) {
+    return 'Gemini API が現在レート制限またはクォータ上限に達しているため';
+  }
+  if (status === 400 || status === 401 || status === 403) {
+    return 'Gemini API の認証またはプロジェクト設定で拒否されたため';
+  }
+  if (error && /not configured/i.test(String(error.message || ''))) {
+    return 'Gemini API キーが未設定のため';
+  }
+  return 'Gemini API が一時的に利用できないため';
+}
+
+function buildFallbackAnswer(query, targetKind, citations, geminiError) {
+  const reason = describeGeminiFallbackReason(geminiError);
   if (citations.length === 0) {
     return {
-      answer: `保存済みの${targetKind === 'problem' ? '問題' : '定理'}には「${query}」に十分一致する情報が見つかりませんでした。`,
+      answer: `${reason}、保存済みの${targetKind === 'problem' ? '問題' : '定理'}から検索しましたが「${query}」に十分一致する情報が見つかりませんでした。`,
       suggestions: [],
       usedCitationIds: []
     };
@@ -310,7 +330,7 @@ function buildFallbackAnswer(query, targetKind, citations) {
     return `${item.title}${file}: ${item.quote} [${item.id}]`;
   });
   return {
-    answer: `Gemini API が未設定または利用できないため、保存済みデータから一致度の高い引用を返します。\n${lines.join('\n')}`,
+    answer: `${reason}、保存済みデータから一致度の高い引用を返します。\n${lines.join('\n')}`,
     suggestions: citations.map((item) => `${item.title} [${item.id}]`),
     usedCitationIds: citations.map((item) => item.id)
   };
@@ -343,7 +363,7 @@ export default async function handler(req, res) {
         generated = await askGemini({ query, targetKind, citations: context, history });
         geminiUsed = true;
       } catch (geminiError) {
-        generated = buildFallbackAnswer(query, targetKind, context);
+        generated = buildFallbackAnswer(query, targetKind, context, geminiError);
         model = '';
       }
     } else {
