@@ -1,10 +1,12 @@
 import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
-const MAX_SEARCH_ROWS = 120;
+const MAX_SEARCH_ROWS = 500;
 const MAX_CONTEXT_DOCS = 12;
 const MAX_SOURCE_CHARS = 900;
 const MAX_CIC_CHARS = 900;
+const MAX_HISTORY_TURNS = 6;
+const MAX_HISTORY_CHARS = 700;
 
 function clamp(num, min, max) {
   return Math.max(min, Math.min(max, num));
@@ -24,6 +26,8 @@ function getGeminiApiKey() {
     process.env.GEMINI_API_KEY
       || process.env.GOOGLE_GEMINI_API_KEY
       || process.env.GOOGLE_GENERATIVE_AI_API_KEY
+      || process.env.GOOGLE_API_KEY
+      || process.env.GENAI_API_KEY
   );
 }
 
@@ -55,6 +59,21 @@ function truncateText(value, limit) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   if (text.length <= limit) return text;
   return `${text.slice(0, Math.max(0, limit - 1)).trim()}...`;
+}
+
+function normalizeHistory(rawHistory) {
+  const source = Array.isArray(rawHistory) ? rawHistory : [];
+  return source
+    .map((item) => {
+      const entry = isPlainObject(item) ? item : {};
+      const role = String(entry.role || '').trim().toLowerCase() === 'assistant'
+        ? 'assistant'
+        : 'user';
+      const text = truncateText(entry.text || entry.content || entry.query || entry.answer, MAX_HISTORY_CHARS);
+      return text ? { role, text } : null;
+    })
+    .filter(Boolean)
+    .slice(-MAX_HISTORY_TURNS);
 }
 
 function stringifyPreview(value, limit) {
@@ -164,7 +183,7 @@ async function searchSavedProblems({ query, mode, limit, offset }) {
   };
 }
 
-function buildGeminiPrompt({ query, targetKind, citations }) {
+function buildGeminiPrompt({ query, targetKind, citations, history }) {
   const context = citations.map((item) => ({
     id: item.id,
     title: item.title,
@@ -177,16 +196,22 @@ function buildGeminiPrompt({ query, targetKind, citations }) {
     attachments: item.attachments,
     quote: item.quote
   }));
+  const conversation = normalizeHistory(history);
 
   return [
     'You are the iVucx saved-problem search assistant.',
     `Search target: ${targetKind}.`,
     `User query: ${query}`,
     '',
+    conversation.length
+      ? `Recent chat history: ${JSON.stringify(conversation)}`
+      : 'Recent chat history: []',
+    '',
     'Use only the provided saved rows as sources.',
     'Answer in Japanese unless the user query is clearly in another language.',
     'Every factual claim about a saved problem/theorem must cite source ids like [P1].',
     'If no saved row supports an answer, say that the saved database does not contain enough information.',
+    'Suggestions must be short follow-up searches that can help refine the same problem/theorem lookup.',
     'Return JSON only with this shape:',
     '{"answer":"string","suggestions":["string"],"usedCitationIds":["P1"]}',
     '',
@@ -222,7 +247,7 @@ function parseAnswerJson(text) {
   }
 }
 
-async function askGemini({ query, targetKind, citations }) {
+async function askGemini({ query, targetKind, citations, history }) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     throw new Error('Gemini API is not configured. Set GEMINI_API_KEY in Vercel.');
@@ -237,7 +262,7 @@ async function askGemini({ query, targetKind, citations }) {
       contents: [
         {
           role: 'user',
-          parts: [{ text: buildGeminiPrompt({ query, targetKind, citations }) }]
+          parts: [{ text: buildGeminiPrompt({ query, targetKind, citations, history }) }]
         }
       ],
       generationConfig: {
@@ -274,7 +299,7 @@ async function askGemini({ query, targetKind, citations }) {
 function buildFallbackAnswer(query, targetKind, citations) {
   if (citations.length === 0) {
     return {
-      answer: `Saved ${targetKind} records do not contain enough information for "${query}".`,
+      answer: `保存済みの${targetKind === 'problem' ? '問題' : '定理'}には「${query}」に十分一致する情報が見つかりませんでした。`,
       suggestions: [],
       usedCitationIds: []
     };
@@ -285,7 +310,7 @@ function buildFallbackAnswer(query, targetKind, citations) {
     return `${item.title}${file}: ${item.quote} [${item.id}]`;
   });
   return {
-    answer: `Gemini API is not configured or unavailable, so I returned extractive matches from saved records:\n${lines.join('\n')}`,
+    answer: `Gemini API が未設定または利用できないため、保存済みデータから一致度の高い引用を返します。\n${lines.join('\n')}`,
     suggestions: citations.map((item) => `${item.title} [${item.id}]`),
     usedCitationIds: citations.map((item) => item.id)
   };
@@ -303,6 +328,8 @@ export default async function handler(req, res) {
     const mode = safeString(body.mode, 'a');
     const limit = clamp(Number(body.limit) || 6, 1, 10);
     const offset = clamp(Number(body.offset) || 0, 0, 5000);
+    const history = normalizeHistory(body.history);
+    const includeAnswer = body.includeAnswer !== false;
     const targetKind = getKindFromMode(mode);
     const pageSize = Math.max(limit, MAX_CONTEXT_DOCS);
     const searchResult = await searchSavedProblems({ query, mode, limit: pageSize, offset });
@@ -311,17 +338,34 @@ export default async function handler(req, res) {
     let generated;
     let model = getGeminiModel();
     let geminiUsed = false;
-    try {
-      generated = await askGemini({ query, targetKind, citations: context });
-      geminiUsed = true;
-    } catch (geminiError) {
-      generated = buildFallbackAnswer(query, targetKind, context);
+    if (includeAnswer) {
+      try {
+        generated = await askGemini({ query, targetKind, citations: context, history });
+        geminiUsed = true;
+      } catch (geminiError) {
+        generated = buildFallbackAnswer(query, targetKind, context);
+        model = '';
+      }
+    } else {
+      generated = {
+        answer: '',
+        suggestions: context.map((item) => `${item.title} [${item.id}]`),
+        usedCitationIds: []
+      };
       model = '';
     }
 
     const suggestions = generated.suggestions && generated.suggestions.length
       ? generated.suggestions
       : context.map((item) => `${item.title} [${item.id}]`);
+    const usedCitationIds = Array.isArray(generated.usedCitationIds)
+      ? generated.usedCitationIds.map((item) => safeString(item)).filter(Boolean)
+      : [];
+    const usedSet = new Set(usedCitationIds);
+    const citations = context.map((item) => ({
+      ...item,
+      used: usedSet.has(item.id)
+    }));
 
     res.status(200).json({
       mode,
@@ -331,7 +375,8 @@ export default async function handler(req, res) {
       model,
       geminiUsed,
       answer: generated.answer,
-      citations: context,
+      citations,
+      usedCitationIds,
       suggestions: suggestions.slice(0, limit),
       hasMore: offset + searchResult.citations.length < searchResult.total
     });

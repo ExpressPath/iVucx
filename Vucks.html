@@ -2244,6 +2244,19 @@
       gap:8px;
     }
 
+    .related-search-title{
+      margin:12px 0 8px;
+      color:#52637f;
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+    }
+
+    body.mode-q .related-search-title{
+      color:#9bb0d4;
+    }
+
     .suggestion-item{
       display:flex;
       align-items:flex-start;
@@ -5092,6 +5105,7 @@
         language: String(citation.language || '').trim(),
         kind: String(citation.kind || '').trim(),
         normalizedFormat: String(citation.normalizedFormat || '').trim(),
+        used: !!citation.used,
         attachments: Array.isArray(citation.attachments)
           ? citation.attachments.map(name=>String(name || '').trim()).filter(Boolean)
           : []
@@ -5108,6 +5122,26 @@
           .sort()
       : [];
     return normalizedQuery + '||' + normalizedFiles.join('|');
+  }
+
+  function buildSuggestionHistory(activeTurn){
+    const history = [];
+    suggestionTurns.forEach(turn=>{
+      if(!turn || turn === activeTurn) return;
+      if(turn.query){
+        history.push({
+          role:'user',
+          text:turn.query
+        });
+      }
+      if(turn.answer){
+        history.push({
+          role:'assistant',
+          text:turn.answer
+        });
+      }
+    });
+    return history.slice(-6);
   }
 
   function renderSuggestionThread(){
@@ -5202,27 +5236,35 @@
           assistantCard.appendChild(citationList);
         }
 
-        const list = document.createElement('ol');
-        list.className = 'suggestion-list';
-        list.hidden = !!turn.answer;
+        if(Array.isArray(turn.suggestions) && turn.suggestions.length > 0){
+          if(turn.answer){
+            const relatedTitle = document.createElement('div');
+            relatedTitle.className = 'related-search-title';
+            relatedTitle.textContent = 'Related searches';
+            assistantCard.appendChild(relatedTitle);
+          }
 
-        turn.suggestions.forEach((text, index)=>{
-          const item = document.createElement('li');
-          item.className = 'suggestion-item';
+          const list = document.createElement('ol');
+          list.className = 'suggestion-list';
 
-          const indexBadge = document.createElement('span');
-          indexBadge.className = 'suggestion-index';
-          indexBadge.textContent = String(index + 1);
+          turn.suggestions.forEach((text, index)=>{
+            const item = document.createElement('li');
+            item.className = 'suggestion-item';
 
-          const label = document.createElement('span');
-          label.className = 'suggestion-text';
-          label.textContent = text;
+            const indexBadge = document.createElement('span');
+            indexBadge.className = 'suggestion-index';
+            indexBadge.textContent = String(index + 1);
 
-          item.append(indexBadge, label);
-          list.appendChild(item);
-        });
+            const label = document.createElement('span');
+            label.className = 'suggestion-text';
+            label.textContent = text;
 
-        assistantCard.appendChild(list);
+            item.append(indexBadge, label);
+            list.appendChild(item);
+          });
+
+          assistantCard.appendChild(list);
+        }
       }
 
       if(turn.error){
@@ -5294,7 +5336,9 @@
         query: turn.query,
         files: turn.files || [],
         limit: SUGGESTION_COUNT,
-        offset
+        offset,
+        includeAnswer: !append,
+        history: append ? [] : buildSuggestionHistory(turn)
       };
 
       const res = await fetch('/api/suggest', {
