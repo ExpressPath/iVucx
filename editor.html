@@ -271,7 +271,7 @@
     .file-head-actions{
       display:flex;
       align-items:center;
-      gap:6px;
+      gap:4px;
     }
 
     .file-action-btn{
@@ -297,7 +297,8 @@
       transform:translateY(-1px);
     }
 
-    .file-row{
+    .file-row,
+    .folder-row{
       display:grid;
       grid-template-columns:minmax(0,1fr) 28px;
       align-items:center;
@@ -308,22 +309,33 @@
       transition:background-color .18s ease,border-color .18s ease;
     }
 
+    .folder-row{
+      grid-template-columns:minmax(0,1fr);
+    }
+
     .file-row.active{
       border-color:rgba(47,129,247,0.55);
       background:rgba(47,129,247,0.14);
     }
 
-    .file-row:hover{
+    .folder-row.active-folder{
+      border-color:rgba(125,133,144,0.35);
+      background:rgba(125,133,144,0.12);
+    }
+
+    .file-row:hover,
+    .folder-row:hover{
       background:rgba(255,255,255,0.04);
     }
 
-    .file-select-btn{
+    .file-select-btn,
+    .folder-select-btn{
       min-width:0;
       border:none;
       background:transparent;
       color:#d0d7de;
       text-align:left;
-      padding:8px 8px;
+      padding:8px 8px 8px calc(8px + (var(--tree-depth, 0) * 14px));
       cursor:pointer;
     }
 
@@ -331,7 +343,30 @@
       color:#f0f6fc;
     }
 
-    .file-label{
+    .folder-select-btn{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      color:#c9d1d9;
+      font-weight:700;
+    }
+
+    .folder-caret{
+      width:10px;
+      min-width:10px;
+      color:#8b949e;
+      font-size:11px;
+      line-height:1;
+    }
+
+    .folder-icon{
+      color:#d29922;
+      font-size:12px;
+      line-height:1;
+    }
+
+    .file-label,
+    .folder-label{
       display:block;
       overflow:hidden;
       text-overflow:ellipsis;
@@ -682,7 +717,9 @@
       <div class="pane-head">
         <span>Files</span>
         <div class="file-head-actions">
-          <button class="file-action-btn" id="addFileBtn" type="button" aria-label="Add proof files" title="Add proof files">+</button>
+          <button class="file-action-btn" id="newFileBtn" type="button" aria-label="New file" title="New file">+</button>
+          <button class="file-action-btn" id="newFolderBtn" type="button" aria-label="New folder" title="New folder">/</button>
+          <button class="file-action-btn" id="addFileBtn" type="button" aria-label="Import proof files" title="Import proof files">^</button>
         </div>
       </div>
       <div class="file-list" id="fileList" aria-label="Proof files"></div>
@@ -768,6 +805,8 @@
       const fallbackEditor = document.getElementById('fallbackEditor');
       const editorMount = document.getElementById('editor');
       const fileListEl = document.getElementById('fileList');
+      const newFileBtn = document.getElementById('newFileBtn');
+      const newFolderBtn = document.getElementById('newFolderBtn');
       const addFileBtn = document.getElementById('addFileBtn');
       const proofFileInput = document.getElementById('proofFileInput');
       const toastEl = document.getElementById('toast');
@@ -863,7 +902,10 @@
       let running = false;
       let leanSeed = '';
       let proofFiles = [];
+      let proofFolders = [];
       let activeProofFileId = '';
+      let activeFolderPath = '';
+      let collapsedFolders = {};
       let proofFileSeq = 0;
       let toastTimer = null;
       let toastPinned = false;
@@ -899,6 +941,16 @@
           await importProofFiles(files, 'picker');
         });
       }
+      if(newFileBtn){
+        newFileBtn.addEventListener('click', ()=>{
+          createBlankProofFile();
+        });
+      }
+      if(newFolderBtn){
+        newFolderBtn.addEventListener('click', ()=>{
+          createProofFolderFromPrompt();
+        });
+      }
       if(addFileBtn){
         addFileBtn.addEventListener('click', ()=>{
           if(proofFileInput) proofFileInput.click();
@@ -913,6 +965,13 @@
           if(removeBtn){
             const id = removeBtn.dataset.fileId || '';
             removeProofFile(id);
+            return;
+          }
+
+          const folderBtn = target.closest('.folder-select-btn');
+          if(folderBtn){
+            const path = folderBtn.dataset.folderPath || '';
+            selectProofFolder(path);
             return;
           }
 
@@ -981,23 +1040,77 @@
         return proofFiles.find(file=>file && file.id === id) || null;
       }
 
+      function sanitizeProofPathSegment(segment){
+        return String(segment || '')
+          .trim()
+          .replace(/[\\:*?"<>|]+/g, '-')
+          .replace(/\s+/g, ' ');
+      }
+
+      function normalizeProofFolderPath(path){
+        const segments = String(path || '')
+          .replace(/\\/g, '/')
+          .split('/')
+          .map(sanitizeProofPathSegment)
+          .filter(segment=>segment && segment !== '.' && segment !== '..');
+        return segments.join('/');
+      }
+
       function normalizeProofFileName(name){
         const fallback = selectedConfig && selectedConfig.fileName ? selectedConfig.fileName : 'Main';
-        const text = String(name || '').trim().replace(/[\\/:*?"<>|]+/g, '-');
-        return text || fallback;
+        const normalized = normalizeProofFolderPath(name);
+        return normalized || fallback;
+      }
+
+      function getProofFileBaseName(path){
+        const normalized = normalizeProofFileName(path);
+        const parts = normalized.split('/');
+        return parts[parts.length - 1] || normalized;
+      }
+
+      function getProofFileFolderPath(path){
+        const normalized = normalizeProofFileName(path);
+        const parts = normalized.split('/');
+        parts.pop();
+        return parts.join('/');
+      }
+
+      function joinProofPath(folderPath, fileName){
+        const folder = normalizeProofFolderPath(folderPath);
+        const file = normalizeProofFileName(fileName);
+        if(!folder) return file;
+        if(file.includes('/')) return file;
+        return folder + '/' + file;
+      }
+
+      function ensureProofFileExtension(name){
+        const normalized = normalizeProofFileName(name);
+        const lowerName = normalized.toLowerCase();
+        const extensions = getAllowedProofFileExtensions()
+          .slice()
+          .sort((a,b)=>b.length - a.length);
+        if(extensions.some(ext=>lowerName.endsWith(ext))) return normalized;
+        const extension = selectedConfig && selectedConfig.extension ? selectedConfig.extension : '';
+        return normalized + extension;
       }
 
       function splitProofFileName(name){
         const cleanName = normalizeProofFileName(name);
+        const baseName = getProofFileBaseName(cleanName);
+        const folderPath = getProofFileFolderPath(cleanName);
         const lowerName = cleanName.toLowerCase();
         const extensions = getAllowedProofFileExtensions()
           .slice()
           .sort((a,b)=>b.length - a.length);
         const matchedExt = extensions.find(ext=>lowerName.endsWith(ext)) || '';
-        if(!matchedExt) return { stem: cleanName, ext: '' };
+        if(!matchedExt) return { stem: cleanName, ext: '', folderPath, baseName };
+        const baseStem = baseName.slice(0, baseName.length - matchedExt.length) || 'Main';
+        const stem = folderPath ? folderPath + '/' + baseStem : baseStem;
         return {
-          stem: cleanName.slice(0, cleanName.length - matchedExt.length) || 'Main',
-          ext: cleanName.slice(cleanName.length - matchedExt.length)
+          stem,
+          ext: cleanName.slice(cleanName.length - matchedExt.length),
+          folderPath,
+          baseName
         };
       }
 
@@ -1023,13 +1136,161 @@
         return text.split(/\r?\n/).length;
       }
 
+      function ensureFolderAncestors(folderPath){
+        const normalized = normalizeProofFolderPath(folderPath);
+        if(!normalized) return;
+        const parts = normalized.split('/');
+        let current = '';
+        parts.forEach(part=>{
+          current = current ? current + '/' + part : part;
+          if(!proofFolders.some(path=>path.toLowerCase() === current.toLowerCase())){
+            proofFolders.push(current);
+          }
+        });
+      }
+
+      function expandFolderPath(folderPath){
+        const normalized = normalizeProofFolderPath(folderPath);
+        if(!normalized) return;
+        const parts = normalized.split('/');
+        let current = '';
+        parts.forEach(part=>{
+          current = current ? current + '/' + part : part;
+          collapsedFolders[current] = false;
+        });
+      }
+
+      function addProofFolderPath(folderPath){
+        const normalized = normalizeProofFolderPath(folderPath);
+        if(!normalized) return '';
+        ensureFolderAncestors(normalized);
+        activeFolderPath = normalized;
+        expandFolderPath(normalized);
+        renderProofFileList();
+        scheduleProofDraftSave('add-proof-folder');
+        return normalized;
+      }
+
+      function getDefaultNewFilePath(){
+        const baseName = makeUniqueProofFileName(joinProofPath(activeFolderPath, 'New' + selectedConfig.extension));
+        return baseName;
+      }
+
+      function createBlankProofFile(){
+        saveActiveProofFileContent();
+        const input = window.prompt('New file', getDefaultNewFilePath());
+        if(input === null) return;
+        const trimmedInput = String(input || '').trim();
+        if(!trimmedInput){
+          setStatus('File ignored', true);
+          return;
+        }
+        const scopedInput = trimmedInput.includes('/') || trimmedInput.includes('\\')
+          ? trimmedInput
+          : joinProofPath(activeFolderPath, trimmedInput);
+        const requested = ensureProofFileExtension(scopedInput);
+        const file = createProofFileRecord(requested, '');
+        proofFiles.push(file);
+        activeProofFileId = file.id;
+        activeFolderPath = getProofFileFolderPath(file.name);
+        expandFolderPath(activeFolderPath);
+        setActiveProofFileName(file.name);
+        setEditorContent('');
+        renderProofFileList();
+        setStatus('File created');
+        scheduleProofDraftSave('create-proof-file');
+      }
+
+      function createProofFolderFromPrompt(){
+        const defaultPath = activeFolderPath ? activeFolderPath + '/New Folder' : 'New Folder';
+        const input = window.prompt('New folder', defaultPath);
+        if(input === null) return;
+        const trimmedInput = String(input || '').trim();
+        if(!trimmedInput){
+          setStatus('Folder ignored', true);
+          return;
+        }
+        const scopedInput = trimmedInput.includes('/') || trimmedInput.includes('\\')
+          ? trimmedInput
+          : joinProofPath(activeFolderPath, trimmedInput);
+        const folderPath = addProofFolderPath(scopedInput);
+        if(folderPath){
+          setStatus('Folder created');
+        }else{
+          setStatus('Folder ignored', true);
+        }
+      }
+
+      function selectProofFolder(folderPath){
+        const normalized = normalizeProofFolderPath(folderPath);
+        activeFolderPath = normalized;
+        if(normalized){
+          collapsedFolders[normalized] = !collapsedFolders[normalized];
+        }
+        renderProofFileList();
+      }
+
+      function buildProofFolderSnapshot(){
+        const paths = new Set();
+        proofFolders.forEach(path=>{
+          const normalized = normalizeProofFolderPath(path);
+          if(normalized) paths.add(normalized);
+        });
+        proofFiles.forEach(file=>{
+          ensureFolderAncestors(getProofFileFolderPath(file && file.name));
+          const folder = getProofFileFolderPath(file && file.name);
+          if(folder) paths.add(folder);
+        });
+        return Array.from(paths).sort((a,b)=>a.localeCompare(b));
+      }
+
+      function createTreeNode(name = '', path = ''){
+        return {
+          name,
+          path,
+          folders: new Map(),
+          files: []
+        };
+      }
+
+      function getOrCreateTreeFolder(root, folderPath){
+        const normalized = normalizeProofFolderPath(folderPath);
+        if(!normalized) return root;
+        let node = root;
+        let current = '';
+        normalized.split('/').forEach(part=>{
+          current = current ? current + '/' + part : part;
+          if(!node.folders.has(part)){
+            node.folders.set(part, createTreeNode(part, current));
+          }
+          node = node.folders.get(part);
+        });
+        return node;
+      }
+
+      function buildProofFileTree(){
+        const root = createTreeNode('', '');
+        buildProofFolderSnapshot().forEach(path=>{
+          getOrCreateTreeFolder(root, path);
+        });
+        proofFiles.forEach(file=>{
+          if(!file) return;
+          const folderPath = getProofFileFolderPath(file.name);
+          const node = getOrCreateTreeFolder(root, folderPath);
+          node.files.push(file);
+        });
+        return root;
+      }
+
       function createProofFileRecord(name, code = '', options = {}){
         const id = typeof options.id === 'string' && options.id.trim()
           ? options.id.trim()
           : makeProofFileId();
+        const fileName = makeUniqueProofFileName(name, id);
+        ensureFolderAncestors(getProofFileFolderPath(fileName));
         return {
           id,
-          name: makeUniqueProofFileName(name, id),
+          name: fileName,
           language: selectedLanguage,
           code: typeof code === 'string' ? code : '',
           createdAt: options.createdAt || new Date().toISOString(),
@@ -1088,7 +1349,41 @@
           return;
         }
 
-        proofFiles.forEach(file=>{
+        const tree = buildProofFileTree();
+
+        function renderFolder(node, depth){
+          const row = document.createElement('div');
+          row.className = 'folder-row';
+          if(node.path === activeFolderPath) row.classList.add('active-folder');
+
+          const select = document.createElement('button');
+          select.type = 'button';
+          select.className = 'folder-select-btn';
+          select.dataset.folderPath = node.path;
+          select.style.setProperty('--tree-depth', String(depth));
+
+          const caret = document.createElement('span');
+          caret.className = 'folder-caret';
+          caret.textContent = collapsedFolders[node.path] ? '>' : 'v';
+
+          const icon = document.createElement('span');
+          icon.className = 'folder-icon';
+          icon.textContent = collapsedFolders[node.path] ? '[+]' : '[-]';
+
+          const label = document.createElement('span');
+          label.className = 'folder-label';
+          label.textContent = node.name;
+
+          select.append(caret, icon, label);
+          row.appendChild(select);
+          fileListEl.appendChild(row);
+
+          if(!collapsedFolders[node.path]){
+            renderTreeNode(node, depth + 1);
+          }
+        }
+
+        function renderFile(file, depth){
           const row = document.createElement('div');
           row.className = 'file-row';
           if(file.id === activeProofFileId) row.classList.add('active');
@@ -1097,10 +1392,11 @@
           select.type = 'button';
           select.className = 'file-select-btn';
           select.dataset.fileId = file.id;
+          select.style.setProperty('--tree-depth', String(depth));
 
           const label = document.createElement('span');
           label.className = 'file-label';
-          label.textContent = file.name || selectedConfig.fileName;
+          label.textContent = getProofFileBaseName(file.name || selectedConfig.fileName);
 
           const meta = document.createElement('span');
           meta.className = 'file-meta';
@@ -1114,18 +1410,39 @@
           remove.className = 'file-remove-btn';
           remove.dataset.fileId = file.id;
           remove.setAttribute('aria-label', 'Remove ' + (file.name || 'file'));
-          remove.textContent = '×';
+          remove.textContent = 'x';
           remove.disabled = proofFiles.length <= 1;
 
           row.append(select, remove);
           fileListEl.appendChild(row);
-        });
+        }
+
+        function renderTreeNode(node, depth){
+          Array.from(node.folders.values())
+            .sort((a,b)=>a.name.localeCompare(b.name))
+            .forEach(folder=>renderFolder(folder, depth));
+
+          node.files
+            .slice()
+            .sort((a,b)=>String(a.name || '').localeCompare(String(b.name || '')))
+            .forEach(file=>renderFile(file, depth));
+        }
+
+        renderTreeNode(tree, 0);
       }
 
-      function setupProofFiles(rawFiles, activeId, fallbackName, fallbackCode){
+      function setupProofFiles(rawFiles, activeId, fallbackName, fallbackCode, rawFolders = []){
         proofFiles = [];
+        proofFolders = [];
         activeProofFileId = '';
+        activeFolderPath = '';
+        collapsedFolders = {};
         proofFileSeq = 0;
+
+        const folders = Array.isArray(rawFolders) ? rawFolders : [];
+        folders.forEach(path=>{
+          ensureFolderAncestors(path);
+        });
 
         const source = Array.isArray(rawFiles) ? rawFiles : [];
         source.forEach(raw=>{
@@ -1150,7 +1467,11 @@
           : proofFiles[0].id;
 
         const activeFile = getActiveProofFile();
-        if(activeFile) setActiveProofFileName(activeFile.name);
+        if(activeFile){
+          activeFolderPath = getProofFileFolderPath(activeFile.name);
+          expandFolderPath(activeFolderPath);
+          setActiveProofFileName(activeFile.name);
+        }
         renderProofFileList();
       }
 
@@ -1174,6 +1495,8 @@
         if(!nextFile || nextFile.id === activeProofFileId) return;
         saveActiveProofFileContent();
         activeProofFileId = nextFile.id;
+        activeFolderPath = getProofFileFolderPath(nextFile.name);
+        expandFolderPath(activeFolderPath);
         setActiveProofFileName(nextFile.name);
         setEditorContent(nextFile.code);
         renderProofFileList();
@@ -1194,6 +1517,8 @@
           const nextFile = proofFiles[Math.max(0, index - 1)] || proofFiles[0];
           activeProofFileId = nextFile ? nextFile.id : '';
           if(nextFile){
+            activeFolderPath = getProofFileFolderPath(nextFile.name);
+            expandFolderPath(activeFolderPath);
             setActiveProofFileName(nextFile.name);
             setEditorContent(nextFile.code);
           }
@@ -1214,6 +1539,7 @@
           const target = proofFiles[0];
           const first = source[0];
           target.name = makeUniqueProofFileName(first.name || selectedConfig.fileName, target.id);
+          ensureFolderAncestors(getProofFileFolderPath(target.name));
           target.code = typeof first.code === 'string' ? first.code : '';
           target.language = selectedLanguage;
           target.updatedAt = new Date().toISOString();
@@ -1232,6 +1558,8 @@
         const firstAdded = added[0];
         if(firstAdded){
           activeProofFileId = firstAdded.id;
+          activeFolderPath = getProofFileFolderPath(firstAdded.name);
+          expandFolderPath(activeFolderPath);
           setActiveProofFileName(firstAdded.name);
           setEditorContent(firstAdded.code);
         }
@@ -1248,8 +1576,9 @@
         for(const file of matched){
           try{
             const text = await file.text();
+            const rawName = file.webkitRelativePath || getClipboardFileName(file);
             records.push({
-              name: getClipboardFileName(file),
+              name: joinProofPath(activeFolderPath, rawName),
               code: text
             });
           }catch(err){
@@ -1682,6 +2011,7 @@
           if(!shouldReturn) return;
         }
         const files = buildProofFileSnapshot();
+        const folders = buildProofFolderSnapshot();
         const activeFile = files.find(file=>file.id === activeProofFileId) || files[0] || null;
 
         await patchTheoremDraftRecord({
@@ -1695,6 +2025,7 @@
             fileName: activeFile ? activeFile.name : getActiveProofFileName(),
             code: activeFile ? activeFile.code : currentCode,
             files,
+            folders,
             activeFileId: activeFile ? activeFile.id : activeProofFileId,
             goalsText: leanGoalsInput ? leanGoalsInput.value : '',
             updatedAt: new Date().toISOString(),
@@ -2056,6 +2387,7 @@
 
       function buildProofDraftSnapshot(reason = 'proof-editor'){
         const files = buildProofFileSnapshot();
+        const folders = buildProofFolderSnapshot();
         const activeFile = files.find(file=>file.id === activeProofFileId) || files[0] || null;
         return {
           problemKind: getProblemKindFromInit(),
@@ -2068,6 +2400,7 @@
             fileName: activeFile ? activeFile.name : getActiveProofFileName(),
             code: activeFile ? activeFile.code : getSafeEditorDraftForPersistence(),
             files,
+            folders,
             activeFileId: activeFile ? activeFile.id : activeProofFileId,
             goalsText: leanGoalsInput ? leanGoalsInput.value : '',
             updatedAt: new Date().toISOString(),
@@ -2098,12 +2431,12 @@
 
       async function restoreProofDraftFromBackground(){
         if(!theoremDraftStore || typeof theoremDraftStore.read !== 'function'){
-          return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName(), files: [], activeFileId: '' };
+          return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName(), files: [], folders: [], activeFileId: '' };
         }
         try{
           const record = await theoremDraftStore.read();
           if(!record || typeof record !== 'object'){
-            return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName(), files: [], activeFileId: '' };
+            return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName(), files: [], folders: [], activeFileId: '' };
           }
 
           const storedTitle = record.title && typeof record.title.text === 'string'
@@ -2133,6 +2466,11 @@
             && Array.isArray(storedProof.files)
             ? storedProof.files
             : [];
+          const nextFolders = storedProof
+            && storedProof.language === selectedLanguage
+            && Array.isArray(storedProof.folders)
+            ? storedProof.folders
+            : [];
           const nextActiveFileId = storedProof
             && storedProof.language === selectedLanguage
             && typeof storedProof.activeFileId === 'string'
@@ -2145,10 +2483,11 @@
             goalsText: nextGoalsText,
             fileName: nextFileName,
             files: nextFiles,
+            folders: nextFolders,
             activeFileId: nextActiveFileId
           };
         }catch(err){
-          return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName(), files: [], activeFileId: '' };
+          return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName(), files: [], folders: [], activeFileId: '' };
         }
       }
 
@@ -2159,7 +2498,7 @@
         summaryText = typeof restored.summary === 'string' ? restored.summary : summaryText;
         initialDraft = typeof restored.draft === 'string' ? restored.draft : initialDraft;
         const restoredGoalsText = typeof restored.goalsText === 'string' ? restored.goalsText : '';
-        setupProofFiles(restored.files, restored.activeFileId, restored.fileName, initialDraft);
+        setupProofFiles(restored.files, restored.activeFileId, restored.fileName, initialDraft, restored.folders);
         const activeFile = getActiveProofFile();
         if(activeFile){
           initialDraft = activeFile.code || '';
