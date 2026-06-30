@@ -631,12 +631,14 @@
           monacoId: 'ivucx-lean',
           fileName: 'Main.lean',
           extension: '.lean',
+          extensions: ['.lean'],
           starter: ''
         },
         Coq: {
           monacoId: 'ivucx-coq',
           fileName: 'Main.v',
           extension: '.v',
+          extensions: ['.v'],
           starter: [
             'Theorem hello : True.',
             'Proof.',
@@ -648,6 +650,7 @@
           monacoId: 'ivucx-isabelle',
           fileName: 'Main.thy',
           extension: '.thy',
+          extensions: ['.thy'],
           starter: [
             'theory Main',
             '  imports Main',
@@ -663,6 +666,7 @@
           monacoId: 'ivucx-agda',
           fileName: 'Main.agda',
           extension: '.agda',
+          extensions: ['.agda', '.lagda', '.lagda.md'],
           starter: [
             'module Main where',
             '',
@@ -680,7 +684,8 @@
       const selectedLanguage = resolveLanguage(params.get('lang') || initPayload.proofAssistant || 'Lean');
       const selectedConfig = languageConfig[selectedLanguage];
       langBadgeEl.textContent = selectedLanguage;
-      fileNameEl.textContent = selectedConfig.fileName;
+      let activeProofFileName = selectedConfig.fileName;
+      setActiveProofFileName(activeProofFileName);
 
       function getProblemKindFromInit(){
         const normalized = String(initPayload && initPayload.problemKind || '').trim().toLowerCase();
@@ -759,6 +764,17 @@
         if(input === 'isabelle') return 'Isabelle';
         if(input === 'agda') return 'Agda';
         return 'Lean';
+      }
+
+      function setActiveProofFileName(name){
+        const fallbackName = selectedConfig && selectedConfig.fileName ? selectedConfig.fileName : 'Main';
+        const nextName = String(name || '').trim() || fallbackName;
+        activeProofFileName = nextName;
+        if(fileNameEl) fileNameEl.textContent = nextName;
+      }
+
+      function getActiveProofFileName(){
+        return activeProofFileName || (selectedConfig ? selectedConfig.fileName : '');
       }
 
       function safeStorageGet(storage, key){
@@ -1155,7 +1171,7 @@
           },
           proof: {
             language: selectedLanguage,
-            fileName: selectedConfig ? selectedConfig.fileName : '',
+            fileName: getActiveProofFileName(),
             code: currentCode,
             goalsText: leanGoalsInput ? leanGoalsInput.value : '',
             updatedAt: new Date().toISOString(),
@@ -1203,22 +1219,22 @@
         return !!(active && editorMount.contains(active));
       }
 
-      function insertCodeAtCursor(text){
+      function replaceEditorContent(text){
         if(useFallbackEditor){
-          const start = fallbackEditor.selectionStart ?? fallbackEditor.value.length;
-          const end = fallbackEditor.selectionEnd ?? fallbackEditor.value.length;
-          const before = fallbackEditor.value.slice(0, start);
-          const after = fallbackEditor.value.slice(end);
-          fallbackEditor.value = before + text + after;
-          const nextPos = start + text.length;
+          fallbackEditor.value = text;
+          const nextPos = text.length;
           fallbackEditor.selectionStart = nextPos;
           fallbackEditor.selectionEnd = nextPos;
           fallbackEditor.focus();
+          scheduleProofDraftSave('proof-file-paste');
           return;
         }
 
         if(editorInstance && monacoRef){
-          const range = editorInstance.getSelection();
+          const model = editorInstance.getModel && editorInstance.getModel();
+          const range = model && typeof model.getFullModelRange === 'function'
+            ? model.getFullModelRange()
+            : editorInstance.getSelection();
           editorInstance.executeEdits('proof-file-paste', [{
             range: range,
             text: text,
@@ -1226,33 +1242,68 @@
           }]);
           editorInstance.pushUndoStop();
           editorInstance.focus();
+          scheduleProofDraftSave('proof-file-paste');
         }
+      }
+
+      function getAllowedProofFileExtensions(){
+        const extensions = selectedConfig && Array.isArray(selectedConfig.extensions)
+          ? selectedConfig.extensions
+          : [selectedConfig && selectedConfig.extension];
+        return extensions
+          .map(ext=>String(ext || '').trim().toLowerCase())
+          .filter(Boolean);
+      }
+
+      function getClipboardFileName(file){
+        return String(file && file.name || '').trim();
+      }
+
+      function isProofFileForSelectedLanguage(file){
+        const name = getClipboardFileName(file).toLowerCase();
+        if(!name) return false;
+        return getAllowedProofFileExtensions().some(ext=>name.endsWith(ext));
       }
 
       async function handleProofFilePaste(e){
         if(!isEditorFocused()) return;
 
         const clipboard = e.clipboardData;
-        if(!clipboard || !clipboard.items) return;
+        if(!clipboard) return;
 
         const files = [];
-        for(const item of clipboard.items){
-          if(item.kind !== 'file') continue;
-          const file = item.getAsFile();
-          if(file) files.push(file);
+        const seenFiles = new Set();
+        if(clipboard.items){
+          for(const item of clipboard.items){
+            if(item.kind !== 'file') continue;
+            const file = item.getAsFile();
+            if(file && !seenFiles.has(file)){
+              seenFiles.add(file);
+              files.push(file);
+            }
+          }
+        }
+        if(clipboard.files){
+          for(const file of clipboard.files){
+            if(file && !seenFiles.has(file)){
+              seenFiles.add(file);
+              files.push(file);
+            }
+          }
         }
 
         if(files.length === 0) return;
 
-        const expectedExt = selectedConfig.extension.toLowerCase();
-        const matchedFiles = files.filter(file=>{
-          const name = (file.name || '').toLowerCase();
-          return name.endsWith(expectedExt);
-        });
-
-        if(matchedFiles.length === 0) return;
+        const matchedFiles = files.filter(isProofFileForSelectedLanguage);
 
         e.preventDefault();
+
+        if(matchedFiles.length === 0){
+          const expected = getAllowedProofFileExtensions().join(', ');
+          setStatus('File ignored', true);
+          outputEl.textContent = '[Paste Ignored]\nOnly ' + selectedLanguage + ' files (' + expected + ') can be expanded in this editor.';
+          return;
+        }
 
         const chunks = [];
         for(const file of matchedFiles){
@@ -1277,8 +1328,9 @@
           if(!shouldPaste) return;
         }
 
-        insertCodeAtCursor(pasted);
-        setStatus('File pasted');
+        replaceEditorContent(pasted);
+        setActiveProofFileName(getClipboardFileName(matchedFiles[0]));
+        setStatus('File expanded');
       }
 
 
@@ -1545,7 +1597,7 @@
           },
           proof: {
             language: selectedLanguage,
-            fileName: selectedConfig ? selectedConfig.fileName : '',
+            fileName: getActiveProofFileName(),
             code: getSafeEditorDraftForPersistence(),
             goalsText: leanGoalsInput ? leanGoalsInput.value : '',
             updatedAt: new Date().toISOString(),
@@ -1576,12 +1628,12 @@
 
       async function restoreProofDraftFromBackground(){
         if(!theoremDraftStore || typeof theoremDraftStore.read !== 'function'){
-          return { summary: summaryText, draft: initialDraft, goalsText: '' };
+          return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName() };
         }
         try{
           const record = await theoremDraftStore.read();
           if(!record || typeof record !== 'object'){
-            return { summary: summaryText, draft: initialDraft, goalsText: '' };
+            return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName() };
           }
 
           const storedTitle = record.title && typeof record.title.text === 'string'
@@ -1601,14 +1653,20 @@
             && typeof storedProof.goalsText === 'string'
             ? storedProof.goalsText
             : '';
+          const nextFileName = storedProof
+            && storedProof.language === selectedLanguage
+            && typeof storedProof.fileName === 'string'
+            ? storedProof.fileName
+            : getActiveProofFileName();
 
           return {
             summary: nextSummary,
             draft: nextDraft,
-            goalsText: nextGoalsText
+            goalsText: nextGoalsText,
+            fileName: nextFileName
           };
         }catch(err){
-          return { summary: summaryText, draft: initialDraft, goalsText: '' };
+          return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName() };
         }
       }
 
@@ -1619,8 +1677,11 @@
         summaryText = typeof restored.summary === 'string' ? restored.summary : summaryText;
         initialDraft = typeof restored.draft === 'string' ? restored.draft : initialDraft;
         const restoredGoalsText = typeof restored.goalsText === 'string' ? restored.goalsText : '';
+        if(typeof restored.fileName === 'string' && restored.fileName.trim()){
+          setActiveProofFileName(restored.fileName);
+        }
 
-        setInitialOutputMessage(selectedLanguage, selectedConfig.fileName, initPayload, summaryText);
+        setInitialOutputMessage(selectedLanguage, getActiveProofFileName(), initPayload, summaryText);
         setLeanMode(selectedLanguage === 'Lean');
         startKeepAlivePings();
 
