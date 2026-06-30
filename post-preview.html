@@ -318,6 +318,125 @@
       backdrop-filter:blur(8px);
       z-index:2;
     }
+    .bounty-panel{
+      position:absolute;
+      left:18px;
+      top:18px;
+      z-index:3;
+      width:min(340px, calc(100% - 36px));
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:16px;
+      background:rgba(8,12,18,0.78);
+      color:#e6edf3;
+      padding:13px;
+      box-shadow:0 18px 44px rgba(0,0,0,0.24);
+      backdrop-filter:blur(12px);
+    }
+    .bounty-panel[hidden]{
+      display:none;
+    }
+    .bounty-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .bounty-title{
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color:#9be9a8;
+    }
+    .bounty-state{
+      font-size:11px;
+      color:rgba(230,237,243,0.68);
+      white-space:nowrap;
+    }
+    .bounty-row{
+      display:grid;
+      grid-template-columns:auto minmax(0,1fr) auto;
+      align-items:center;
+      gap:8px;
+    }
+    .bounty-prefix,
+    .bounty-currency{
+      color:#8b949e;
+      font-size:13px;
+      font-weight:800;
+    }
+    .bounty-input{
+      width:100%;
+      min-width:0;
+      height:38px;
+      border:1px solid rgba(255,255,255,0.14);
+      border-radius:10px;
+      background:rgba(255,255,255,0.06);
+      color:#f0f6fc;
+      font-size:16px;
+      font-weight:800;
+      padding:0 10px;
+      outline:none;
+    }
+    .bounty-input:focus{
+      border-color:rgba(63,185,80,0.55);
+      box-shadow:0 0 0 3px rgba(63,185,80,0.12);
+    }
+    .bounty-chips{
+      display:flex;
+      gap:6px;
+      margin:10px 0;
+    }
+    .bounty-chip{
+      flex:1 1 0;
+      height:30px;
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:999px;
+      background:rgba(255,255,255,0.04);
+      color:#d0d7de;
+      font-size:12px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .bounty-chip:hover{
+      background:rgba(63,185,80,0.1);
+      border-color:rgba(63,185,80,0.32);
+      color:#9be9a8;
+    }
+    .bounty-submit{
+      width:100%;
+      height:38px;
+      border:1px solid rgba(63,185,80,0.52);
+      border-radius:11px;
+      background:linear-gradient(180deg, rgba(111,255,154,0.95), rgba(63,185,80,0.9));
+      color:#08110c;
+      font-size:13px;
+      font-weight:900;
+      cursor:pointer;
+      transition:transform .12s ease, opacity .18s ease;
+    }
+    .bounty-submit:hover{
+      transform:translateY(-1px);
+    }
+    .bounty-submit:disabled{
+      cursor:progress;
+      opacity:.68;
+      transform:none;
+    }
+    .bounty-status{
+      min-height:16px;
+      margin-top:8px;
+      color:rgba(230,237,243,0.68);
+      font-size:11px;
+      line-height:1.45;
+    }
+    .bounty-status.error{
+      color:#ffb4ad;
+    }
+    .bounty-status.success{
+      color:#9be9a8;
+    }
     .source-panel{
       display:flex;
       align-items:stretch;
@@ -704,6 +823,24 @@
   <main class="layout">
     <div class="view-shell">
       <section class="stage-panel view-pane" id="slideView">
+        <section class="bounty-panel" id="bountyPanel" aria-label="Bounty" hidden>
+          <div class="bounty-head">
+            <div class="bounty-title">Bounty</div>
+            <div class="bounty-state" id="bountyState">Not funded</div>
+          </div>
+          <div class="bounty-row">
+            <span class="bounty-prefix">$</span>
+            <input class="bounty-input" id="bountyAmount" type="number" min="1" step="1" inputmode="decimal" value="10" aria-label="Bounty amount" />
+            <span class="bounty-currency">USD</span>
+          </div>
+          <div class="bounty-chips" aria-label="Quick bounty amounts">
+            <button class="bounty-chip" type="button" data-bounty-amount="5">$5</button>
+            <button class="bounty-chip" type="button" data-bounty-amount="10">$10</button>
+            <button class="bounty-chip" type="button" data-bounty-amount="25">$25</button>
+          </div>
+          <button class="bounty-submit" id="bountyCheckoutBtn" type="button">Fund bounty</button>
+          <div class="bounty-status" id="bountyStatus" role="status" aria-live="polite"></div>
+        </section>
         <div class="stage-viewport" id="stageViewport">
           <div class="stage" id="stage"></div>
         </div>
@@ -755,6 +892,11 @@
       const sourceGutterEl = document.getElementById('sourceGutter');
       const sourceCodeEl = document.getElementById('sourceCode');
       const cicSuccessPopupEl = document.getElementById('cicSuccessPopup');
+      const bountyPanelEl = document.getElementById('bountyPanel');
+      const bountyAmountEl = document.getElementById('bountyAmount');
+      const bountyCheckoutBtn = document.getElementById('bountyCheckoutBtn');
+      const bountyStatusEl = document.getElementById('bountyStatus');
+      const bountyStateEl = document.getElementById('bountyState');
       const store = window.ivucxTheoremDraftStore || null;
       const MODE_PERSIST_KEY = 'ivucxModeSnapshotV1';
       const COOKIE_HISTORY_CONSENT_KEY = 'ivucxCookieHistoryConsentV1';
@@ -768,6 +910,8 @@
       let currentView = 'slide';
       let currentLanguage = 'Lean';
       let currentFileName = 'Main.lean';
+      let currentProblemKind = 'theorem';
+      let bountyBusy = false;
       let deckItemLabel = 'Slide';
       let touchStartX = 0;
       let touchStartY = 0;
@@ -1154,6 +1298,207 @@
         }
       }
 
+      function formatBountyAmount(amountCents, currency){
+        const amount = Number(amountCents) || 0;
+        const code = String(currency || 'usd').trim().toUpperCase() || 'USD';
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: code,
+          maximumFractionDigits: amount % 100 === 0 ? 0 : 2
+        }).format(amount / 100);
+      }
+
+      function readBountyAmountCents(){
+        const amount = Number(bountyAmountEl && bountyAmountEl.value);
+        if(!Number.isFinite(amount)) return 0;
+        return Math.round(amount * 100);
+      }
+
+      function setBountyStatus(message, tone){
+        if(!bountyStatusEl) return;
+        const text = String(message || '').trim();
+        bountyStatusEl.textContent = text;
+        bountyStatusEl.classList.remove('error', 'success');
+        if(tone === 'error' || tone === 'success'){
+          bountyStatusEl.classList.add(tone);
+        }
+      }
+
+      function setBountyBusy(busy){
+        bountyBusy = !!busy;
+        if(bountyCheckoutBtn){
+          bountyCheckoutBtn.disabled = bountyBusy;
+          bountyCheckoutBtn.textContent = bountyBusy ? 'Opening checkout...' : 'Fund bounty';
+        }
+      }
+
+      function getDraftBounty(draft){
+        const bounty = draft && draft.bounty && typeof draft.bounty === 'object'
+          ? draft.bounty
+          : null;
+        return bounty;
+      }
+
+      function syncBountyPanel(draft){
+        if(!bountyPanelEl) return;
+        const isProblem = currentProblemKind === 'problem';
+        bountyPanelEl.hidden = !isProblem;
+        if(!isProblem) return;
+
+        const bounty = getDraftBounty(draft);
+        const amountCents = bounty && Number(bounty.amountCents) > 0 ? Number(bounty.amountCents) : 1000;
+        const currency = bounty && bounty.currency ? bounty.currency : 'usd';
+        if(bountyAmountEl){
+          bountyAmountEl.value = String(Math.max(1, Math.round(amountCents / 100)));
+        }
+        if(bounty && (bounty.paymentStatus === 'paid' || bounty.status === 'paid')){
+          if(bountyStateEl) bountyStateEl.textContent = 'Funded ' + formatBountyAmount(amountCents, currency);
+          setBountyStatus('This problem has a funded bounty.', 'success');
+        }else if(bounty && bounty.stripeSessionId){
+          if(bountyStateEl) bountyStateEl.textContent = 'Checkout created';
+          setBountyStatus('Checkout was created. Complete payment to fund the bounty.');
+        }else{
+          if(bountyStateEl) bountyStateEl.textContent = 'Not funded';
+          setBountyStatus('');
+        }
+      }
+
+      async function patchBounty(bounty){
+        if(!store || typeof store.patch !== 'function') return null;
+        return store.patch({
+          bounty: {
+            ...bounty,
+            updatedAt: new Date().toISOString()
+          }
+        });
+      }
+
+      function removeBountyQueryParams(){
+        try{
+          const url = new URL(window.location.href);
+          url.searchParams.delete('bounty');
+          url.searchParams.delete('session_id');
+          window.history.replaceState({}, '', url.pathname + (url.search ? url.search : '') + url.hash);
+        }catch(err){
+          // Ignore history cleanup failures.
+        }
+      }
+
+      async function handleBountyReturn(draft){
+        const params = new URLSearchParams(window.location.search);
+        const state = params.get('bounty');
+        const sessionId = params.get('session_id');
+        if(state === 'cancelled'){
+          setBountyStatus('Bounty checkout was cancelled.');
+          removeBountyQueryParams();
+          return draft;
+        }
+        if(state !== 'success' || !sessionId) return draft;
+
+        setBountyStatus('Confirming bounty payment...');
+        try{
+          const response = await fetch('/api/bounty-checkout?session_id=' + encodeURIComponent(sessionId), {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+          });
+          const raw = await response.text();
+          const payload = tryParseJson(raw);
+          if(!response.ok || !payload){
+            throw new Error(payload && payload.error ? payload.error : raw || 'Could not confirm bounty payment.');
+          }
+          const nextBounty = {
+            amountCents: Number(payload.amountTotal) || 0,
+            currency: payload.currency || 'usd',
+            status: payload.paid ? 'paid' : (payload.status || 'open'),
+            paymentStatus: payload.paymentStatus || '',
+            stripeSessionId: payload.sessionId || sessionId
+          };
+          await patchBounty(nextBounty);
+          const nextDraft = {
+            ...(draft || {}),
+            bounty: {
+              ...(draft && draft.bounty && typeof draft.bounty === 'object' ? draft.bounty : {}),
+              ...nextBounty,
+              updatedAt: new Date().toISOString()
+            }
+          };
+          syncBountyPanel(nextDraft);
+          setBountyStatus(
+            payload.paid
+              ? 'Bounty payment confirmed.'
+              : 'Checkout returned, but Stripe has not marked the payment as paid yet.',
+            payload.paid ? 'success' : ''
+          );
+          removeBountyQueryParams();
+          return nextDraft;
+        }catch(err){
+          setBountyStatus(err && err.message ? err.message : 'Could not confirm bounty payment.', 'error');
+          removeBountyQueryParams();
+          return draft;
+        }
+      }
+
+      async function startBountyCheckout(){
+        if(bountyBusy) return;
+        const amountCents = readBountyAmountCents();
+        if(amountCents < 100){
+          setBountyStatus('Enter at least $1.', 'error');
+          return;
+        }
+
+        const draft = store && typeof store.read === 'function'
+          ? await store.read()
+          : null;
+        const proofPayload = getProofPayload(draft);
+        if(!proofPayload){
+          setBountyStatus('No saved problem code is available yet.', 'error');
+          return;
+        }
+        if(proofPayload.problemKind !== 'problem'){
+          setBountyStatus('Bounties can be added to problem posts only.', 'error');
+          return;
+        }
+
+        setBountyBusy(true);
+        setBountyStatus('Creating Stripe checkout...');
+        try{
+          const response = await fetch('/api/bounty-checkout', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+              amountCents,
+              currency: 'usd',
+              title: proofPayload.title || titleEl.textContent || 'Untitled problem',
+              problemKind: proofPayload.problemKind,
+              language: proofPayload.language,
+              fileName: proofPayload.fileName,
+              clientReferenceId: 'provf-' + Date.now().toString(36)
+            })
+          });
+          const raw = await response.text();
+          const payload = tryParseJson(raw);
+          if(!response.ok || !payload || !payload.url){
+            throw new Error(payload && payload.error ? payload.error : raw || 'Could not create Stripe checkout.');
+          }
+          await patchBounty({
+            amountCents,
+            currency: payload.currency || 'usd',
+            status: 'checkout_created',
+            paymentStatus: '',
+            stripeSessionId: payload.sessionId || ''
+          });
+          window.location.href = payload.url;
+        }catch(err){
+          setBountyStatus(err && err.message ? err.message : 'Could not start bounty checkout.', 'error');
+          setBountyBusy(false);
+        }
+      }
+
       function describeHelperJob(job){
         const status = job && typeof job.status === 'string'
           ? job.status.toLowerCase()
@@ -1362,6 +1707,7 @@
             language: proofPayload.language,
             fileName: proofPayload.fileName,
             code: proofPayload.code,
+            bounty: proofPayload.bounty,
             verify: true,
             format: completedFormat || requestedFormat,
             requestedFormat,
@@ -1547,6 +1893,7 @@
         const title = draft && draft.title && typeof draft.title.text === 'string'
           ? draft.title.text.trim()
           : '';
+        const problemKind = getDraftProblemKind(draft);
         return {
           title,
           language: resolveLanguage(proof.language || currentLanguage),
@@ -1554,7 +1901,8 @@
             ? proof.fileName.trim()
             : currentFileName,
           code: proof.code,
-          problemKind: getDraftProblemKind(draft)
+          problemKind,
+          bounty: problemKind === 'problem' ? getDraftBounty(draft) : null
         };
       }
 
@@ -2468,9 +2816,12 @@
           ? draft.title.text.trim()
           : '';
         titleEl.textContent = title || 'Untitled';
+        currentProblemKind = getDraftProblemKind(draft);
         currentLanguage = resolveLanguage(
           draft && draft.proof && typeof draft.proof === 'object' ? draft.proof.language : 'Lean'
         );
+        draft = await handleBountyReturn(draft);
+        syncBountyPanel(draft);
         currentFileName = draft
           && draft.proof
           && typeof draft.proof === 'object'
@@ -2515,6 +2866,18 @@
       sourceTabEl.addEventListener('click', ()=>{
         setView('source');
       });
+      document.querySelectorAll('[data-bounty-amount]').forEach(button=>{
+        button.addEventListener('click', ()=>{
+          if(bountyAmountEl){
+            bountyAmountEl.value = button.getAttribute('data-bounty-amount') || '10';
+          }
+        });
+      });
+      if(bountyCheckoutBtn){
+        bountyCheckoutBtn.addEventListener('click', ()=>{
+          startBountyCheckout();
+        });
+      }
       if(futureBtn){
         futureBtn.addEventListener('click', ()=>{
           runHelperConversion();

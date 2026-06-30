@@ -6,6 +6,7 @@ import {
   proxyHelperRequest,
   sendMethodNotAllowed
 } from '../lib/helper-proxy.js';
+import { sendBountyCheckoutResponse } from '../lib/bounty-checkout.js';
 import { sendAttachmentCompleteResponse, sendAttachmentUploadPlanResponse } from '../lib/problem-attachments.js';
 import { sendPersistedProblemResponse, sendProblemPersistenceStatusResponse } from '../lib/problem-store.js';
 
@@ -36,6 +37,11 @@ function sendNotFound(res) {
 
 export default async function handler(req, res) {
   const segments = getRouteSegments(req);
+
+  if (segments.length === 1 && segments[0] === 'bounty-checkout') {
+    await sendBountyCheckoutResponse(req, res);
+    return;
+  }
 
   if (segments.length === 1 && segments[0] === 'info') {
     if (req.method !== 'GET') {

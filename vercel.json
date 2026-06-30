@@ -50,6 +50,10 @@
       "dest": "/api/helper?route=$1"
     },
     {
+      "src": "/api/bounty-checkout",
+      "dest": "/api/helper?route=bounty-checkout"
+    },
+    {
       "src": "/api/google-auth-start",
       "dest": "/api/google?route=auth-start"
     },

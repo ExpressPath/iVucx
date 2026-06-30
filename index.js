@@ -3,6 +3,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { sendBountyCheckoutResponse } from './lib/bounty-checkout.js';
 import blueAuthLogin from './api/blue-auth-login.js';
 import blueAuthLogout from './api/blue-auth-logout.js';
 import blueAuthSignup from './api/blue-auth-signup.js';
@@ -117,6 +118,7 @@ app.get('/api/jscoq/*', wrap((req, res) => {
 app.all('/api/blue-auth-signup', wrap(blueAuthSignup));
 app.all('/api/blue-auth-login', wrap(blueAuthLogin));
 app.all('/api/blue-auth-logout', wrap(blueAuthLogout));
+app.all('/api/bounty-checkout', wrap(sendBountyCheckoutResponse));
 app.all('/api/check-login', wrap(checkLogin));
 app.all('/api/cookie-consent', wrap(cookieConsent));
 app.all('/api/google', wrap(googleApi));

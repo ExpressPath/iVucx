@@ -9,12 +9,19 @@
     "build": "echo 'No build step required'",
     "start": "node index.js"
   },
-  "keywords": ["proof-assistant", "coq", "lean", "isabelle", "agda"],
+  "keywords": [
+    "proof-assistant",
+    "coq",
+    "lean",
+    "isabelle",
+    "agda"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@supabase/supabase-js": "^2.50.2",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "stripe": "^22.3.0"
   },
   "engines": {
     "node": "22.x"
