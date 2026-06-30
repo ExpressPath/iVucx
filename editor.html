@@ -127,7 +127,7 @@
       flex:1;
       min-height:0;
       display:grid;
-      grid-template-columns:minmax(360px, 1fr) minmax(280px, 36%);
+      grid-template-columns:minmax(190px, 230px) minmax(360px, 1fr) minmax(280px, 36%);
       gap:10px;
       padding:10px;
     }
@@ -243,6 +243,133 @@
       color:var(--muted);
       border-bottom:1px solid var(--line);
       background:linear-gradient(to bottom, #141b23, #10161d);
+    }
+
+    .file-pane{
+      background:#0f141b;
+    }
+
+    .file-list{
+      flex:1;
+      min-height:0;
+      overflow:auto;
+      padding:8px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+
+    .file-list-empty{
+      margin:auto;
+      max-width:150px;
+      color:#6e7681;
+      font-size:12px;
+      line-height:1.45;
+      text-align:center;
+    }
+
+    .file-head-actions{
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+
+    .file-action-btn{
+      width:26px;
+      height:26px;
+      border-radius:7px;
+      border:1px solid rgba(255,255,255,0.12);
+      background:#1f2937;
+      color:#dce6f2;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:18px;
+      line-height:1;
+      font-weight:700;
+      cursor:pointer;
+      transition:background-color .18s ease,border-color .18s ease,transform .12s ease;
+    }
+
+    .file-action-btn:hover{
+      background:#263445;
+      border-color:rgba(47,129,247,0.5);
+      transform:translateY(-1px);
+    }
+
+    .file-row{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 28px;
+      align-items:center;
+      gap:4px;
+      border:1px solid transparent;
+      border-radius:8px;
+      background:transparent;
+      transition:background-color .18s ease,border-color .18s ease;
+    }
+
+    .file-row.active{
+      border-color:rgba(47,129,247,0.55);
+      background:rgba(47,129,247,0.14);
+    }
+
+    .file-row:hover{
+      background:rgba(255,255,255,0.04);
+    }
+
+    .file-select-btn{
+      min-width:0;
+      border:none;
+      background:transparent;
+      color:#d0d7de;
+      text-align:left;
+      padding:8px 8px;
+      cursor:pointer;
+    }
+
+    .file-row.active .file-select-btn{
+      color:#f0f6fc;
+    }
+
+    .file-label{
+      display:block;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:12px;
+      font-weight:700;
+    }
+
+    .file-meta{
+      display:block;
+      margin-top:2px;
+      color:#7d8590;
+      font-size:11px;
+      line-height:1.25;
+    }
+
+    .file-remove-btn{
+      width:24px;
+      height:24px;
+      border:none;
+      border-radius:6px;
+      background:transparent;
+      color:#7d8590;
+      font-size:18px;
+      line-height:1;
+      cursor:pointer;
+      visibility:hidden;
+    }
+
+    .file-row:hover .file-remove-btn,
+    .file-remove-btn:focus{
+      visibility:visible;
+    }
+
+    .file-remove-btn:hover{
+      background:rgba(255,123,114,0.12);
+      color:#ffb3ad;
     }
 
     .lean-panel-actions{
@@ -479,8 +606,12 @@
 
     @media (max-width:1020px){
       .workspace{
-        grid-template-columns:1fr;
+        grid-template-columns:minmax(180px, 230px) minmax(0, 1fr);
         grid-template-rows:minmax(300px, 1fr) minmax(180px, 42%);
+      }
+
+      .output-pane{
+        grid-column:1 / -1;
       }
 
       .right-cluster{
@@ -521,6 +652,15 @@
         width:100%;
       }
 
+      .workspace{
+        grid-template-columns:1fr;
+        grid-template-rows:minmax(150px, 22%) minmax(300px, 1fr) minmax(180px, 36%);
+      }
+
+      .file-pane{
+        min-height:150px;
+      }
+
     }
   </style>
 </head>
@@ -538,6 +678,17 @@
   </header>
 
   <main class="workspace" id="editorWorkspace">
+    <section class="pane file-pane">
+      <div class="pane-head">
+        <span>Files</span>
+        <div class="file-head-actions">
+          <button class="file-action-btn" id="addFileBtn" type="button" aria-label="Add proof files" title="Add proof files">+</button>
+        </div>
+      </div>
+      <div class="file-list" id="fileList" aria-label="Proof files"></div>
+      <input id="proofFileInput" type="file" multiple hidden />
+    </section>
+
     <section class="pane">
       <div class="pane-head">
         <span>Editor</span>
@@ -549,7 +700,7 @@
       </div>
     </section>
 
-    <section class="pane">
+    <section class="pane output-pane">
       <div class="pane-head">
         <span id="outputTitle">Server Output</span>
         <span id="outputHint">Ctrl/Cmd + Enter to run</span>
@@ -616,6 +767,9 @@
       const backBtn = document.getElementById('backBtn');
       const fallbackEditor = document.getElementById('fallbackEditor');
       const editorMount = document.getElementById('editor');
+      const fileListEl = document.getElementById('fileList');
+      const addFileBtn = document.getElementById('addFileBtn');
+      const proofFileInput = document.getElementById('proofFileInput');
       const toastEl = document.getElementById('toast');
       const toastMessageEl = document.getElementById('toastMessage');
       const toastSubtitleEl = document.getElementById('toastSubtitle');
@@ -708,6 +862,9 @@
       let monacoRef = null;
       let running = false;
       let leanSeed = '';
+      let proofFiles = [];
+      let activeProofFileId = '';
+      let proofFileSeq = 0;
       let toastTimer = null;
       let toastPinned = false;
       let keepAliveTimer = null;
@@ -732,6 +889,38 @@
       if(leanGoalsInput){
         leanGoalsInput.addEventListener('input', ()=>{
           scheduleProofDraftSave('lean-goals-input');
+        });
+      }
+      if(proofFileInput){
+        proofFileInput.setAttribute('accept', getAllowedProofFileExtensions().join(','));
+        proofFileInput.addEventListener('change', async ()=>{
+          const files = proofFileInput.files ? Array.from(proofFileInput.files) : [];
+          proofFileInput.value = '';
+          await importProofFiles(files, 'picker');
+        });
+      }
+      if(addFileBtn){
+        addFileBtn.addEventListener('click', ()=>{
+          if(proofFileInput) proofFileInput.click();
+        });
+      }
+      if(fileListEl){
+        fileListEl.addEventListener('click', e=>{
+          const target = e.target && typeof e.target.closest === 'function' ? e.target : null;
+          if(!target) return;
+
+          const removeBtn = target.closest('.file-remove-btn');
+          if(removeBtn){
+            const id = removeBtn.dataset.fileId || '';
+            removeProofFile(id);
+            return;
+          }
+
+          const selectBtn = target.closest('.file-select-btn');
+          if(selectBtn){
+            const id = selectBtn.dataset.fileId || '';
+            switchProofFile(id);
+          }
         });
       }
       window.addEventListener('paste', handleProofFilePaste, true);
@@ -774,7 +963,333 @@
       }
 
       function getActiveProofFileName(){
-        return activeProofFileName || (selectedConfig ? selectedConfig.fileName : '');
+        const activeFile = getActiveProofFile();
+        return (activeFile && activeFile.name) || activeProofFileName || (selectedConfig ? selectedConfig.fileName : '');
+      }
+
+      function makeProofFileId(){
+        proofFileSeq += 1;
+        return 'proof-file-' + Date.now().toString(36) + '-' + proofFileSeq;
+      }
+
+      function getActiveProofFile(){
+        if(!Array.isArray(proofFiles) || proofFiles.length === 0) return null;
+        return proofFiles.find(file=>file && file.id === activeProofFileId) || proofFiles[0] || null;
+      }
+
+      function getProofFileById(id){
+        return proofFiles.find(file=>file && file.id === id) || null;
+      }
+
+      function normalizeProofFileName(name){
+        const fallback = selectedConfig && selectedConfig.fileName ? selectedConfig.fileName : 'Main';
+        const text = String(name || '').trim().replace(/[\\/:*?"<>|]+/g, '-');
+        return text || fallback;
+      }
+
+      function splitProofFileName(name){
+        const cleanName = normalizeProofFileName(name);
+        const lowerName = cleanName.toLowerCase();
+        const extensions = getAllowedProofFileExtensions()
+          .slice()
+          .sort((a,b)=>b.length - a.length);
+        const matchedExt = extensions.find(ext=>lowerName.endsWith(ext)) || '';
+        if(!matchedExt) return { stem: cleanName, ext: '' };
+        return {
+          stem: cleanName.slice(0, cleanName.length - matchedExt.length) || 'Main',
+          ext: cleanName.slice(cleanName.length - matchedExt.length)
+        };
+      }
+
+      function makeUniqueProofFileName(name, ignoreId = ''){
+        const normalized = normalizeProofFileName(name);
+        const exists = candidate => proofFiles.some(file=>{
+          if(!file || file.id === ignoreId) return false;
+          return String(file.name || '').toLowerCase() === String(candidate || '').toLowerCase();
+        });
+        if(!exists(normalized)) return normalized;
+
+        const parts = splitProofFileName(normalized);
+        for(let i = 2; i < 1000; i += 1){
+          const candidate = parts.stem + ' ' + i + parts.ext;
+          if(!exists(candidate)) return candidate;
+        }
+        return parts.stem + ' ' + Date.now().toString(36) + parts.ext;
+      }
+
+      function getProofFileLineCount(code){
+        const text = String(code || '');
+        if(!text) return 0;
+        return text.split(/\r?\n/).length;
+      }
+
+      function createProofFileRecord(name, code = '', options = {}){
+        const id = typeof options.id === 'string' && options.id.trim()
+          ? options.id.trim()
+          : makeProofFileId();
+        return {
+          id,
+          name: makeUniqueProofFileName(name, id),
+          language: selectedLanguage,
+          code: typeof code === 'string' ? code : '',
+          createdAt: options.createdAt || new Date().toISOString(),
+          updatedAt: options.updatedAt || new Date().toISOString()
+        };
+      }
+
+      function canReadEditorContent(){
+        return !!(useFallbackEditor || editorInstance);
+      }
+
+      function saveActiveProofFileContent(){
+        const activeFile = getActiveProofFile();
+        if(!activeFile || !canReadEditorContent()) return;
+        activeFile.code = getEditorCode();
+        activeFile.updatedAt = new Date().toISOString();
+        renderProofFileList();
+      }
+
+      function setEditorContent(text){
+        const nextText = typeof text === 'string' ? text : '';
+        if(useFallbackEditor){
+          fallbackEditor.value = nextText;
+          fallbackEditor.selectionStart = 0;
+          fallbackEditor.selectionEnd = 0;
+          fallbackEditor.focus();
+          return;
+        }
+
+        if(editorInstance && typeof editorInstance.setValue === 'function'){
+          editorInstance.setValue(nextText);
+          editorInstance.setPosition({ lineNumber: 1, column: 1 });
+          editorInstance.focus();
+          return;
+        }
+
+        initialDraft = nextText;
+      }
+
+      function shouldReplaceSingleEmptyDefaultFile(){
+        if(proofFiles.length !== 1) return false;
+        const file = proofFiles[0];
+        if(!file) return false;
+        const isDefaultName = String(file.name || '').toLowerCase() === String(selectedConfig.fileName || '').toLowerCase();
+        return isDefaultName && !String(file.code || '').trim();
+      }
+
+      function renderProofFileList(){
+        if(!fileListEl) return;
+        fileListEl.innerHTML = '';
+        if(!Array.isArray(proofFiles) || proofFiles.length === 0){
+          const empty = document.createElement('div');
+          empty.className = 'file-list-empty';
+          empty.textContent = 'No files';
+          fileListEl.appendChild(empty);
+          return;
+        }
+
+        proofFiles.forEach(file=>{
+          const row = document.createElement('div');
+          row.className = 'file-row';
+          if(file.id === activeProofFileId) row.classList.add('active');
+
+          const select = document.createElement('button');
+          select.type = 'button';
+          select.className = 'file-select-btn';
+          select.dataset.fileId = file.id;
+
+          const label = document.createElement('span');
+          label.className = 'file-label';
+          label.textContent = file.name || selectedConfig.fileName;
+
+          const meta = document.createElement('span');
+          meta.className = 'file-meta';
+          const lineCount = getProofFileLineCount(file.code);
+          meta.textContent = lineCount + (lineCount === 1 ? ' line' : ' lines');
+
+          select.append(label, meta);
+
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'file-remove-btn';
+          remove.dataset.fileId = file.id;
+          remove.setAttribute('aria-label', 'Remove ' + (file.name || 'file'));
+          remove.textContent = '×';
+          remove.disabled = proofFiles.length <= 1;
+
+          row.append(select, remove);
+          fileListEl.appendChild(row);
+        });
+      }
+
+      function setupProofFiles(rawFiles, activeId, fallbackName, fallbackCode){
+        proofFiles = [];
+        activeProofFileId = '';
+        proofFileSeq = 0;
+
+        const source = Array.isArray(rawFiles) ? rawFiles : [];
+        source.forEach(raw=>{
+          if(!raw || typeof raw !== 'object') return;
+          const rawLanguage = raw.language ? resolveLanguage(raw.language) : selectedLanguage;
+          if(rawLanguage !== selectedLanguage) return;
+          const file = createProofFileRecord(raw.name || raw.fileName || fallbackName, raw.code || '', {
+            id: raw.id,
+            createdAt: raw.createdAt,
+            updatedAt: raw.updatedAt
+          });
+          proofFiles.push(file);
+        });
+
+        if(proofFiles.length === 0){
+          proofFiles.push(createProofFileRecord(fallbackName, fallbackCode || ''));
+        }
+
+        const requestedActive = typeof activeId === 'string' && activeId.trim() ? activeId.trim() : '';
+        activeProofFileId = proofFiles.some(file=>file.id === requestedActive)
+          ? requestedActive
+          : proofFiles[0].id;
+
+        const activeFile = getActiveProofFile();
+        if(activeFile) setActiveProofFileName(activeFile.name);
+        renderProofFileList();
+      }
+
+      function buildProofFileSnapshot(){
+        saveActiveProofFileContent();
+        if(!Array.isArray(proofFiles) || proofFiles.length === 0){
+          setupProofFiles([], '', getActiveProofFileName(), getSafeEditorDraftForPersistence());
+        }
+        return proofFiles.map(file=>({
+          id: file.id,
+          name: file.name,
+          language: selectedLanguage,
+          code: typeof file.code === 'string' ? file.code : '',
+          createdAt: file.createdAt || '',
+          updatedAt: file.updatedAt || new Date().toISOString()
+        }));
+      }
+
+      function switchProofFile(id){
+        const nextFile = getProofFileById(id);
+        if(!nextFile || nextFile.id === activeProofFileId) return;
+        saveActiveProofFileContent();
+        activeProofFileId = nextFile.id;
+        setActiveProofFileName(nextFile.name);
+        setEditorContent(nextFile.code);
+        renderProofFileList();
+        scheduleProofDraftSave('switch-proof-file');
+      }
+
+      function removeProofFile(id){
+        if(!id || proofFiles.length <= 1){
+          setStatus('Keep one file', true);
+          return;
+        }
+        saveActiveProofFileContent();
+        const index = proofFiles.findIndex(file=>file && file.id === id);
+        if(index < 0) return;
+        const removingActive = proofFiles[index].id === activeProofFileId;
+        proofFiles.splice(index, 1);
+        if(removingActive){
+          const nextFile = proofFiles[Math.max(0, index - 1)] || proofFiles[0];
+          activeProofFileId = nextFile ? nextFile.id : '';
+          if(nextFile){
+            setActiveProofFileName(nextFile.name);
+            setEditorContent(nextFile.code);
+          }
+        }
+        renderProofFileList();
+        setStatus('File removed');
+        scheduleProofDraftSave('remove-proof-file');
+      }
+
+      function addProofFileRecords(records){
+        const source = Array.isArray(records) ? records : [];
+        if(source.length === 0) return [];
+        saveActiveProofFileContent();
+
+        const added = [];
+        let startIndex = 0;
+        if(shouldReplaceSingleEmptyDefaultFile()){
+          const target = proofFiles[0];
+          const first = source[0];
+          target.name = makeUniqueProofFileName(first.name || selectedConfig.fileName, target.id);
+          target.code = typeof first.code === 'string' ? first.code : '';
+          target.language = selectedLanguage;
+          target.updatedAt = new Date().toISOString();
+          activeProofFileId = target.id;
+          added.push(target);
+          startIndex = 1;
+        }
+
+        for(let i = startIndex; i < source.length; i += 1){
+          const item = source[i];
+          const file = createProofFileRecord(item.name || selectedConfig.fileName, item.code || '');
+          proofFiles.push(file);
+          added.push(file);
+        }
+
+        const firstAdded = added[0];
+        if(firstAdded){
+          activeProofFileId = firstAdded.id;
+          setActiveProofFileName(firstAdded.name);
+          setEditorContent(firstAdded.code);
+        }
+        renderProofFileList();
+        scheduleProofDraftSave('add-proof-files');
+        return added;
+      }
+
+      async function readProofFileRecords(files){
+        const source = Array.from(files || []);
+        const matched = source.filter(isProofFileForSelectedLanguage);
+        const records = [];
+        let unreadable = 0;
+        for(const file of matched){
+          try{
+            const text = await file.text();
+            records.push({
+              name: getClipboardFileName(file),
+              code: text
+            });
+          }catch(err){
+            unreadable += 1;
+          }
+        }
+        return {
+          records,
+          ignored: source.length - matched.length,
+          unreadable
+        };
+      }
+
+      async function importProofFiles(files, source){
+        const incoming = Array.from(files || []);
+        if(incoming.length === 0) return;
+
+        const result = await readProofFileRecords(incoming);
+        if(result.records.length === 0){
+          const expected = getAllowedProofFileExtensions().join(', ');
+          setStatus('File ignored', true);
+          outputEl.textContent = '[File Ignored]\nOnly ' + selectedLanguage + ' files (' + expected + ') can be added to this editor.';
+          return;
+        }
+
+        const totalLines = result.records.reduce((sum, item)=>sum + getProofFileLineCount(item.code), 0);
+        if(totalLines >= 30){
+          const shouldAdd = window.confirm('You are adding ' + totalLines + ' lines across ' + result.records.length + ' file(s). Continue?');
+          if(!shouldAdd) return;
+        }
+
+        const added = addProofFileRecords(result.records);
+        const details = [];
+        if(result.ignored > 0) details.push(result.ignored + ' ignored');
+        if(result.unreadable > 0) details.push(result.unreadable + ' unreadable');
+        const detailText = details.length ? ' (' + details.join(', ') + ')' : '';
+        setStatus((added.length === 1 ? 'File added' : 'Files added') + detailText);
+        if(source === 'paste'){
+          outputEl.textContent = '[Files]\nExpanded ' + added.length + ' ' + selectedLanguage + ' file(s).' + detailText;
+        }
       }
 
       function safeStorageGet(storage, key){
@@ -1117,6 +1632,10 @@
             lineNumbersMinChars: 3,
             tabSize: 2
           });
+          const activeFile = getActiveProofFile();
+          if(activeFile && typeof activeFile.code === 'string' && activeFile.code !== initialText){
+            editorInstance.setValue(activeFile.code);
+          }
           setEditorReadOnly(false);
 
           editorInstance.addCommand(monacoRef.KeyMod.CtrlCmd | monacoRef.KeyCode.Enter, function(){
@@ -1162,6 +1681,8 @@
           const shouldReturn = window.confirm('The editor has 30+ lines. Return to the proof assistant selection?');
           if(!shouldReturn) return;
         }
+        const files = buildProofFileSnapshot();
+        const activeFile = files.find(file=>file.id === activeProofFileId) || files[0] || null;
 
         await patchTheoremDraftRecord({
           problemKind: getProblemKindFromInit(),
@@ -1171,8 +1692,10 @@
           },
           proof: {
             language: selectedLanguage,
-            fileName: getActiveProofFileName(),
-            code: currentCode,
+            fileName: activeFile ? activeFile.name : getActiveProofFileName(),
+            code: activeFile ? activeFile.code : currentCode,
+            files,
+            activeFileId: activeFile ? activeFile.id : activeProofFileId,
             goalsText: leanGoalsInput ? leanGoalsInput.value : '',
             updatedAt: new Date().toISOString(),
             reason: 'back-navigation'
@@ -1217,33 +1740,6 @@
 
         const active = document.activeElement;
         return !!(active && editorMount.contains(active));
-      }
-
-      function replaceEditorContent(text){
-        if(useFallbackEditor){
-          fallbackEditor.value = text;
-          const nextPos = text.length;
-          fallbackEditor.selectionStart = nextPos;
-          fallbackEditor.selectionEnd = nextPos;
-          fallbackEditor.focus();
-          scheduleProofDraftSave('proof-file-paste');
-          return;
-        }
-
-        if(editorInstance && monacoRef){
-          const model = editorInstance.getModel && editorInstance.getModel();
-          const range = model && typeof model.getFullModelRange === 'function'
-            ? model.getFullModelRange()
-            : editorInstance.getSelection();
-          editorInstance.executeEdits('proof-file-paste', [{
-            range: range,
-            text: text,
-            forceMoveMarkers: true
-          }]);
-          editorInstance.pushUndoStop();
-          editorInstance.focus();
-          scheduleProofDraftSave('proof-file-paste');
-        }
       }
 
       function getAllowedProofFileExtensions(){
@@ -1294,43 +1790,8 @@
 
         if(files.length === 0) return;
 
-        const matchedFiles = files.filter(isProofFileForSelectedLanguage);
-
         e.preventDefault();
-
-        if(matchedFiles.length === 0){
-          const expected = getAllowedProofFileExtensions().join(', ');
-          setStatus('File ignored', true);
-          outputEl.textContent = '[Paste Ignored]\nOnly ' + selectedLanguage + ' files (' + expected + ') can be expanded in this editor.';
-          return;
-        }
-
-        const chunks = [];
-        for(const file of matchedFiles){
-          try{
-            const text = await file.text();
-            chunks.push(text);
-          }catch(err){
-            // Skip unreadable files and continue.
-          }
-        }
-
-        if(chunks.length === 0){
-          setStatus('Paste failed', true);
-          outputEl.textContent = '[Paste Error]\nThe selected file could not be read from clipboard.';
-          return;
-        }
-
-        const pasted = chunks.join('\n\n');
-        const lineCount = pasted.length === 0 ? 0 : pasted.split(/\r?\n/).length;
-        if(lineCount >= 30){
-          const shouldPaste = window.confirm('You are pasting ' + lineCount + ' lines. Continue?');
-          if(!shouldPaste) return;
-        }
-
-        replaceEditorContent(pasted);
-        setActiveProofFileName(getClipboardFileName(matchedFiles[0]));
-        setStatus('File expanded');
+        await importProofFiles(files, 'paste');
       }
 
 
@@ -1582,6 +2043,11 @@
       }
 
       function getSafeEditorDraftForPersistence(){
+        saveActiveProofFileContent();
+        const activeFile = getActiveProofFile();
+        if(activeFile){
+          return typeof activeFile.code === 'string' ? activeFile.code : '';
+        }
         if(useFallbackEditor || editorInstance){
           return getEditorCode();
         }
@@ -1589,6 +2055,8 @@
       }
 
       function buildProofDraftSnapshot(reason = 'proof-editor'){
+        const files = buildProofFileSnapshot();
+        const activeFile = files.find(file=>file.id === activeProofFileId) || files[0] || null;
         return {
           problemKind: getProblemKindFromInit(),
           title: {
@@ -1597,8 +2065,10 @@
           },
           proof: {
             language: selectedLanguage,
-            fileName: getActiveProofFileName(),
-            code: getSafeEditorDraftForPersistence(),
+            fileName: activeFile ? activeFile.name : getActiveProofFileName(),
+            code: activeFile ? activeFile.code : getSafeEditorDraftForPersistence(),
+            files,
+            activeFileId: activeFile ? activeFile.id : activeProofFileId,
             goalsText: leanGoalsInput ? leanGoalsInput.value : '',
             updatedAt: new Date().toISOString(),
             reason
@@ -1628,12 +2098,12 @@
 
       async function restoreProofDraftFromBackground(){
         if(!theoremDraftStore || typeof theoremDraftStore.read !== 'function'){
-          return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName() };
+          return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName(), files: [], activeFileId: '' };
         }
         try{
           const record = await theoremDraftStore.read();
           if(!record || typeof record !== 'object'){
-            return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName() };
+            return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName(), files: [], activeFileId: '' };
           }
 
           const storedTitle = record.title && typeof record.title.text === 'string'
@@ -1658,15 +2128,27 @@
             && typeof storedProof.fileName === 'string'
             ? storedProof.fileName
             : getActiveProofFileName();
+          const nextFiles = storedProof
+            && storedProof.language === selectedLanguage
+            && Array.isArray(storedProof.files)
+            ? storedProof.files
+            : [];
+          const nextActiveFileId = storedProof
+            && storedProof.language === selectedLanguage
+            && typeof storedProof.activeFileId === 'string'
+            ? storedProof.activeFileId
+            : '';
 
           return {
             summary: nextSummary,
             draft: nextDraft,
             goalsText: nextGoalsText,
-            fileName: nextFileName
+            fileName: nextFileName,
+            files: nextFiles,
+            activeFileId: nextActiveFileId
           };
         }catch(err){
-          return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName() };
+          return { summary: summaryText, draft: initialDraft, goalsText: '', fileName: getActiveProofFileName(), files: [], activeFileId: '' };
         }
       }
 
@@ -1677,8 +2159,11 @@
         summaryText = typeof restored.summary === 'string' ? restored.summary : summaryText;
         initialDraft = typeof restored.draft === 'string' ? restored.draft : initialDraft;
         const restoredGoalsText = typeof restored.goalsText === 'string' ? restored.goalsText : '';
-        if(typeof restored.fileName === 'string' && restored.fileName.trim()){
-          setActiveProofFileName(restored.fileName);
+        setupProofFiles(restored.files, restored.activeFileId, restored.fileName, initialDraft);
+        const activeFile = getActiveProofFile();
+        if(activeFile){
+          initialDraft = activeFile.code || '';
+          setActiveProofFileName(activeFile.name);
         }
 
         setInitialOutputMessage(selectedLanguage, getActiveProofFileName(), initPayload, summaryText);
@@ -2988,7 +3473,7 @@
         runBtn.disabled = true;
         setStatus('Running...');
 
-        const code = getEditorCode();
+        const code = getSafeEditorDraftForPersistence();
         let validationResult = null;
 
         let shouldResetCoq = false;
