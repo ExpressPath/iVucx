@@ -1719,12 +1719,12 @@
 
     .login-popup-card{
       position:relative;
-      width:min(470px, 100%);
-      border-radius:22px;
-      border:1px solid rgba(188,216,255,0.24);
-      padding:24px 22px 22px;
-      background:linear-gradient(145deg, rgba(11,30,66,0.95), rgba(8,22,51,0.95));
-      box-shadow:0 0 0 1px rgba(255,255,255,0.06),0 20px 48px rgba(0,0,0,0.44),0 0 46px rgba(90,180,255,0.22);
+      width:min(430px, 100%);
+      border-radius:24px;
+      border:1px solid rgba(210,228,255,0.28);
+      padding:26px 24px 24px;
+      background:linear-gradient(145deg, rgba(9,22,50,0.96), rgba(6,15,36,0.96));
+      box-shadow:0 0 0 1px rgba(255,255,255,0.08),0 24px 62px rgba(0,0,0,0.48),0 0 52px rgba(84,158,255,0.2);
       overflow:hidden;
     }
 
@@ -1768,13 +1768,23 @@
       letter-spacing:.01em;
     }
 
+    .login-popup-title.is-hidden{
+      position:absolute;
+      width:1px;
+      height:1px;
+      overflow:hidden;
+      clip:rect(0 0 0 0);
+      white-space:nowrap;
+    }
+
     .login-popup-copy{
       position:relative;
       z-index:1;
-      margin:10px 0 18px;
-      color:rgba(255,255,255,0.74);
-      font-size:14px;
+      margin:0 0 18px;
+      color:rgba(235,244,255,0.72);
+      font-size:13px;
       line-height:1.45;
+      text-align:center;
     }
 
     .login-popup-switch{
@@ -1809,7 +1819,7 @@
       z-index:1;
       display:flex;
       flex-direction:column;
-      gap:10px;
+      gap:12px;
     }
 
     .login-popup-view{
@@ -1890,13 +1900,21 @@
     .login-popup-input{
       width:100%;
       height:48px;
-      border-radius:12px;
-      border:1px solid rgba(255,255,255,0.28);
-      background:rgba(255,255,255,0.12);
-      color:#fff;
+      box-sizing:border-box;
+      border-radius:14px;
+      border:1px solid rgba(213,228,255,0.24);
+      background:rgba(255,255,255,0.08);
+      color:#f6f9ff;
       font-size:15px;
       padding:0 14px;
       outline:none;
+      transition:border-color .18s ease,background-color .18s ease,box-shadow .18s ease;
+    }
+
+    .login-popup-input:focus{
+      border-color:rgba(174,210,255,0.6);
+      background:rgba(255,255,255,0.12);
+      box-shadow:0 0 0 4px rgba(74,144,255,0.14);
     }
 
     .login-popup-input::placeholder{
@@ -1932,17 +1950,80 @@
       width:100%;
       height:50px;
       border-radius:14px;
-      border:1px solid rgba(255,255,255,0.7);
-      background:rgba(255,255,255,0.18);
-      color:#fff;
-      font-size:16px;
+      border:1px solid rgba(220,230,245,0.82);
+      background:rgba(255,255,255,0.96);
+      color:#172033;
+      font-size:15px;
       font-weight:680;
       cursor:pointer;
-      transition:background-color .2s ease,transform .2s ease;
+      transition:background-color .2s ease,transform .2s ease,border-color .2s ease,box-shadow .2s ease;
     }
 
     .login-popup-submit:hover{
-      background:rgba(255,255,255,0.3);
+      background:#fff;
+      transform:translateY(-1px);
+      box-shadow:0 12px 26px rgba(0,0,0,0.18);
+    }
+
+    .login-popup-submit.google-login-btn{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:12px;
+      letter-spacing:.01em;
+    }
+
+    .google-logo-mark{
+      width:20px;
+      height:20px;
+      display:block;
+      flex:0 0 20px;
+    }
+
+    .login-popup-divider{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      color:rgba(229,239,255,0.5);
+      font-size:12px;
+      line-height:1;
+      margin:3px 0 1px;
+    }
+
+    .login-popup-divider::before,
+    .login-popup-divider::after{
+      content:'';
+      height:1px;
+      flex:1;
+      background:rgba(213,228,255,0.16);
+    }
+
+    .email-login-row{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:8px;
+    }
+
+    .email-login-row .login-popup-input{
+      height:46px;
+    }
+
+    .email-login-btn{
+      height:46px;
+      min-width:92px;
+      border-radius:14px;
+      border:1px solid rgba(169,204,255,0.38);
+      background:rgba(87,145,255,0.18);
+      color:#edf5ff;
+      font-size:13px;
+      font-weight:720;
+      cursor:pointer;
+      transition:background-color .18s ease,border-color .18s ease,transform .18s ease;
+    }
+
+    .email-login-btn:hover{
+      background:rgba(87,145,255,0.28);
+      border-color:rgba(178,214,255,0.55);
       transform:translateY(-1px);
     }
 
@@ -2564,23 +2645,28 @@
         <div id="loginLoadingText">Checking account state...</div>
       </div>
       <div class="login-popup-main" id="loginPopupMain">
-        <h2 class="login-popup-title" id="loginPopupTitle">BlueMode Access</h2>
-        <p class="login-popup-copy" id="loginPopupCopy">Use your Account ID and Recovery Password to log in.</p>
-        <div class="login-popup-switch" id="loginPopupSwitch" role="tablist" aria-label="BlueMode authentication">
-          <button class="login-switch-btn is-active" type="button" data-auth-view="login" role="tab" aria-selected="true">Login</button>
-          <button class="login-switch-btn" type="button" data-auth-view="signin" role="tab" aria-selected="false">Sign in</button>
-        </div>
+        <h2 class="login-popup-title is-hidden" id="loginPopupTitle">Google sign in</h2>
+        <p class="login-popup-copy" id="loginPopupCopy">Sign in with a Google account.</p>
         <section class="login-popup-view is-active" data-auth-panel="login">
           <form class="login-popup-form" id="loginPopupForm">
-            <label class="login-popup-label" for="loginAccountIdInput">Account ID</label>
-            <input class="login-popup-input" id="loginAccountIdInput" type="text" autocomplete="username" required placeholder="VX-..." />
-            <label class="login-popup-label" for="loginRecoveryInput">Recovery Password</label>
-            <input class="login-popup-input" id="loginRecoveryInput" type="password" autocomplete="current-password" required placeholder="RCV-..." />
-            <button class="login-popup-submit" type="submit">Login with ID</button>
+            <button class="login-popup-submit google-login-btn" type="submit" aria-label="Sign in with Google">
+              <svg class="google-logo-mark" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06L5.84 9.9C6.71 7.31 9.14 5.38 12 5.38z"/>
+              </svg>
+              <span>Google</span>
+            </button>
+            <div class="login-popup-divider">or</div>
+            <label class="login-popup-label" for="loginEmailInput">Email address</label>
+            <div class="email-login-row">
+              <input class="login-popup-input" id="loginEmailInput" type="email" autocomplete="email" inputmode="email" placeholder="name@example.com" />
+              <button class="email-login-btn" id="emailLoginBtn" type="button">Login</button>
+            </div>
           </form>
-          <button class="login-popup-link" id="switchToSigninBtn" type="button">I do not have an ID</button>
         </section>
-        <section class="login-popup-view" data-auth-panel="signin">
+        <section class="login-popup-view" data-auth-panel="signin" hidden>
           <div class="login-popup-hint">Generate a long Account ID and Recovery Password, then save both values securely.</div>
           <div class="login-popup-hint legacy-import" id="legacyImportHint" hidden>Legacy ID detected on this device.</div>
           <button class="login-popup-submit secondary legacy-import" id="importLegacyBtn" type="button" hidden>Import Local ID</button>
@@ -2675,6 +2761,8 @@
   const loginPopupForm = document.getElementById('loginPopupForm');
   const loginPopupSwitch = document.getElementById('loginPopupSwitch');
   const loginPopupViewPanels = Array.from(document.querySelectorAll('[data-auth-panel]'));
+  const loginEmailInput = document.getElementById('loginEmailInput');
+  const emailLoginBtn = document.getElementById('emailLoginBtn');
   const loginAccountIdInput = document.getElementById('loginAccountIdInput');
   const loginRecoveryInput = document.getElementById('loginRecoveryInput');
   const switchToSigninBtn = document.getElementById('switchToSigninBtn');
@@ -3572,6 +3660,9 @@
       const nextQuery = params.toString();
       const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
       window.history.replaceState(null, '', nextUrl);
+      if(googleConnected === 'blue'){
+        setTimeout(()=>applyState(2), 0);
+      }
     }
   });
 
@@ -3699,6 +3790,18 @@
 
   if(loginPopupForm){
     loginPopupForm.addEventListener('submit', handleLoginSubmit);
+  }
+  if(emailLoginBtn){
+    emailLoginBtn.addEventListener('click', ()=>{
+      handleEmailLoginSubmit();
+    });
+  }
+  if(loginEmailInput){
+    loginEmailInput.addEventListener('keydown', e=>{
+      if(e.key !== 'Enter') return;
+      e.preventDefault();
+      handleEmailLoginSubmit();
+    });
   }
 
   if(loginPopupSwitch){
@@ -4085,8 +4188,8 @@
   const POPUP_LOADING_TEXT = 'Checking account state...';
   const AUTH_VIEW_LOGIN = 'login';
   const AUTH_VIEW_SIGNIN = 'signin';
-  const LOGIN_VIEW_COPY = 'Use your Account ID and Recovery Password to log in.';
-  const SIGNIN_VIEW_COPY = 'No ID yet? Generate one and store it in a secure place.';
+  const LOGIN_VIEW_COPY = 'Sign in with a Google account.';
+  const SIGNIN_VIEW_COPY = LOGIN_VIEW_COPY;
   const BLUE_ACCOUNT_HINT_KEY = 'ivucxBlueModeAccountHintV1';
   const LEGACY_AUTH_KEY = 'ivucxBlueModeAuthV1';
   let popupAuthView = AUTH_VIEW_LOGIN;
@@ -4578,7 +4681,7 @@
   }
 
   function hasBlueAuth(){
-    return readBlueAccountHint().length > 0;
+    return false;
   }
 
   function getCopyForAuthView(view){
@@ -4586,7 +4689,7 @@
   }
 
   function getInitialAuthView(){
-    return hasBlueAuth() ? AUTH_VIEW_LOGIN : AUTH_VIEW_SIGNIN;
+    return AUTH_VIEW_LOGIN;
   }
 
   function chunkToken(token, size){
@@ -4833,8 +4936,11 @@
       return;
     }
 
-    if(loginAccountIdInput){
-      loginAccountIdInput.focus();
+    const loginSubmitBtn = loginPopupForm
+      ? loginPopupForm.querySelector('button[type="submit"]')
+      : null;
+    if(loginSubmitBtn){
+      loginSubmitBtn.focus();
     }
   }
 
@@ -4880,19 +4986,6 @@
 
   async function handleLoginSubmit(e){
     e.preventDefault();
-    if(!loginAccountIdInput || !loginRecoveryInput) return;
-
-    const accountId = loginAccountIdInput.value.trim();
-    const recoveryPassword = loginRecoveryInput.value.trim();
-    if(!accountId || !recoveryPassword){
-      setPopupStatus('Account ID and Recovery Password are required.');
-      if(!accountId){
-        loginAccountIdInput.focus();
-      }else{
-        loginRecoveryInput.focus();
-      }
-      return;
-    }
 
     const loginSubmitBtn = loginPopupForm
       ? loginPopupForm.querySelector('button[type="submit"]')
@@ -4901,43 +4994,38 @@
     if(loginSubmitBtn){
       loginSubmitBtn.disabled = true;
     }
-    setPopupStatus('Signing in...');
+    startBlueGoogleAuth('');
+  }
 
-    try{
-      const result = await requestBlueLogin(accountId, recoveryPassword);
+  function normalizeLoginEmail(value){
+    const email = String(value || '').trim();
+    if(!email) return '';
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
+  }
 
-      if(result && typeof result.accountId === 'string'){
-        saveBlueAccountHint(result.accountId);
-      }else{
-        saveBlueAccountHint(accountId);
-      }
-
-      blueModeLoggedIn = !!(result && result.loggedIn);
-      blueModeRewards = Array.isArray(result && result.rewards) ? result.rewards : [];
-      renderRewards();
-      loginPopupDismissed = true;
-      closeLoginPopup(true);
-      hydrateCookieConsentFromServer();
-    }catch(err){
-      const message = err && typeof err.message === 'string'
-        ? err.message
-        : 'Login failed. Please try again.';
-      setPopupStatus(message);
-      if(loginRecoveryInput){
-        loginRecoveryInput.select();
-      }
-      const legacy = readLegacyAuth();
-      if(legacy){
-        setPopupStatus('Legacy ID detected. Please import it from Sign in.');
-        setAuthView(AUTH_VIEW_SIGNIN, { keepStatus: true });
-      }else if(err && (err.status === 404 || (err.status === 401 && !hasBlueAuth()))){
-        setAuthView(AUTH_VIEW_SIGNIN, { keepStatus: true });
-      }
-    }finally{
-      if(loginSubmitBtn){
-        loginSubmitBtn.disabled = false;
-      }
+  function handleEmailLoginSubmit(){
+    const email = normalizeLoginEmail(loginEmailInput ? loginEmailInput.value : '');
+    if(!email){
+      setPopupStatus('Enter a valid email address.');
+      if(loginEmailInput) loginEmailInput.focus();
+      return;
     }
+    if(emailLoginBtn){
+      emailLoginBtn.disabled = true;
+    }
+    startBlueGoogleAuth(email);
+  }
+
+  function startBlueGoogleAuth(loginHint){
+    setPopupStatus('Opening Google...');
+    const returnTo = `${window.location.pathname}${window.location.search || ''}${window.location.hash || ''}` || '/Vucks.html';
+    const params = new URLSearchParams({
+      kind: 'blue',
+      returnTo
+    });
+    const hint = normalizeLoginEmail(loginHint);
+    if(hint) params.set('login_hint', hint);
+    window.location.href = `/api/google-auth-start?${params.toString()}`;
   }
 
   function showBlueModePanel(){
@@ -5529,12 +5617,11 @@
     if(!blueModeLoggedIn){
       const wrap = document.createElement('div');
       wrap.className = 'rewards-login-wrap';
-      const hasAccount = hasBlueAuth();
 
       const loginBtn = document.createElement('button');
       loginBtn.type = 'button';
       loginBtn.className = 'rewards-login-btn';
-      loginBtn.textContent = hasAccount ? 'Login' : 'Sign in';
+      loginBtn.textContent = 'Continue with Google';
       loginBtn.addEventListener('click', ()=>{
         loginPopupDismissed = false;
         showAuthPopup();
@@ -5547,7 +5634,7 @@
 
     const authId = document.createElement('span');
     authId.className = 'vx-auth-id';
-    authId.textContent = readBlueAccountHint() || 'Signed in';
+    authId.textContent = readBlueAccountHint() || 'Google account';
 
     const logoutBtn = document.createElement('button');
     logoutBtn.type = 'button';
