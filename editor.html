@@ -328,6 +328,28 @@
       background:rgba(255,255,255,0.04);
     }
 
+    .file-list.drag-over-root{
+      outline:1px dashed rgba(47,129,247,0.55);
+      outline-offset:-5px;
+      background:rgba(47,129,247,0.05);
+    }
+
+    .file-row.dragging,
+    .folder-row.dragging{
+      opacity:.48;
+    }
+
+    .file-row.drop-target,
+    .folder-row.drop-target{
+      border-color:rgba(47,129,247,0.72);
+      background:rgba(47,129,247,0.16);
+    }
+
+    .folder-row.drop-blocked{
+      border-color:rgba(255,123,114,0.55);
+      background:rgba(255,123,114,0.1);
+    }
+
     .file-select-btn,
     .folder-select-btn{
       min-width:0;
@@ -906,6 +928,7 @@
       let activeProofFileId = '';
       let activeFolderPath = '';
       let collapsedFolders = {};
+      let proofDragItem = null;
       let proofFileSeq = 0;
       let toastTimer = null;
       let toastPinned = false;
@@ -981,6 +1004,11 @@
             switchProofFile(id);
           }
         });
+        fileListEl.addEventListener('dragstart', handleProofTreeDragStart);
+        fileListEl.addEventListener('dragover', handleProofTreeDragOver);
+        fileListEl.addEventListener('dragleave', handleProofTreeDragLeave);
+        fileListEl.addEventListener('drop', handleProofTreeDrop);
+        fileListEl.addEventListener('dragend', clearProofTreeDragState);
       }
       window.addEventListener('paste', handleProofFilePaste, true);
       window.addEventListener('pagehide', ()=>{
@@ -1081,6 +1109,271 @@
         if(!folder) return file;
         if(file.includes('/')) return file;
         return folder + '/' + file;
+      }
+
+      function proofPathEquals(a, b){
+        return normalizeProofFolderPath(a).toLowerCase() === normalizeProofFolderPath(b).toLowerCase();
+      }
+
+      function isProofPathInsideFolder(path, folderPath){
+        const normalizedPath = normalizeProofFolderPath(path);
+        const normalizedFolder = normalizeProofFolderPath(folderPath);
+        if(!normalizedPath || !normalizedFolder) return false;
+        const lowerPath = normalizedPath.toLowerCase();
+        const lowerFolder = normalizedFolder.toLowerCase();
+        return lowerPath === lowerFolder || lowerPath.startsWith(lowerFolder + '/');
+      }
+
+      function getProofPathRelativeToFolder(path, folderPath){
+        const normalizedPath = normalizeProofFolderPath(path);
+        const normalizedFolder = normalizeProofFolderPath(folderPath);
+        if(!normalizedFolder) return normalizedPath;
+        if(proofPathEquals(normalizedPath, normalizedFolder)) return '';
+        if(!isProofPathInsideFolder(normalizedPath, normalizedFolder)) return normalizedPath;
+        return normalizedPath.slice(normalizedFolder.length + 1);
+      }
+
+      function getProofFolderBaseName(folderPath){
+        const normalized = normalizeProofFolderPath(folderPath);
+        const parts = normalized.split('/').filter(Boolean);
+        return parts[parts.length - 1] || normalized;
+      }
+
+      function getProofFolderParentPath(folderPath){
+        const normalized = normalizeProofFolderPath(folderPath);
+        const parts = normalized.split('/').filter(Boolean);
+        parts.pop();
+        return parts.join('/');
+      }
+
+      function escapeProofSelectorValue(value){
+        if(window.CSS && typeof window.CSS.escape === 'function'){
+          return window.CSS.escape(String(value || ''));
+        }
+        return String(value || '').replace(/["\\]/g, '\\$&');
+      }
+
+      function makeUniqueProofFolderPath(folderPath, ignoreFolderPath = ''){
+        const normalized = normalizeProofFolderPath(folderPath);
+        if(!normalized) return '';
+        const ignored = normalizeProofFolderPath(ignoreFolderPath);
+        const exists = candidate => buildProofFolderSnapshot().some(path=>{
+          const current = normalizeProofFolderPath(path);
+          if(ignored && isProofPathInsideFolder(current, ignored)) return false;
+          return current.toLowerCase() === String(candidate || '').toLowerCase();
+        });
+        if(!exists(normalized)) return normalized;
+
+        const parent = getProofFolderParentPath(normalized);
+        const base = getProofFolderBaseName(normalized) || 'Folder';
+        for(let i = 2; i < 1000; i += 1){
+          const candidate = parent ? parent + '/' + base + ' ' + i : base + ' ' + i;
+          if(!exists(candidate)) return candidate;
+        }
+        return parent ? parent + '/' + base + ' ' + Date.now().toString(36) : base + ' ' + Date.now().toString(36);
+      }
+
+      function getProofTreeDropFolder(event){
+        const target = event && event.target && typeof event.target.closest === 'function'
+          ? event.target
+          : null;
+        if(!target) return '';
+        const folderRow = target.closest('.folder-row');
+        if(folderRow && fileListEl && fileListEl.contains(folderRow)){
+          return normalizeProofFolderPath(folderRow.dataset.folderPath || '');
+        }
+        const fileRow = target.closest('.file-row');
+        if(fileRow && fileListEl && fileListEl.contains(fileRow)){
+          const file = proofFiles.find(entry=>entry && entry.id === fileRow.dataset.fileId);
+          return file ? getProofFileFolderPath(file.name) : '';
+        }
+        return '';
+      }
+
+      function isProofTreeDropAllowed(item, targetFolder){
+        if(!item || !item.type) return false;
+        const target = normalizeProofFolderPath(targetFolder);
+        if(item.type === 'file'){
+          const file = proofFiles.find(entry=>entry && entry.id === item.id);
+          if(!file) return false;
+          return !proofPathEquals(getProofFileFolderPath(file.name), target);
+        }
+        if(item.type === 'folder'){
+          const source = normalizeProofFolderPath(item.path);
+          if(!source) return false;
+          if(proofPathEquals(source, target)) return false;
+          if(target && isProofPathInsideFolder(target, source)) return false;
+          return !proofPathEquals(getProofFolderParentPath(source), target);
+        }
+        return false;
+      }
+
+      function clearProofTreeDropClasses(){
+        if(!fileListEl) return;
+        fileListEl.classList.remove('drag-over-root');
+        fileListEl.querySelectorAll('.drop-target,.drop-blocked,.dragging').forEach(row=>{
+          row.classList.remove('drop-target', 'drop-blocked', 'dragging');
+        });
+      }
+
+      function setProofTreeDropVisual(targetFolder, allowed){
+        clearProofTreeDropClasses();
+        if(!fileListEl || !proofDragItem) return;
+        const selector = targetFolder
+          ? '.folder-row[data-folder-path="' + escapeProofSelectorValue(targetFolder) + '"]'
+          : '';
+        const row = selector ? fileListEl.querySelector(selector) : null;
+        if(row){
+          row.classList.add(allowed ? 'drop-target' : 'drop-blocked');
+        }else if(allowed){
+          fileListEl.classList.add('drag-over-root');
+        }
+        const draggingSelector = proofDragItem.type === 'file'
+          ? '.file-row[data-file-id="' + escapeProofSelectorValue(proofDragItem.id) + '"]'
+          : '.folder-row[data-folder-path="' + escapeProofSelectorValue(proofDragItem.path) + '"]';
+        const draggingRow = fileListEl.querySelector(draggingSelector);
+        if(draggingRow) draggingRow.classList.add('dragging');
+      }
+
+      function handleProofTreeDragStart(event){
+        const target = event && event.target && typeof event.target.closest === 'function'
+          ? event.target
+          : null;
+        if(!target) return;
+        const fileRow = target.closest('.file-row');
+        const folderRow = target.closest('.folder-row');
+        if(fileRow && fileRow.dataset.fileId){
+          proofDragItem = { type: 'file', id: fileRow.dataset.fileId };
+        }else if(folderRow && folderRow.dataset.folderPath){
+          proofDragItem = { type: 'folder', path: normalizeProofFolderPath(folderRow.dataset.folderPath) };
+        }else{
+          proofDragItem = null;
+          return;
+        }
+        if(event.dataTransfer){
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', JSON.stringify(proofDragItem));
+        }
+        clearProofTreeDropClasses();
+        target.closest('.file-row,.folder-row').classList.add('dragging');
+      }
+
+      function handleProofTreeDragOver(event){
+        if(!proofDragItem) return;
+        const targetFolder = getProofTreeDropFolder(event);
+        const allowed = isProofTreeDropAllowed(proofDragItem, targetFolder);
+        if(allowed){
+          event.preventDefault();
+          if(event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        }
+        setProofTreeDropVisual(targetFolder, allowed);
+      }
+
+      function handleProofTreeDragLeave(event){
+        if(!fileListEl || !proofDragItem) return;
+        const related = event.relatedTarget;
+        if(related && fileListEl.contains(related)) return;
+        clearProofTreeDropClasses();
+      }
+
+      function handleProofTreeDrop(event){
+        if(!proofDragItem) return;
+        const targetFolder = getProofTreeDropFolder(event);
+        const allowed = isProofTreeDropAllowed(proofDragItem, targetFolder);
+        event.preventDefault();
+        if(allowed){
+          moveProofTreeItem(proofDragItem, targetFolder);
+        }else{
+          setStatus('Move ignored', true);
+        }
+        clearProofTreeDragState();
+      }
+
+      function clearProofTreeDragState(){
+        proofDragItem = null;
+        clearProofTreeDropClasses();
+      }
+
+      function moveProofTreeItem(item, targetFolder){
+        const target = normalizeProofFolderPath(targetFolder);
+        if(!item || !item.type) return false;
+        if(item.type === 'file'){
+          return moveProofFileToFolder(item.id, target);
+        }
+        if(item.type === 'folder'){
+          return moveProofFolderToFolder(item.path, target);
+        }
+        return false;
+      }
+
+      function moveProofFileToFolder(fileId, targetFolder){
+        const file = proofFiles.find(entry=>entry && entry.id === fileId);
+        if(!file) return false;
+        saveActiveProofFileContent();
+        const baseName = getProofFileBaseName(file.name || selectedConfig.fileName);
+        const nextName = makeUniqueProofFileName(joinProofPath(targetFolder, baseName), file.id);
+        if(String(file.name || '') === nextName){
+          setStatus('Move ignored', true);
+          return false;
+        }
+        file.name = nextName;
+        file.updatedAt = new Date().toISOString();
+        activeFolderPath = getProofFileFolderPath(file.name);
+        expandFolderPath(activeFolderPath);
+        setActiveProofFileName(file.name);
+        renderProofFileList();
+        scheduleProofDraftSave('move-proof-file');
+        setStatus('File moved');
+        return true;
+      }
+
+      function moveProofFolderToFolder(sourceFolder, targetFolder){
+        const source = normalizeProofFolderPath(sourceFolder);
+        const target = normalizeProofFolderPath(targetFolder);
+        if(!source || !isProofTreeDropAllowed({ type: 'folder', path: source }, target)){
+          setStatus('Move ignored', true);
+          return false;
+        }
+        saveActiveProofFileContent();
+        const baseName = getProofFolderBaseName(source);
+        const requestedTarget = target ? target + '/' + baseName : baseName;
+        const nextRoot = makeUniqueProofFolderPath(requestedTarget, source);
+        if(!nextRoot || proofPathEquals(source, nextRoot)){
+          setStatus('Move ignored', true);
+          return false;
+        }
+
+        proofFolders = Array.from(new Set(proofFolders.map(path=>{
+          const current = normalizeProofFolderPath(path);
+          if(!isProofPathInsideFolder(current, source)) return current;
+          const relative = getProofPathRelativeToFolder(current, source);
+          return relative ? nextRoot + '/' + relative : nextRoot;
+        }).filter(Boolean)));
+        proofFiles.forEach(file=>{
+          if(!file) return;
+          const current = normalizeProofFileName(file.name);
+          if(!isProofPathInsideFolder(current, source)) return;
+          const relative = getProofPathRelativeToFolder(current, source);
+          file.name = makeUniqueProofFileName(relative ? nextRoot + '/' + relative : nextRoot + '/' + getProofFileBaseName(current), file.id);
+          file.updatedAt = new Date().toISOString();
+        });
+
+        if(activeFolderPath && isProofPathInsideFolder(activeFolderPath, source)){
+          const relativeActiveFolder = getProofPathRelativeToFolder(activeFolderPath, source);
+          activeFolderPath = relativeActiveFolder ? nextRoot + '/' + relativeActiveFolder : nextRoot;
+        }else{
+          activeFolderPath = nextRoot;
+        }
+        collapsedFolders[nextRoot] = false;
+        expandFolderPath(nextRoot);
+        const activeFile = getActiveProofFile();
+        if(activeFile){
+          setActiveProofFileName(activeFile.name);
+        }
+        renderProofFileList();
+        scheduleProofDraftSave('move-proof-folder');
+        setStatus('Folder moved');
+        return true;
       }
 
       function ensureProofFileExtension(name){
@@ -1354,6 +1647,8 @@
         function renderFolder(node, depth){
           const row = document.createElement('div');
           row.className = 'folder-row';
+          row.draggable = true;
+          row.dataset.folderPath = node.path;
           if(node.path === activeFolderPath) row.classList.add('active-folder');
 
           const select = document.createElement('button');
@@ -1386,6 +1681,8 @@
         function renderFile(file, depth){
           const row = document.createElement('div');
           row.className = 'file-row';
+          row.draggable = true;
+          row.dataset.fileId = file.id;
           if(file.id === activeProofFileId) row.classList.add('active');
 
           const select = document.createElement('button');
