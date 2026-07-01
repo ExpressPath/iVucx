@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
@@ -7,6 +8,14 @@ const MAX_SOURCE_CHARS = 900;
 const MAX_CIC_CHARS = 900;
 const MAX_HISTORY_TURNS = 6;
 const MAX_HISTORY_CHARS = 700;
+const VERTEX_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
+const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+
+let vertexTokenCache = {
+  cacheKey: '',
+  accessToken: '',
+  expiresAt: 0
+};
 
 function clamp(num, min, max) {
   return Math.max(min, Math.min(max, num));
@@ -35,7 +44,64 @@ function getGeminiModel() {
   return safeString(process.env.GEMINI_MODEL, DEFAULT_MODEL);
 }
 
+function isTruthyEnv(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+}
+
+function getVertexConfig() {
+  const serviceAccountJson = safeString(
+    process.env.GOOGLE_VERTEX_SERVICE_ACCOUNT_JSON
+      || process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+      || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+  );
+  const project = safeString(
+    process.env.GOOGLE_CLOUD_PROJECT
+      || process.env.GCP_PROJECT
+      || process.env.GCLOUD_PROJECT
+  );
+  const location = safeString(
+    process.env.GOOGLE_CLOUD_LOCATION
+      || process.env.GEMINI_VERTEX_LOCATION
+      || process.env.VERTEX_AI_LOCATION,
+    'us-central1'
+  );
+  const model = safeString(
+    process.env.GEMINI_VERTEX_MODEL
+      || process.env.GEMINI_MODEL,
+    DEFAULT_MODEL
+  );
+  return {
+    enabled: isTruthyEnv(process.env.GEMINI_VERTEX_ENABLED) || Boolean(serviceAccountJson),
+    serviceAccountJson,
+    project,
+    location,
+    model
+  };
+}
+
+function getGeminiProxyConfig() {
+  const url = safeString(
+    process.env.GEMINI_VERTEX_PROXY_URL
+      || process.env.GEMINI_PROXY_URL
+  );
+  return {
+    enabled: Boolean(url),
+    url,
+    key: safeString(
+      process.env.GEMINI_VERTEX_PROXY_KEY
+        || process.env.GEMINI_PROXY_KEY
+    ),
+    model: safeString(
+      process.env.GEMINI_VERTEX_MODEL
+        || process.env.GEMINI_MODEL,
+      DEFAULT_MODEL
+    )
+  };
+}
+
 function getKindFromMode(mode) {
+  const normalized = normalizeProblemKind(mode);
+  if (normalized) return normalized;
   return String(mode || '').trim().toLowerCase() === 'q' ? 'problem' : 'theorem';
 }
 
@@ -44,6 +110,17 @@ function normalizeProblemKind(value) {
   if (['problem', 'problems', 'unsolved', 'q'].includes(text)) return 'problem';
   if (['theorem', 'theorems', 'proof', 'proofs', 'solved', 'a'].includes(text)) return 'theorem';
   return '';
+}
+
+function getRequestTargetKind(body) {
+  const source = isPlainObject(body) ? body : {};
+  return normalizeProblemKind(
+    source.targetKind
+      || source.problemKind
+      || source.searchKind
+      || source.postKind
+      || source.mode
+  ) || getKindFromMode(source.mode);
 }
 
 function tokenize(query) {
@@ -110,7 +187,7 @@ function readRowKind(row) {
 
 function scoreRow(row, terms, targetKind) {
   const rowKind = readRowKind(row);
-  if (rowKind && rowKind !== targetKind) return -1;
+  if (rowKind !== targetKind) return -1;
 
   const title = String(row.title || '').toLowerCase();
   const fileName = String(row.file_name || '').toLowerCase();
@@ -118,7 +195,7 @@ function scoreRow(row, terms, targetKind) {
   const cic = stringifyPreview(row.normalized_term, MAX_CIC_CHARS).toLowerCase();
   const haystack = `${title} ${fileName} ${source} ${cic}`;
 
-  let score = rowKind === targetKind ? 4 : 1;
+  let score = 4;
   if (terms.length === 0) score += 1;
   for (const term of terms) {
     if (title.includes(term)) score += 12;
@@ -152,7 +229,7 @@ function buildCitation(row, index) {
   };
 }
 
-async function searchSavedProblems({ query, mode, limit, offset }) {
+async function searchSavedProblems({ query, targetKind, limit, offset }) {
   const { client, error } = getSupabaseAdmin();
   if (!client) {
     throw new Error(error || 'Supabase is not configured.');
@@ -169,7 +246,6 @@ async function searchSavedProblems({ query, mode, limit, offset }) {
   }
 
   const terms = tokenize(query);
-  const targetKind = getKindFromMode(mode);
   const ranked = (Array.isArray(data) ? data : [])
     .map((row) => ({ row, score: scoreRow(row, terms, targetKind) }))
     .filter((entry) => entry.score >= 0)
@@ -219,6 +295,21 @@ function buildGeminiPrompt({ query, targetKind, citations, history }) {
   ].join('\n');
 }
 
+function buildGeminiRequestBody({ query, targetKind, citations, history }) {
+  return {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: buildGeminiPrompt({ query, targetKind, citations, history }) }]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: 'application/json'
+    }
+  };
+}
+
 function parseGeminiText(payload) {
   const candidates = Array.isArray(payload && payload.candidates) ? payload.candidates : [];
   for (const candidate of candidates) {
@@ -247,6 +338,195 @@ function parseAnswerJson(text) {
   }
 }
 
+function parseServiceAccountJson(rawValue) {
+  const raw = safeString(rawValue);
+  if (!raw) {
+    throw new Error('Vertex AI service account is not configured. Set GOOGLE_VERTEX_SERVICE_ACCOUNT_JSON in Vercel.');
+  }
+
+  let text = raw;
+  if (!text.trim().startsWith('{')) {
+    try {
+      text = Buffer.from(text, 'base64').toString('utf8');
+    } catch (error) {
+      throw new Error('Vertex AI service account JSON is not valid JSON or base64 JSON.');
+    }
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new Error('Vertex AI service account JSON could not be parsed.');
+  }
+
+  const clientEmail = safeString(parsed.client_email);
+  const privateKey = safeString(parsed.private_key).replace(/\\n/g, '\n');
+  if (!clientEmail || !privateKey) {
+    throw new Error('Vertex AI service account JSON is missing client_email or private_key.');
+  }
+  return {
+    clientEmail,
+    privateKey,
+    tokenUri: safeString(parsed.token_uri, OAUTH_TOKEN_URL)
+  };
+}
+
+function base64Url(value) {
+  return Buffer.from(value)
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+async function getVertexAccessToken(config) {
+  const serviceAccount = parseServiceAccountJson(config.serviceAccountJson);
+  const cacheKey = `${serviceAccount.clientEmail}|${serviceAccount.tokenUri}`;
+  const nowMs = Date.now();
+  if (
+    vertexTokenCache.cacheKey === cacheKey
+    && vertexTokenCache.accessToken
+    && vertexTokenCache.expiresAt - 60000 > nowMs
+  ) {
+    return vertexTokenCache.accessToken;
+  }
+
+  const now = Math.floor(nowMs / 1000);
+  const unsigned = [
+    base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' })),
+    base64Url(JSON.stringify({
+      iss: serviceAccount.clientEmail,
+      scope: VERTEX_SCOPE,
+      aud: serviceAccount.tokenUri,
+      iat: now,
+      exp: now + 3600
+    }))
+  ].join('.');
+  const signature = crypto
+    .createSign('RSA-SHA256')
+    .update(unsigned)
+    .end()
+    .sign(serviceAccount.privateKey);
+  const assertion = `${unsigned}.${base64Url(signature)}`;
+
+  const tokenResponse = await fetch(serviceAccount.tokenUri, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion
+    })
+  });
+  const payload = await tokenResponse.json().catch(() => null);
+  if (!tokenResponse.ok) {
+    const message = payload && (payload.error_description || payload.error)
+      ? payload.error_description || payload.error
+      : `Vertex AI OAuth failed: ${tokenResponse.status}`;
+    const error = new Error(message);
+    error.status = tokenResponse.status;
+    throw error;
+  }
+
+  const accessToken = safeString(payload && payload.access_token);
+  if (!accessToken) {
+    throw new Error('Vertex AI OAuth did not return an access token.');
+  }
+  vertexTokenCache = {
+    cacheKey,
+    accessToken,
+    expiresAt: nowMs + (Number(payload.expires_in) || 3600) * 1000
+  };
+  return accessToken;
+}
+
+async function askVertexGemini({ query, targetKind, citations, history, config }) {
+  if (!config.project) {
+    throw new Error('Vertex AI project is not configured. Set GOOGLE_CLOUD_PROJECT in Vercel.');
+  }
+  const accessToken = await getVertexAccessToken(config);
+  const project = encodeURIComponent(config.project);
+  const location = encodeURIComponent(config.location);
+  const model = encodeURIComponent(config.model);
+  const url = `https://${config.location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(buildGeminiRequestBody({ query, targetKind, citations, history }))
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = payload && payload.error && payload.error.message
+      ? payload.error.message
+      : `Vertex AI Gemini failed: ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.code = payload && payload.error && payload.error.code
+      ? payload.error.code
+      : response.status;
+    throw error;
+  }
+
+  const text = parseGeminiText(payload);
+  const parsed = parseAnswerJson(text);
+  if (parsed) {
+    return {
+      answer: safeString(parsed.answer, text),
+      suggestions: Array.isArray(parsed.suggestions)
+        ? parsed.suggestions.map((item) => safeString(item)).filter(Boolean)
+        : [],
+      usedCitationIds: Array.isArray(parsed.usedCitationIds)
+        ? parsed.usedCitationIds.map((item) => safeString(item)).filter(Boolean)
+        : []
+    };
+  }
+  return { answer: text, suggestions: [], usedCitationIds: [] };
+}
+
+async function askGeminiProxy({ query, targetKind, citations, history, config }) {
+  const response = await fetch(config.url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(config.key ? { 'x-ivucx-helper-key': config.key } : {})
+    },
+    body: JSON.stringify({
+      model: config.model,
+      requestBody: buildGeminiRequestBody({ query, targetKind, citations, history })
+    })
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = payload && payload.error
+      ? payload.error
+      : `Gemini proxy failed: ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.code = response.status;
+    throw error;
+  }
+
+  const text = parseGeminiText(payload);
+  const parsed = parseAnswerJson(text);
+  if (parsed) {
+    return {
+      answer: safeString(parsed.answer, text),
+      suggestions: Array.isArray(parsed.suggestions)
+        ? parsed.suggestions.map((item) => safeString(item)).filter(Boolean)
+        : [],
+      usedCitationIds: Array.isArray(parsed.usedCitationIds)
+        ? parsed.usedCitationIds.map((item) => safeString(item)).filter(Boolean)
+        : []
+    };
+  }
+  return { answer: text, suggestions: [], usedCitationIds: [] };
+}
+
 async function askGemini({ query, targetKind, citations, history }) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
@@ -258,18 +538,7 @@ async function askGemini({ query, targetKind, citations, history }) {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: buildGeminiPrompt({ query, targetKind, citations, history }) }]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.2,
-        responseMimeType: 'application/json'
-      }
-    })
+    body: JSON.stringify(buildGeminiRequestBody({ query, targetKind, citations, history }))
   });
 
   const payload = await response.json().catch(() => null);
@@ -301,7 +570,30 @@ async function askGemini({ query, targetKind, citations, history }) {
   return { answer: text, suggestions: [], usedCitationIds: [] };
 }
 
-function describeGeminiFallbackReason(error) {
+async function askConfiguredGemini({ query, targetKind, citations, history }) {
+  const proxyConfig = getGeminiProxyConfig();
+  if (proxyConfig.enabled) {
+    return {
+      generated: await askGeminiProxy({ query, targetKind, citations, history, config: proxyConfig }),
+      model: `vertex-proxy:${proxyConfig.model}`
+    };
+  }
+
+  const vertexConfig = getVertexConfig();
+  if (vertexConfig.enabled) {
+    return {
+      generated: await askVertexGemini({ query, targetKind, citations, history, config: vertexConfig }),
+      model: `vertex:${vertexConfig.location}/${vertexConfig.model}`
+    };
+  }
+
+  return {
+    generated: await askGemini({ query, targetKind, citations, history }),
+    model: getGeminiModel()
+  };
+}
+
+function legacyDescribeGeminiFallbackReason(error) {
   const status = Number(error && (error.status || error.code));
   if (status === 429) {
     return 'Gemini API が現在レート制限またはクォータ上限に達しているため';
@@ -315,11 +607,46 @@ function describeGeminiFallbackReason(error) {
   return 'Gemini API が一時的に利用できないため';
 }
 
+function legacyBuildFallbackAnswer(query, targetKind, citations, geminiError) {
+  const reason = legacyDescribeGeminiFallbackReason(geminiError);
+  if (citations.length === 0) {
+    return {
+      answer: `${reason}、保存済みの${targetKind === 'problem' ? '問題' : '定理'}から検索しましたが「${query}」に十分一致する情報が見つかりませんでした。`,
+      suggestions: [],
+      usedCitationIds: []
+    };
+  }
+
+  const lines = citations.slice(0, 4).map((item) => {
+    const file = item.fileName ? ` (${item.fileName})` : '';
+    return `${item.title}${file}: ${item.quote} [${item.id}]`;
+  });
+  return {
+    answer: `${reason}、保存済みデータから一致度の高い引用を返します。\n${lines.join('\n')}`,
+    suggestions: citations.map((item) => `${item.title} [${item.id}]`),
+    usedCitationIds: citations.map((item) => item.id)
+  };
+}
+
+function describeGeminiFallbackReason(error) {
+  const status = Number(error && (error.status || error.code));
+  if (status === 429) {
+    return 'Gemini API が現在レート制限またはクォータ上限に達しているため';
+  }
+  if (status === 400 || status === 401 || status === 403) {
+    return 'Gemini API の認証またはプロジェクト設定で拒否されたため';
+  }
+  if (error && /not configured/i.test(String(error.message || ''))) {
+    return 'Gemini API の接続情報が未設定のため';
+  }
+  return 'Gemini API が一時的に利用できないため';
+}
+
 function buildFallbackAnswer(query, targetKind, citations, geminiError) {
   const reason = describeGeminiFallbackReason(geminiError);
   if (citations.length === 0) {
     return {
-      answer: `${reason}、保存済みの${targetKind === 'problem' ? '問題' : '定理'}から検索しましたが「${query}」に十分一致する情報が見つかりませんでした。`,
+      answer: `${reason}、保存済みの${targetKind === 'problem' ? '問題' : '定理'}から検索しましたが、「${query}」に十分一致する情報が見つかりませんでした。`,
       suggestions: [],
       usedCitationIds: []
     };
@@ -350,9 +677,9 @@ export default async function handler(req, res) {
     const offset = clamp(Number(body.offset) || 0, 0, 5000);
     const history = normalizeHistory(body.history);
     const includeAnswer = body.includeAnswer !== false;
-    const targetKind = getKindFromMode(mode);
+    const targetKind = getRequestTargetKind(body);
     const pageSize = Math.max(limit, MAX_CONTEXT_DOCS);
-    const searchResult = await searchSavedProblems({ query, mode, limit: pageSize, offset });
+    const searchResult = await searchSavedProblems({ query, targetKind, limit: pageSize, offset });
     const context = searchResult.citations.slice(0, MAX_CONTEXT_DOCS);
 
     let generated;
@@ -360,7 +687,9 @@ export default async function handler(req, res) {
     let geminiUsed = false;
     if (includeAnswer) {
       try {
-        generated = await askGemini({ query, targetKind, citations: context, history });
+        const geminiResult = await askConfiguredGemini({ query, targetKind, citations: context, history });
+        generated = geminiResult.generated;
+        model = geminiResult.model;
         geminiUsed = true;
       } catch (geminiError) {
         generated = buildFallbackAnswer(query, targetKind, context, geminiError);

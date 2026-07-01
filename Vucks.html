@@ -5449,15 +5449,20 @@
     });
   }
 
-  function buildSuggestionTurnKey(query, fileNames){
+  function getModeFromProblemKind(kind){
+    return String(kind || '').trim().toLowerCase() === 'problem' ? 'q' : 'a';
+  }
+
+  function buildSuggestionTurnKey(query, fileNames, targetKind = getCurrentProblemKind()){
     const normalizedQuery = String(query || '').trim().toLowerCase();
+    const normalizedKind = String(targetKind || getCurrentProblemKind()).trim().toLowerCase() || 'theorem';
     const normalizedFiles = Array.isArray(fileNames)
       ? fileNames
           .map(name=>String(name || '').trim().toLowerCase())
           .filter(Boolean)
           .sort()
       : [];
-    return normalizedQuery + '||' + normalizedFiles.join('|');
+    return normalizedKind + '||' + normalizedQuery + '||' + normalizedFiles.join('|');
   }
 
   function buildSuggestionHistory(activeTurn){
@@ -5666,8 +5671,13 @@
     renderSuggestionThread();
 
     try{
+      const targetKind = String(turn.targetKind || getCurrentProblemKind()).trim().toLowerCase() === 'problem'
+        ? 'problem'
+        : 'theorem';
       const payload = {
-        mode: bodyEl.classList.contains('mode-q') ? 'q' : 'a',
+        mode: getModeFromProblemKind(targetKind),
+        targetKind,
+        problemKind: targetKind,
         state,
         query: turn.query,
         files: turn.files || [],
@@ -5729,10 +5739,11 @@
 
   async function requestSuggestions(query, fileNames){
     if(!query) return;
-    const turnKey = buildSuggestionTurnKey(query, fileNames);
+    const targetKind = getCurrentProblemKind();
+    const turnKey = buildSuggestionTurnKey(query, fileNames, targetKind);
     const alreadyShown = suggestionTurns.some(turn=>{
       if(typeof turn.key === 'string') return turn.key === turnKey;
-      return buildSuggestionTurnKey(turn.query, turn.files) === turnKey;
+      return buildSuggestionTurnKey(turn.query, turn.files, turn.targetKind) === turnKey;
     });
     if(alreadyShown){
       renderSuggestionThread();
@@ -5747,7 +5758,7 @@
       suggestions:[],
       answer:'',
       citations:[],
-      targetKind:getCurrentProblemKind(),
+      targetKind,
       loading:true,
       loadingMore:false,
       hasMore:true,
