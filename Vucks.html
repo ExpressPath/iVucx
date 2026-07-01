@@ -180,6 +180,25 @@
       color:#ffffff;
     }
 
+    .entrance-brand::before{
+      content:"theorem";
+      position:absolute;
+      right:calc(50% + clamp(58px, 10vw, 100px));
+      top:50%;
+      color:#1a73e8;
+      font-size:clamp(12px, 1.35vw, 16px);
+      font-weight:600;
+      line-height:1;
+      letter-spacing:0;
+      transform:translateY(-42%);
+      white-space:nowrap;
+    }
+
+    body.mode-q .entrance-brand::before{
+      content:"problem";
+      color:#4c8dff;
+    }
+
     .entrance-brand.is-shimmering{
       color:transparent;
       background:
