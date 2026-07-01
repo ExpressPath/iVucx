@@ -20,6 +20,7 @@
       --gray-title-y-offset:-36px;
       --gray-title-row-height:68px;
       --gray-title-panel-width:min(720px, calc(78vw - 24px));
+      --pose-problem-center-x:50%;
     }
 
     *,*::before,*::after{box-sizing:border-box}
@@ -208,7 +209,7 @@
       background-repeat:no-repeat;
       -webkit-background-clip:text;
       background-clip:text;
-      animation:provf-brand-shimmer 2.8s cubic-bezier(.2,.72,.22,1) 1 both;
+      animation:provf-brand-shimmer 4.2s cubic-bezier(.2,.72,.22,1) 1 both;
     }
 
     .entrance-brand.shimmer-finished{
@@ -244,22 +245,42 @@
     .pose-problem-brand{
       display:none;
       position:absolute;
-      left:0;
+      left:var(--pose-problem-center-x, 50%);
       top:0;
       color:#f7fbff;
-      font-size:clamp(24px, 3.4vw, 38px);
+      font-size:clamp(32px, 4.8vw, 54px);
       font-weight:520;
       line-height:1.08;
       letter-spacing:0;
       font-family:"Google Sans","Product Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       text-shadow:0 10px 30px rgba(0,0,0,0.28);
-      transform:translateY(calc(-100% - 18px));
+      transform:translate(-50%, calc(-100% - 22px));
       pointer-events:none;
       user-select:none;
+      white-space:nowrap;
     }
 
     body.scrolled .search-container:not(.expanded) .pose-problem-brand{
       display:block;
+    }
+
+    .pose-problem-brand.is-shimmering{
+      color:transparent;
+      background:
+        linear-gradient(92deg, #f7fbff 0%, #f7fbff 42%, #f58529 52%, #dd2a7b 62%, #8134af 72%, #515bd4 82%, #f7fbff 92%, #f7fbff 100%);
+      background-size:260% 100%;
+      background-position:100% 50%;
+      background-repeat:no-repeat;
+      -webkit-background-clip:text;
+      background-clip:text;
+      text-shadow:none;
+      animation:provf-brand-shimmer 4.2s cubic-bezier(.2,.72,.22,1) 1 both;
+    }
+
+    .pose-problem-brand.shimmer-finished{
+      color:#f7fbff;
+      background:none;
+      transition:color 0s;
     }
 
     body.login-check .pose-problem-brand,
@@ -283,6 +304,13 @@
 
       body.mode-q .entrance-brand.is-shimmering{
         color:#ffffff;
+      }
+
+      .pose-problem-brand.is-shimmering{
+        animation:none;
+        color:#f7fbff;
+        background:none;
+        text-shadow:0 10px 30px rgba(0,0,0,0.28);
       }
     }
 
@@ -2834,6 +2862,7 @@
   const input = document.getElementById('searchInput');
   const container = document.getElementById('searchContainer');
   const entranceBrand = document.getElementById('entranceBrand');
+  const poseProblemBrand = document.querySelector('.pose-problem-brand');
   const sendButton = document.getElementById('sendButton');
   const searchModeClose = document.getElementById('searchModeClose');
   const attachmentList = document.getElementById('attachmentList');
@@ -2959,6 +2988,7 @@
     const titleCenterX = hasUploads
       ? rect.offsetLeft + rect.width * GOLDEN_RATIO_RIGHT_X
       : rect.offsetLeft + rect.width * 0.5;
+    const poseProblemCenterX = rect.offsetLeft + rect.width * 0.5 - titleCenterX + panelWidth * 0.5;
     const rootStyle = document.documentElement.style;
     rootStyle.setProperty('--visible-vw', `${rect.width}px`);
     rootStyle.setProperty('--visible-vh', `${rect.height}px`);
@@ -2970,6 +3000,7 @@
     rootStyle.setProperty('--gray-title-center-x', `${titleCenterX}px`);
     rootStyle.setProperty('--gray-title-y-offset', `${-Math.min(56, Math.max(24, rect.height * 0.055))}px`);
     rootStyle.setProperty('--gray-title-panel-width', `${panelWidth}px`);
+    rootStyle.setProperty('--pose-problem-center-x', `${poseProblemCenterX}px`);
   }
 
   function readEditorReturnContext(){
@@ -4237,29 +4268,45 @@
     positionSlideTitlePopup();
   }, true);
 
-  function scheduleEntranceBrandShimmer(){
-    if(!entranceBrand) return;
+  const BRAND_SHIMMER_FALLBACK_MS = 4700;
+
+  function finishTextShimmer(element){
+    if(!element || !element.classList.contains('is-shimmering')) return;
+    element.classList.remove('is-shimmering');
+    element.classList.add('shimmer-finished');
+  }
+
+  function runTextShimmer(element, delay = 0){
+    if(!element) return;
     window.setTimeout(()=>{
-      entranceBrand.classList.remove('shimmer-finished');
-      entranceBrand.classList.add('is-shimmering');
-      window.setTimeout(()=>{
-        if(!entranceBrand.classList.contains('is-shimmering')) return;
-        entranceBrand.classList.remove('is-shimmering');
-        entranceBrand.classList.add('shimmer-finished');
-      }, 2200);
-    }, 1000);
+      element.classList.remove('shimmer-finished');
+      element.classList.remove('is-shimmering');
+      void element.offsetWidth;
+      element.classList.add('is-shimmering');
+      window.setTimeout(()=>finishTextShimmer(element), BRAND_SHIMMER_FALLBACK_MS);
+    }, Math.max(0, delay));
+  }
+
+  function scheduleEntranceBrandShimmer(){
+    runTextShimmer(entranceBrand, 1000);
+  }
+
+  function schedulePoseProblemShimmer(delay = 120){
+    if(!poseProblemBrand) return;
+    runTextShimmer(poseProblemBrand, delay);
   }
 
   if(entranceBrand){
-    entranceBrand.addEventListener('animationend', ()=>{
-      entranceBrand.classList.remove('is-shimmering');
-      entranceBrand.classList.add('shimmer-finished');
-    });
+    entranceBrand.addEventListener('animationend', ()=>finishTextShimmer(entranceBrand));
     if(document.readyState === 'complete'){
       scheduleEntranceBrandShimmer();
     }else{
       window.addEventListener('load', scheduleEntranceBrandShimmer, { once:true });
     }
+  }
+
+  if(poseProblemBrand){
+    poseProblemBrand.addEventListener('animationend', ()=>finishTextShimmer(poseProblemBrand));
   }
 
   if(editorCloseKeep){
@@ -5991,6 +6038,7 @@
       saveSelectionNavigation('gray-compact', 'proof-editor', editorReturnContext.proofAssistant || '');
     }
     syncCompactGrayLayoutState();
+    schedulePoseProblemShimmer();
     adjustTextarea();
     persistModeState();
   }
@@ -6857,6 +6905,10 @@
 
     if(next !== 2){
       adjustTextarea();
+    }
+
+    if(next === 1 && previousState !== 1 && !container.classList.contains('expanded')){
+      requestAnimationFrame(()=>schedulePoseProblemShimmer());
     }
 
     const shouldSkipPersist = skipNextModeStatePersist;
