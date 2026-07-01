@@ -202,12 +202,13 @@
     .entrance-brand.is-shimmering{
       color:transparent;
       background:
-        linear-gradient(92deg, #050505 0%, #050505 12%, #f58529 30%, #dd2a7b 45%, #8134af 60%, #515bd4 76%, #050505 92%, #050505 100%);
+        linear-gradient(92deg, #050505 0%, #050505 42%, #f58529 52%, #dd2a7b 62%, #8134af 72%, #515bd4 82%, #050505 92%, #050505 100%);
       background-size:260% 100%;
       background-position:100% 50%;
+      background-repeat:no-repeat;
       -webkit-background-clip:text;
       background-clip:text;
-      animation:provf-brand-shimmer 1.55s cubic-bezier(.2,.72,.22,1) 1 both;
+      animation:provf-brand-shimmer 1.9s cubic-bezier(.2,.72,.22,1) 1 both;
     }
 
     .entrance-brand.shimmer-finished{
@@ -223,9 +224,10 @@
     body.mode-q .entrance-brand.is-shimmering{
       color:transparent;
       background:
-        linear-gradient(92deg, #ffffff 0%, #ffffff 12%, #f58529 30%, #dd2a7b 45%, #8134af 60%, #515bd4 76%, #ffffff 92%, #ffffff 100%);
+        linear-gradient(92deg, #ffffff 0%, #ffffff 42%, #f58529 52%, #dd2a7b 62%, #8134af 72%, #515bd4 82%, #ffffff 92%, #ffffff 100%);
       background-size:260% 100%;
       background-position:100% 50%;
+      background-repeat:no-repeat;
       -webkit-background-clip:text;
       background-clip:text;
     }
@@ -239,8 +241,36 @@
       pointer-events:none;
     }
 
+    .pose-problem-brand{
+      display:none;
+      position:absolute;
+      left:0;
+      top:0;
+      color:#f7fbff;
+      font-size:clamp(24px, 3.4vw, 38px);
+      font-weight:520;
+      line-height:1.08;
+      letter-spacing:0;
+      font-family:"Google Sans","Product Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      text-shadow:0 10px 30px rgba(0,0,0,0.28);
+      transform:translateY(calc(-100% - 18px));
+      pointer-events:none;
+      user-select:none;
+    }
+
+    body.scrolled .search-container:not(.expanded) .pose-problem-brand{
+      display:block;
+    }
+
+    body.login-check .pose-problem-brand,
+    body.suggestions-open .pose-problem-brand,
+    .search-container.expanded .pose-problem-brand{
+      display:none;
+    }
+
     @keyframes provf-brand-shimmer{
       0%{ background-position:100% 50%; }
+      72%{ background-position:0% 50%; }
       100%{ background-position:0% 50%; }
     }
 
@@ -2621,6 +2651,7 @@
   <div class="search-container" id="searchContainer">
 
     <div class="entrance-brand" id="entranceBrand" aria-label="provf">provf</div>
+    <div class="pose-problem-brand" aria-hidden="true">Pose problem</div>
 
     <form class="search-box" id="searchForm">
       <textarea
