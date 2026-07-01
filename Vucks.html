@@ -133,7 +133,7 @@
 
     .search-container{
       width:100%;
-      max-width:690px;
+      max-width:720px;
       position:relative;
       padding:16px;
       text-align:center;
@@ -194,6 +194,7 @@
     .entrance-brand.shimmer-finished{
       color:#050505;
       background:none;
+      transition:opacity .2s ease, transform .24s ease, color 0s;
     }
 
     body.mode-q .entrance-brand.shimmer-finished{
@@ -2952,17 +2953,37 @@
     return bodyEl.classList.contains('mode-q') ? 'problem' : 'theorem';
   }
 
+  function switchSearchMode(isQ, reason = 'qa-mode'){
+    if(bodyEl.classList.contains('mode-q') === !!isQ) return false;
+    setMode(!!isQ);
+    persistModeState();
+    scheduleCookieHistorySnapshot(reason);
+    return true;
+  }
+
   qBtn.addEventListener('click',e=>{
     e.preventDefault();
-    setMode(true);
-    persistModeState();
-    scheduleCookieHistorySnapshot('qa-mode');
+    switchSearchMode(true);
   });
   aBtn.addEventListener('click',e=>{
     e.preventDefault();
-    setMode(false);
-    persistModeState();
-    scheduleCookieHistorySnapshot('qa-mode');
+    switchSearchMode(false);
+  });
+
+  window.addEventListener('keydown', e=>{
+    if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.isComposing) return;
+    if(state !== 0 || bodyEl.classList.contains('suggestions-open')) return;
+    const activeEl = document.activeElement;
+    const isTextInput = activeEl && (
+      activeEl === input
+      || activeEl.tagName === 'TEXTAREA'
+      || activeEl.tagName === 'INPUT'
+      || activeEl.isContentEditable
+    );
+    if(isTextInput && String(input.value || '').length > 0) return;
+    e.preventDefault();
+    switchSearchMode(e.key === 'ArrowRight', 'qa-mode-key');
   });
 
   function formatFileSize(bytes){
