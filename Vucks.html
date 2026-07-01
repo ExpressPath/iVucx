@@ -157,16 +157,22 @@
     }
 
     .entrance-brand{
-      margin:0 0 18px;
+      position:absolute;
+      left:16px;
+      right:16px;
+      top:16px;
+      margin:0;
       color:#050505;
       font-size:clamp(48px, 8vw, 84px);
-      font-weight:780;
+      font-weight:500;
       line-height:.95;
       letter-spacing:0;
       text-align:center;
-      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      font-family:"Google Sans","Product Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       user-select:none;
+      transform:translateY(calc(-100% - 22px));
       transition:opacity .2s ease, transform .24s ease;
+      pointer-events:none;
     }
 
     .entrance-brand.is-shimmering{
@@ -190,7 +196,7 @@
     body.suggestions-open .entrance-brand,
     .search-container.expanded .entrance-brand{
       opacity:0;
-      transform:translateY(-8px);
+      transform:translateY(calc(-100% - 30px));
       pointer-events:none;
     }
 
