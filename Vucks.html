@@ -156,6 +156,57 @@
       padding:0;
     }
 
+    .entrance-brand{
+      margin:0 0 18px;
+      color:#050505;
+      font-size:clamp(48px, 8vw, 84px);
+      font-weight:780;
+      line-height:.95;
+      letter-spacing:0;
+      text-align:center;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      user-select:none;
+      transition:opacity .2s ease, transform .24s ease;
+    }
+
+    .entrance-brand.is-shimmering{
+      color:transparent;
+      background:
+        linear-gradient(92deg, #050505 0%, #050505 12%, #f58529 30%, #dd2a7b 45%, #8134af 60%, #515bd4 76%, #050505 92%, #050505 100%);
+      background-size:260% 100%;
+      background-position:100% 50%;
+      -webkit-background-clip:text;
+      background-clip:text;
+      animation:provf-brand-shimmer 1.55s cubic-bezier(.2,.72,.22,1) 1 both;
+    }
+
+    .entrance-brand.shimmer-finished{
+      color:#050505;
+      background:none;
+    }
+
+    body.scrolled .entrance-brand,
+    body.login-check .entrance-brand,
+    body.suggestions-open .entrance-brand,
+    .search-container.expanded .entrance-brand{
+      opacity:0;
+      transform:translateY(-8px);
+      pointer-events:none;
+    }
+
+    @keyframes provf-brand-shimmer{
+      0%{ background-position:100% 50%; }
+      100%{ background-position:0% 50%; }
+    }
+
+    @media (prefers-reduced-motion:reduce){
+      .entrance-brand.is-shimmering{
+        animation:none;
+        color:#050505;
+        background:none;
+      }
+    }
+
     .search-box{
       display:flex;
       align-items:center;
@@ -2520,6 +2571,8 @@
 <div class="fixed-wrapper">
   <div class="search-container" id="searchContainer">
 
+    <div class="entrance-brand" id="entranceBrand" aria-label="provf">provf</div>
+
     <form class="search-box" id="searchForm">
       <textarea
         class="search-input"
@@ -2700,6 +2753,7 @@
   const form = document.getElementById('searchForm');
   const input = document.getElementById('searchInput');
   const container = document.getElementById('searchContainer');
+  const entranceBrand = document.getElementById('entranceBrand');
   const sendButton = document.getElementById('sendButton');
   const searchModeClose = document.getElementById('searchModeClose');
   const attachmentList = document.getElementById('attachmentList');
@@ -4082,6 +4136,31 @@
   window.addEventListener('scroll', ()=>{
     positionSlideTitlePopup();
   }, true);
+
+  function scheduleEntranceBrandShimmer(){
+    if(!entranceBrand) return;
+    window.setTimeout(()=>{
+      entranceBrand.classList.remove('shimmer-finished');
+      entranceBrand.classList.add('is-shimmering');
+      window.setTimeout(()=>{
+        if(!entranceBrand.classList.contains('is-shimmering')) return;
+        entranceBrand.classList.remove('is-shimmering');
+        entranceBrand.classList.add('shimmer-finished');
+      }, 2200);
+    }, 1000);
+  }
+
+  if(entranceBrand){
+    entranceBrand.addEventListener('animationend', ()=>{
+      entranceBrand.classList.remove('is-shimmering');
+      entranceBrand.classList.add('shimmer-finished');
+    });
+    if(document.readyState === 'complete'){
+      scheduleEntranceBrandShimmer();
+    }else{
+      window.addEventListener('load', scheduleEntranceBrandShimmer, { once:true });
+    }
+  }
 
   if(editorCloseKeep){
     editorCloseKeep.addEventListener('click', ()=>{
