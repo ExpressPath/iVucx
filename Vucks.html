@@ -170,9 +170,13 @@
       text-align:center;
       font-family:"Google Sans","Product Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       user-select:none;
-      transform:translateY(calc(-100% - 22px));
-      transition:opacity .2s ease, transform .24s ease;
+      transform:translateY(calc(-100% - 46px));
+      transition:opacity .2s ease, transform .24s ease, color .38s ease;
       pointer-events:none;
+    }
+
+    body.mode-q .entrance-brand{
+      color:#ffffff;
     }
 
     .entrance-brand.is-shimmering{
@@ -191,12 +195,25 @@
       background:none;
     }
 
+    body.mode-q .entrance-brand.shimmer-finished{
+      color:#ffffff;
+    }
+
+    body.mode-q .entrance-brand.is-shimmering{
+      background:
+        linear-gradient(92deg, #ffffff 0%, #ffffff 12%, #f58529 30%, #dd2a7b 45%, #8134af 60%, #515bd4 76%, #ffffff 92%, #ffffff 100%);
+      background-size:260% 100%;
+      background-position:100% 50%;
+      -webkit-background-clip:text;
+      background-clip:text;
+    }
+
     body.scrolled .entrance-brand,
     body.login-check .entrance-brand,
     body.suggestions-open .entrance-brand,
     .search-container.expanded .entrance-brand{
       opacity:0;
-      transform:translateY(calc(-100% - 30px));
+      transform:translateY(calc(-100% - 54px));
       pointer-events:none;
     }
 
@@ -210,6 +227,10 @@
         animation:none;
         color:#050505;
         background:none;
+      }
+
+      body.mode-q .entrance-brand.is-shimmering{
+        color:#ffffff;
       }
     }
 
