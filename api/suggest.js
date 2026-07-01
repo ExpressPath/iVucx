@@ -173,16 +173,40 @@ function extractAttachmentNames(requestMeta) {
     .slice(0, 8);
 }
 
+function inferLegacyRowKind(row) {
+  const title = String(row && row.title || '').toLowerCase();
+  const fileName = String(row && row.file_name || '').toLowerCase();
+  const source = String(row && row.source_code || '').toLowerCase();
+  const normalized = stringifyPreview(row && row.normalized_term, MAX_CIC_CHARS).toLowerCase();
+  const headerText = `${title} ${fileName}`;
+  const fullText = `${headerText} ${source} ${normalized}`;
+
+  if (/\b(problem|problems|exercise|exercises|conjecture|conjectures|unsolved|open problem)\b/.test(headerText)) {
+    return 'problem';
+  }
+  if (/\b(theorem|theorems|lemma|lemmas|corollary|corollaries|proposition|propositions|proof|proofs)\b/.test(headerText)) {
+    return 'theorem';
+  }
+  if (/\b(problem|exercise|conjecture|unsolved|open problem)\b/.test(fullText)) {
+    return 'problem';
+  }
+  if (/\b(theorem|lemma|corollary|proposition)\b/.test(fullText)) {
+    return 'theorem';
+  }
+  return '';
+}
+
 function readRowKind(row) {
   const requestMeta = isPlainObject(row.request_meta) ? row.request_meta : {};
   const adapterMeta = isPlainObject(row.adapter_meta) ? row.adapter_meta : {};
-  return normalizeProblemKind(
+  const storedKind = normalizeProblemKind(
     requestMeta.problemKind
       || requestMeta.postKind
       || requestMeta.searchKind
       || adapterMeta.problemKind
       || adapterMeta.postKind
   );
+  return storedKind || inferLegacyRowKind(row);
 }
 
 function scoreRow(row, terms, targetKind) {
