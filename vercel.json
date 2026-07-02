@@ -54,6 +54,10 @@
       "dest": "/api/helper?route=bounty-checkout"
     },
     {
+      "src": "/api/stripe-setup",
+      "dest": "/api/helper?route=stripe-setup"
+    },
+    {
       "src": "/api/google-auth-start",
       "dest": "/api/google?route=auth-start"
     },

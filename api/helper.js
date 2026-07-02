@@ -7,6 +7,7 @@ import {
   sendMethodNotAllowed
 } from '../lib/helper-proxy.js';
 import { sendBountyCheckoutResponse } from '../lib/bounty-checkout.js';
+import { sendStripeSetupResponse } from '../lib/stripe-setup.js';
 import { sendAttachmentCompleteResponse, sendAttachmentUploadPlanResponse } from '../lib/problem-attachments.js';
 import { sendPersistedProblemResponse, sendProblemPersistenceStatusResponse } from '../lib/problem-store.js';
 
@@ -40,6 +41,11 @@ export default async function handler(req, res) {
 
   if (segments.length === 1 && segments[0] === 'bounty-checkout') {
     await sendBountyCheckoutResponse(req, res);
+    return;
+  }
+
+  if (segments.length === 1 && segments[0] === 'stripe-setup') {
+    await sendStripeSetupResponse(req, res);
     return;
   }
 
