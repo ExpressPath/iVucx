@@ -11,7 +11,9 @@
       --line:rgba(255,255,255,0.08);
       --ink:#e6edf3;
       --muted:#8b949e;
-      --accent:#3fb950;
+      --accent:#4f8cff;
+      --accent-strong:#6d5dfc;
+      --accent-glow:rgba(88,137,255,0.28);
     }
     *{ box-sizing:border-box; }
     html,body{
@@ -27,8 +29,8 @@
       display:flex;
       flex-direction:column;
       background:
-        radial-gradient(circle at top left, rgba(63,185,80,0.12), transparent 28%),
-        radial-gradient(circle at bottom right, rgba(47,129,247,0.10), transparent 24%),
+        radial-gradient(circle at top left, rgba(66,133,255,0.16), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(111,78,255,0.14), transparent 24%),
         var(--bg);
     }
     .topbar{
@@ -54,10 +56,16 @@
       color:#f6f8fa;
       width:38px;
       height:38px;
-      border-radius:999px;
+      border-radius:11px;
       font-size:24px;
       line-height:1;
       cursor:pointer;
+      transition:border-color .18s ease, background-color .18s ease, transform .12s ease;
+    }
+    .btn-back:hover{
+      border-color:rgba(91,141,255,0.46);
+      background:rgba(63,111,230,0.12);
+      transform:translateY(-1px);
     }
     .title-wrap{
       min-width:0;
@@ -89,20 +97,20 @@
       gap:10px;
       padding:6px 10px;
       border:1px solid rgba(255,255,255,0.1);
-      border-radius:999px;
+      border-radius:13px;
       background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
       box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);
     }
     .view-switch:hover .view-divider{
-      background:rgba(63,185,80,0.55);
-      box-shadow:0 0 10px rgba(63,185,80,0.22);
+      background:rgba(92,144,255,0.62);
+      box-shadow:0 0 10px var(--accent-glow);
     }
     .view-tab{
       border:none;
       background:transparent;
       color:rgba(230,237,243,0.68);
       padding:8px 12px;
-      border-radius:999px;
+      border-radius:10px;
       font-size:13px;
       font-weight:700;
       letter-spacing:.04em;
@@ -116,14 +124,14 @@
       transform:translateY(-1px);
     }
     .view-tab[aria-selected="true"]{
-      color:#08110c;
-      background:linear-gradient(180deg, rgba(111,255,154,0.96), rgba(63,185,80,0.92));
-      box-shadow:0 10px 24px rgba(63,185,80,0.18);
+      color:#f8fbff;
+      background:linear-gradient(135deg, #101826 0%, #1668ff 52%, #7b5cff 100%);
+      box-shadow:0 12px 28px rgba(58,103,255,0.28);
     }
     .view-divider{
       width:1px;
       height:24px;
-      border-radius:999px;
+      border-radius:4px;
       background:rgba(255,255,255,0.14);
       transition:background-color .18s ease, box-shadow .18s ease;
     }
@@ -133,15 +141,15 @@
       color:rgba(230,237,243,0.72);
       width:42px;
       height:42px;
-      border-radius:999px;
+      border-radius:12px;
       font-size:22px;
       line-height:1;
       cursor:pointer;
       transition:border-color .18s ease, background-color .18s ease, color .18s ease, transform .12s ease, opacity .18s ease;
     }
     .future-btn:hover{
-      border-color:rgba(255,255,255,0.16);
-      background:rgba(255,255,255,0.06);
+      border-color:rgba(91,141,255,0.46);
+      background:rgba(63,111,230,0.12);
       color:#f0f6fc;
       transform:translateY(-1px);
     }
@@ -170,9 +178,9 @@
       color:#f8fafc;
     }
     .helper-status.success{
-      border-color:rgba(63,185,80,0.45);
-      color:#8ef0a4;
-      background:rgba(63,185,80,0.08);
+      border-color:rgba(79,140,255,0.45);
+      color:#9fc4ff;
+      background:rgba(47,111,255,0.09);
     }
     .helper-status.error{
       border-color:rgba(248,81,73,0.42);
@@ -200,7 +208,7 @@
     }
     .cic-success-card{
       width:min(360px, 100%);
-      border:1px solid rgba(111,255,154,0.36);
+      border:1px solid rgba(121,156,255,0.36);
       border-radius:18px;
       padding:24px 22px;
       background:linear-gradient(180deg, rgba(16,26,20,0.98), rgba(8,14,20,0.98));
@@ -219,10 +227,10 @@
       width:42px;
       height:42px;
       margin-bottom:14px;
-      border-radius:999px;
-      background:rgba(63,185,80,0.18);
-      border:1px solid rgba(111,255,154,0.42);
-      color:#8ef0a4;
+      border-radius:12px;
+      background:rgba(47,111,255,0.18);
+      border:1px solid rgba(121,156,255,0.42);
+      color:#a9c7ff;
       font-size:24px;
       font-weight:800;
     }
@@ -299,7 +307,7 @@
       line-height:1.5;
       color:#3d4856;
       background:
-        linear-gradient(135deg, rgba(63,185,80,0.08), transparent 35%),
+        linear-gradient(135deg, rgba(65,117,255,0.09), transparent 35%),
         #f8fafc;
     }
     .stage-counter{
@@ -347,7 +355,7 @@
       font-weight:800;
       letter-spacing:.08em;
       text-transform:uppercase;
-      color:#9be9a8;
+      color:#8fb8ff;
     }
     .bounty-state{
       font-size:11px;
@@ -380,8 +388,8 @@
       outline:none;
     }
     .bounty-input:focus{
-      border-color:rgba(63,185,80,0.55);
-      box-shadow:0 0 0 3px rgba(63,185,80,0.12);
+      border-color:rgba(91,141,255,0.62);
+      box-shadow:0 0 0 3px rgba(66,133,255,0.16);
     }
     .bounty-chips{
       display:flex;
@@ -392,7 +400,7 @@
       flex:1 1 0;
       height:30px;
       border:1px solid rgba(255,255,255,0.12);
-      border-radius:999px;
+      border-radius:9px;
       background:rgba(255,255,255,0.04);
       color:#d0d7de;
       font-size:12px;
@@ -400,17 +408,17 @@
       cursor:pointer;
     }
     .bounty-chip:hover{
-      background:rgba(63,185,80,0.1);
-      border-color:rgba(63,185,80,0.32);
-      color:#9be9a8;
+      background:rgba(47,111,255,0.12);
+      border-color:rgba(91,141,255,0.42);
+      color:#b8ccff;
     }
     .bounty-submit{
       width:100%;
       height:38px;
-      border:1px solid rgba(63,185,80,0.52);
-      border-radius:11px;
-      background:linear-gradient(180deg, rgba(111,255,154,0.95), rgba(63,185,80,0.9));
-      color:#08110c;
+      border:1px solid rgba(91,141,255,0.56);
+      border-radius:9px;
+      background:linear-gradient(135deg, #0c1220 0%, #155dff 55%, #7a5cff 100%);
+      color:#f8fbff;
       font-size:13px;
       font-weight:900;
       cursor:pointer;
@@ -435,7 +443,7 @@
       color:#ffb4ad;
     }
     .bounty-status.success{
-      color:#9be9a8;
+      color:#9fc4ff;
     }
     .source-panel{
       display:flex;
@@ -487,10 +495,10 @@
     }
     .source-language{
       padding:5px 10px;
-      border-radius:999px;
-      border:1px solid rgba(63,185,80,0.26);
-      background:rgba(63,185,80,0.1);
-      color:#9be9a8;
+      border-radius:8px;
+      border:1px solid rgba(91,141,255,0.32);
+      background:rgba(47,111,255,0.12);
+      color:#b8ccff;
       font-size:11px;
       font-weight:700;
       letter-spacing:.05em;
@@ -637,7 +645,7 @@
       gap:18px;
       padding:34px;
       background:
-        linear-gradient(135deg, rgba(63,185,80,0.08), transparent 34%),
+        linear-gradient(135deg, rgba(65,117,255,0.08), transparent 34%),
         #f8fafc;
       color:#0f172a;
     }
@@ -718,7 +726,7 @@
     }
     .doc-fact{
       padding:6px 10px;
-      border-radius:999px;
+      border-radius:8px;
       border:1px solid rgba(15,23,42,0.1);
       background:#ffffff;
       color:#475569;
@@ -740,8 +748,8 @@
       justify-content:center;
       min-height:40px;
       padding:0 16px;
-      border-radius:999px;
-      background:#0f172a;
+      border-radius:9px;
+      background:linear-gradient(135deg, #0f172a, #1e4fd8);
       color:#ffffff;
       font-size:13px;
       font-weight:800;
@@ -911,6 +919,7 @@
       let currentLanguage = 'Lean';
       let currentFileName = 'Main.lean';
       let currentProblemKind = 'theorem';
+      let currentProofState = '';
       let bountyBusy = false;
       let deckItemLabel = 'Slide';
       let touchStartX = 0;
@@ -1339,11 +1348,73 @@
         return bounty;
       }
 
+      function normalizeProofState(value){
+        const text = String(value || '').trim().toUpperCase();
+        return text === 'NY' || text === 'YY' || text === 'YN' || text === 'NN' ? text : '';
+      }
+
+      function inferProofStateFromCode(language, code){
+        const source = String(code || '');
+        if(!source.trim()) return '';
+        const lang = resolveLanguage(language);
+        if(lang === 'Coq'){
+          if(/\b(?:Admitted|Conjecture)\s*\./.test(source)) return 'NY';
+          if(/\b(?:Qed|Defined)\s*\./.test(source)) return 'YY';
+          return '';
+        }
+        if(lang === 'Lean'){
+          if(/\b(?:sorry|admit|axiom|constant)\b/.test(source)) return 'NY';
+          return 'YY';
+        }
+        return '';
+      }
+
+      function getDraftProofState(draft){
+        const proof = draft && draft.proof && typeof draft.proof === 'object'
+          ? draft.proof
+          : null;
+        const helper = draft && draft.helper && typeof draft.helper === 'object'
+          ? draft.helper
+          : null;
+        const helperResult = helper
+          && helper.lambdaConversion
+          && typeof helper.lambdaConversion === 'object'
+          ? helper.lambdaConversion
+          : null;
+        const result = helperResult
+          && helperResult.result
+          && typeof helperResult.result === 'object'
+          ? helperResult.result
+          : null;
+        const candidates = [
+          proof && proof.proofState,
+          proof && proof.proof_state,
+          result && result.proofState,
+          result && result.proof_state,
+          draft && draft.proofState,
+          draft && draft.proof_state
+        ];
+        for(const candidate of candidates){
+          const normalized = normalizeProofState(candidate);
+          if(normalized) return normalized;
+        }
+        return proof
+          ? inferProofStateFromCode(proof.language || currentLanguage, proof.code)
+          : '';
+      }
+
+      function isUnresolvedProblemDraft(draft){
+        return getDraftProblemKind(draft) === 'problem' && getDraftProofState(draft) === 'NY';
+      }
+
       function syncBountyPanel(draft){
         if(!bountyPanelEl) return;
-        const isProblem = currentProblemKind === 'problem';
-        bountyPanelEl.hidden = !isProblem;
-        if(!isProblem) return;
+        const isUnresolvedProblem = isUnresolvedProblemDraft(draft);
+        bountyPanelEl.hidden = !isUnresolvedProblem;
+        if(!isUnresolvedProblem){
+          setBountyStatus('');
+          return;
+        }
 
         const bounty = getDraftBounty(draft);
         const amountCents = bounty && Number(bounty.amountCents) > 0 ? Number(bounty.amountCents) : 1000;
@@ -1459,6 +1530,10 @@
           setBountyStatus('Bounties can be added to problem posts only.', 'error');
           return;
         }
+        if(proofPayload.proofState !== 'NY'){
+          setBountyStatus('Bounties are only available for unsolved propositions.', 'error');
+          return;
+        }
 
         setBountyBusy(true);
         setBountyStatus('Creating Stripe checkout...');
@@ -1475,6 +1550,7 @@
               currency: 'usd',
               title: proofPayload.title || titleEl.textContent || 'Untitled problem',
               problemKind: proofPayload.problemKind,
+              proofState: proofPayload.proofState,
               language: proofPayload.language,
               fileName: proofPayload.fileName,
               clientReferenceId: 'provf-' + Date.now().toString(36)
@@ -1707,6 +1783,8 @@
             language: proofPayload.language,
             fileName: proofPayload.fileName,
             code: proofPayload.code,
+            problemKind: proofPayload.problemKind,
+            proofState: proofPayload.proofState,
             bounty: proofPayload.bounty,
             verify: true,
             format: completedFormat || requestedFormat,
@@ -1894,6 +1972,7 @@
           ? draft.title.text.trim()
           : '';
         const problemKind = getDraftProblemKind(draft);
+        const proofState = getDraftProofState(draft);
         return {
           title,
           language: resolveLanguage(proof.language || currentLanguage),
@@ -1902,7 +1981,8 @@
             : currentFileName,
           code: proof.code,
           problemKind,
-          bounty: problemKind === 'problem' ? getDraftBounty(draft) : null
+          proofState,
+          bounty: problemKind === 'problem' && proofState === 'NY' ? getDraftBounty(draft) : null
         };
       }
 
@@ -2817,6 +2897,7 @@
           : '';
         titleEl.textContent = title || 'Untitled';
         currentProblemKind = getDraftProblemKind(draft);
+        currentProofState = getDraftProofState(draft);
         currentLanguage = resolveLanguage(
           draft && draft.proof && typeof draft.proof === 'object' ? draft.proof.language : 'Lean'
         );

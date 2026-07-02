@@ -923,6 +923,7 @@
       let monacoRef = null;
       let running = false;
       let leanSeed = '';
+      let lastProofValidation = null;
       let proofFiles = [];
       let proofFolders = [];
       let activeProofFileId = '';
@@ -2325,6 +2326,9 @@
             folders,
             activeFileId: activeFile ? activeFile.id : activeProofFileId,
             goalsText: leanGoalsInput ? leanGoalsInput.value : '',
+            proofState: lastProofValidation && lastProofValidation.proof_state ? lastProofValidation.proof_state : '',
+            validationStatus: lastProofValidation && lastProofValidation.status ? lastProofValidation.status : '',
+            validationReason: lastProofValidation && lastProofValidation.reason ? lastProofValidation.reason : '',
             updatedAt: new Date().toISOString(),
             reason: 'back-navigation'
           },
@@ -2700,6 +2704,9 @@
             folders,
             activeFileId: activeFile ? activeFile.id : activeProofFileId,
             goalsText: leanGoalsInput ? leanGoalsInput.value : '',
+            proofState: lastProofValidation && lastProofValidation.proof_state ? lastProofValidation.proof_state : '',
+            validationStatus: lastProofValidation && lastProofValidation.status ? lastProofValidation.status : '',
+            validationReason: lastProofValidation && lastProofValidation.reason ? lastProofValidation.reason : '',
             updatedAt: new Date().toISOString(),
             reason
           },
@@ -2716,7 +2723,21 @@
         return patchTheoremDraftRecord(buildProofDraftSnapshot(reason));
       }
 
+      function isProofContentChangeReason(reason){
+        return [
+          'monaco-edit',
+          'fallback-edit',
+          'add-proof-files',
+          'remove-proof-file',
+          'create-proof-file',
+          'switch-proof-file'
+        ].includes(String(reason || ''));
+      }
+
       function scheduleProofDraftSave(reason = 'proof-editor'){
+        if(isProofContentChangeReason(reason)){
+          lastProofValidation = null;
+        }
         if(proofDraftSaveTimer){
           clearTimeout(proofDraftSaveTimer);
         }
@@ -2742,6 +2763,18 @@
           const storedProof = record.proof && typeof record.proof === 'object'
             ? record.proof
             : null;
+          if(storedProof){
+            const storedProofState = typeof storedProof.proofState === 'string'
+              ? storedProof.proofState
+              : (typeof storedProof.proof_state === 'string' ? storedProof.proof_state : '');
+            if(storedProofState){
+              lastProofValidation = {
+                status: typeof storedProof.validationStatus === 'string' ? storedProof.validationStatus : 'allowed',
+                proof_state: storedProofState,
+                reason: typeof storedProof.validationReason === 'string' ? storedProof.validationReason : ''
+              };
+            }
+          }
           const nextSummary = storedTitle || summaryText;
           const nextDraft = storedProof
             && storedProof.language === selectedLanguage
@@ -4123,6 +4156,11 @@
             setStatus('Runner disabled', true);
             outputEl.textContent = '[Configuration]\nOnly Coq and Lean validation are supported in this editor.';
             return;
+          }
+
+          if(validationResult && validationResult.proof_state){
+            lastProofValidation = validationResult;
+            saveProofDraftSnapshot('proof-validation');
           }
 
           if(validationResult && validationResult.status === 'allowed'){
