@@ -12,6 +12,8 @@
       --system-text:CanvasText;
       --brand-base:#050505;
       --brand-shimmer-base:#050505;
+      --search-surface:rgba(0,0,0,0.055);
+      --search-surface-text:#111111;
       --visible-vw:100vw;
       --visible-vh:100vh;
       --visible-left:0px;
@@ -30,6 +32,8 @@
       :root{
         --brand-base:#ffffff;
         --brand-shimmer-base:#ffffff;
+        --search-surface:rgba(255,255,255,0.075);
+        --search-surface-text:#f7f7f7;
       }
     }
 
@@ -333,7 +337,7 @@
       width:100%;
       border-radius:28px;
       padding:8px 15px;
-      background:#111;
+      background:var(--search-surface);
       position:relative;
       transition:border-radius .24s cubic-bezier(.22,1,.36,1), padding .24s cubic-bezier(.22,1,.36,1), transform .24s cubic-bezier(.22,1,.36,1), box-shadow .24s cubic-bezier(.22,1,.36,1), background-color .24s cubic-bezier(.22,1,.36,1), gap .24s cubic-bezier(.22,1,.36,1);
       will-change:border-radius,padding,transform,box-shadow,background-color,gap;
@@ -384,7 +388,7 @@
       font-size:16px;
       font-family:"Latin Modern Roman","CMU Serif","Computer Modern Serif","Computer Modern","Times New Roman",serif;
       background:transparent;
-      color:#fff;
+      color:var(--search-surface-text);
       resize:none;
       line-height:1.4;
       max-height:calc(100vh - 300px);
