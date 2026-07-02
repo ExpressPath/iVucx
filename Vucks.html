@@ -7454,9 +7454,13 @@
   });
 
   function focusSearchInputOnOpen(){
-    if(!input || state !== 0 || hasSuggestionResults || bodyEl.classList.contains('login-check')) return;
+    const canFocusCurrentInput = state === 0
+      || (state === 1 && !selectionMode && !container.classList.contains('expanded'));
+    if(!input || !canFocusCurrentInput || hasSuggestionResults || bodyEl.classList.contains('login-check')) return;
     const focusNow = ()=>{
-      if(state !== 0 || hasSuggestionResults || bodyEl.classList.contains('login-check')) return;
+      const canFocusNow = state === 0
+        || (state === 1 && !selectionMode && !container.classList.contains('expanded'));
+      if(!canFocusNow || hasSuggestionResults || bodyEl.classList.contains('login-check')) return;
       input.focus({ preventScroll:true });
       const end = input.value.length;
       try{
