@@ -1826,6 +1826,82 @@
       outline:none;
     }
 
+    .stripe-setup-card{
+      margin:8px 0 14px;
+      padding:12px;
+      border-radius:14px;
+      border:1px solid rgba(139,190,255,0.24);
+      background:linear-gradient(145deg, rgba(10,28,70,0.52), rgba(4,12,32,0.52));
+      box-shadow:0 12px 34px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08);
+      backdrop-filter:blur(12px);
+    }
+
+    .stripe-setup-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+
+    .stripe-setup-copy{
+      min-width:0;
+      color:rgba(235,246,255,0.82);
+      font-size:12px;
+      line-height:1.35;
+    }
+
+    .stripe-setup-copy strong{
+      display:block;
+      color:#ffffff;
+      font-size:13px;
+      font-weight:760;
+      line-height:1.3;
+    }
+
+    .stripe-setup-btn{
+      flex:0 0 auto;
+      min-height:34px;
+      border-radius:10px;
+      border:1px solid rgba(130,174,255,0.45);
+      background:linear-gradient(135deg, rgba(18,55,130,0.88), rgba(95,84,255,0.78));
+      color:#f7fbff;
+      font-size:12px;
+      font-weight:800;
+      padding:0 12px;
+      cursor:pointer;
+      box-shadow:0 8px 18px rgba(30,86,210,0.24);
+      transition:transform .18s ease,opacity .18s ease,box-shadow .18s ease;
+    }
+
+    .stripe-setup-btn:hover,
+    .stripe-setup-btn:focus-visible{
+      transform:translateY(-1px);
+      box-shadow:0 10px 24px rgba(56,104,255,0.32);
+      outline:none;
+    }
+
+    .stripe-setup-btn:disabled{
+      cursor:progress;
+      opacity:.7;
+      transform:none;
+    }
+
+    .stripe-setup-status{
+      min-height:16px;
+      margin-top:8px;
+      color:rgba(226,241,255,0.68);
+      font-size:11px;
+      line-height:1.35;
+    }
+
+    .stripe-setup-status.success{
+      color:#9fc4ff;
+    }
+
+    .stripe-setup-status.error{
+      color:#ffb4ad;
+    }
+
     .rewards-items{
       margin:0;
       padding:0;
@@ -2681,6 +2757,15 @@
         padding:4px 0;
       }
 
+      .stripe-setup-row{
+        align-items:stretch;
+        flex-direction:column;
+      }
+
+      .stripe-setup-btn{
+        width:100%;
+      }
+
       .cash-action-btn{
         font-size:17px;
       }
@@ -2905,6 +2990,7 @@
   </div>
 </div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="theorem-draft-store.js"></script>
 <script>
   const bodyEl = document.body;
@@ -4427,6 +4513,10 @@
   let theoremDraftSaveTimer = null;
   let blueModeCheckToken = 0;
   let loginPopupDismissed = false;
+  let googleOneTapInitialized = false;
+  let stripeSetupBusy = false;
+  let stripeSetupNotice = consumeStripeSetupReturn();
+  let stripeSetupReturnShouldOpenBlue = !!stripeSetupNotice;
   let suggestionAbortController = null;
   let hasSuggestionResults = false;
   let suggestionTurnSeq = 0;
@@ -5060,6 +5150,136 @@
 
   async function requestBlueLogout(){
     return requestAuthJson('/api/blue-auth-logout', 'POST');
+  }
+
+  async function requestStripeSetup(){
+    return requestAuthJson('/api/stripe-setup', 'POST');
+  }
+
+  function consumeStripeSetupReturn(){
+    try{
+      const url = new URL(window.location.href);
+      const state = url.searchParams.get('stripeSetup');
+      const sessionId = url.searchParams.get('session_id');
+      if(state !== 'success' && state !== 'cancelled') return null;
+      url.searchParams.delete('stripeSetup');
+      url.searchParams.delete('session_id');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : '') + url.hash);
+      if(state === 'success'){
+        return {
+          tone:'success',
+          sessionId: sessionId || '',
+          message:'Stripe card registration completed.'
+        };
+      }
+      return {
+        tone:'',
+        sessionId:'',
+        message:'Stripe card registration was cancelled.'
+      };
+    }catch(err){
+      return null;
+    }
+  }
+
+  function setStripeSetupNotice(message, tone = ''){
+    stripeSetupNotice = message
+      ? { message:String(message), tone:String(tone || '') }
+      : null;
+    renderRewards();
+  }
+
+  async function startStripeSetup(button){
+    if(stripeSetupBusy) return;
+    stripeSetupBusy = true;
+    if(button){
+      button.disabled = true;
+      button.textContent = 'Opening...';
+    }
+    setStripeSetupNotice('Opening Stripe card setup...');
+    try{
+      const payload = await requestStripeSetup();
+      if(!payload || !payload.url){
+        throw new Error('Stripe setup URL was not returned.');
+      }
+      window.location.href = payload.url;
+    }catch(err){
+      stripeSetupBusy = false;
+      if(button){
+        button.disabled = false;
+        button.textContent = 'Register card';
+      }
+      setStripeSetupNotice(err && err.message ? err.message : 'Could not open Stripe setup.', 'error');
+    }
+  }
+
+  function waitForGoogleIdentityClient(timeoutMs = 5000){
+    return new Promise(resolve=>{
+      const startedAt = Date.now();
+      const tick = ()=>{
+        if(window.google && window.google.accounts && window.google.accounts.id){
+          resolve(window.google);
+          return;
+        }
+        if(Date.now() - startedAt >= timeoutMs){
+          resolve(null);
+          return;
+        }
+        setTimeout(tick, 80);
+      };
+      tick();
+    });
+  }
+
+  async function handleGoogleOneTapCredential(response){
+    const credential = response && typeof response.credential === 'string'
+      ? response.credential
+      : '';
+    if(!credential) return;
+    try{
+      const result = await requestAuthJson('/api/google-one-tap', 'POST', { credential });
+      blueModeLoggedIn = true;
+      blueModeRewards = Array.isArray(result && result.rewards) ? result.rewards : [];
+      if(result && typeof result.accountId === 'string'){
+        saveBlueAccountHint(result.accountId);
+      }
+      if(state === 2){
+        renderRewards();
+        closeLoginPopup(true);
+        hydrateCookieConsentFromServer();
+      }
+    }catch(err){
+      // The existing Google button remains available if One Tap is skipped or rejected.
+    }
+  }
+
+  async function initializeGoogleOneTap(){
+    if(googleOneTapInitialized) return;
+    googleOneTapInitialized = true;
+    try{
+      const status = await requestAuthJson('/api/google-status', 'GET');
+      if(!status || !status.configured || !status.clientId) return;
+      const loginResult = await checkLogin();
+      if(loginResult && loginResult.loggedIn){
+        blueModeRewards = Array.isArray(loginResult.rewards) ? loginResult.rewards : [];
+        if(typeof loginResult.accountId === 'string'){
+          saveBlueAccountHint(loginResult.accountId);
+        }
+        return;
+      }
+      const googleClient = await waitForGoogleIdentityClient();
+      if(!googleClient || !googleClient.accounts || !googleClient.accounts.id) return;
+      googleClient.accounts.id.initialize({
+        client_id: status.clientId,
+        callback: handleGoogleOneTapCredential,
+        cancel_on_tap_outside: true,
+        context: 'signin',
+        use_fedcm_for_prompt: true
+      });
+      googleClient.accounts.id.prompt();
+    }catch(err){
+      // One Tap is opportunistic; the normal Google button still handles login.
+    }
   }
 
   async function requestCookieConsentPreference(method = 'GET', payload = null, signal = null){
@@ -5936,6 +6156,45 @@
       vxAuthRow.appendChild(authId);
       vxAuthRow.appendChild(logoutBtn);
     }
+
+    const stripeCard = document.createElement('div');
+    stripeCard.className = 'stripe-setup-card';
+
+    const stripeRow = document.createElement('div');
+    stripeRow.className = 'stripe-setup-row';
+
+    const stripeCopy = document.createElement('div');
+    stripeCopy.className = 'stripe-setup-copy';
+    const stripeTitle = document.createElement('strong');
+    stripeTitle.textContent = 'Stripe card setup';
+    const stripeDescription = document.createElement('span');
+    stripeDescription.textContent = 'Register a payout or payment card with Stripe.';
+    stripeCopy.appendChild(stripeTitle);
+    stripeCopy.appendChild(stripeDescription);
+
+    const stripeBtn = document.createElement('button');
+    stripeBtn.type = 'button';
+    stripeBtn.className = 'stripe-setup-btn';
+    stripeBtn.textContent = stripeSetupBusy ? 'Opening...' : 'Register card';
+    stripeBtn.disabled = stripeSetupBusy;
+    stripeBtn.addEventListener('click', ()=>{
+      startStripeSetup(stripeBtn);
+    });
+
+    stripeRow.appendChild(stripeCopy);
+    stripeRow.appendChild(stripeBtn);
+    stripeCard.appendChild(stripeRow);
+
+    const stripeStatus = document.createElement('div');
+    stripeStatus.className = 'stripe-setup-status';
+    if(stripeSetupNotice && stripeSetupNotice.tone){
+      stripeStatus.classList.add(stripeSetupNotice.tone);
+    }
+    stripeStatus.textContent = stripeSetupNotice && stripeSetupNotice.message
+      ? stripeSetupNotice.message
+      : '';
+    stripeCard.appendChild(stripeStatus);
+    rewardsList.appendChild(stripeCard);
 
     if(blueModeRewards.length === 0){
       const empty = document.createElement('div');
@@ -7194,11 +7453,33 @@
     saveUploadDraftSnapshot('upload');
   });
 
+  function focusSearchInputOnOpen(){
+    if(!input || state !== 0 || hasSuggestionResults || bodyEl.classList.contains('login-check')) return;
+    const focusNow = ()=>{
+      if(state !== 0 || hasSuggestionResults || bodyEl.classList.contains('login-check')) return;
+      input.focus({ preventScroll:true });
+      const end = input.value.length;
+      try{
+        input.setSelectionRange(end, end);
+      }catch(err){
+        // Textarea selection can fail in rare hidden states; focus is enough.
+      }
+    };
+    requestAnimationFrame(focusNow);
+    setTimeout(focusNow, 350);
+  }
+
   (async ()=>{
     restorePersistedModeState();
     await restoreTheoremDraftTitle();
     persistModeState();
     hydrateCookieConsentFromServer();
+    if(stripeSetupReturnShouldOpenBlue && state !== 2){
+      applyState(2);
+    }else{
+      focusSearchInputOnOpen();
+    }
+    setTimeout(()=>initializeGoogleOneTap(), 900);
   })();
 
   window.addEventListener('pagehide', ()=>{

@@ -3,6 +3,7 @@ import {
   googleAuthStartHandler,
   googleFilesHandler,
   googleImportHandler,
+  googleOneTapHandler,
   googleStatusHandler
 } from '../lib/google-oauth.js';
 
@@ -11,6 +12,7 @@ const ROUTES = {
   'auth-callback': googleAuthCallbackHandler,
   files: googleFilesHandler,
   import: googleImportHandler,
+  'one-tap': googleOneTapHandler,
   status: googleStatusHandler
 };
 

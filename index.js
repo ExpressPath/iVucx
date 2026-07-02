@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { sendBountyCheckoutResponse } from './lib/bounty-checkout.js';
+import { sendStripeSetupResponse } from './lib/stripe-setup.js';
 import blueAuthLogin from './api/blue-auth-login.js';
 import blueAuthLogout from './api/blue-auth-logout.js';
 import blueAuthSignup from './api/blue-auth-signup.js';
@@ -126,7 +127,9 @@ app.all('/api/google-auth-start', wrap(googleRoute('auth-start')));
 app.all('/api/google-auth-callback', wrap(googleRoute('auth-callback')));
 app.all('/api/google-files', wrap(googleRoute('files')));
 app.all('/api/google-import', wrap(googleRoute('import')));
+app.all('/api/google-one-tap', wrap(googleRoute('one-tap')));
 app.all('/api/google-status', wrap(googleRoute('status')));
+app.all('/api/stripe-setup', wrap(sendStripeSetupResponse));
 app.all('/api/suggest', wrap(suggest));
 
 app.use(express.static(__dirname, { dotfiles: 'ignore', extensions: ['html'] }));

@@ -70,6 +70,10 @@
       "dest": "/api/google?route=import"
     },
     {
+      "src": "/api/google-one-tap",
+      "dest": "/api/google?route=one-tap"
+    },
+    {
       "src": "/api/google-status",
       "dest": "/api/google?route=status"
     },
