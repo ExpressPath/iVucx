@@ -30,6 +30,8 @@
 
     @media (prefers-color-scheme:dark){
       :root{
+        --bg-white:#000000;
+        --bg-black:#000000;
         --brand-base:#ffffff;
         --brand-shimmer-base:#ffffff;
         --search-surface:rgba(255,255,255,0.075);
@@ -485,18 +487,20 @@
       max-height:150px;
       padding:15px 17px;
       border-radius:18px 0 0 18px;
-      background:rgba(255,255,255,0.95);
-      color:#111827;
+      background:rgba(255,255,255,0.12);
+      color:#f7fbff;
+      caret-color:#f7fbff;
+      backdrop-filter:blur(14px) saturate(126%);
       box-shadow:
-        0 12px 34px rgba(15,23,42,0.14),
-        inset 1px 0 0 rgba(15,23,42,0.09),
-        inset 0 1px 0 rgba(15,23,42,0.09),
-        inset 0 -1px 0 rgba(15,23,42,0.09);
+        0 12px 34px rgba(0,0,0,0.18),
+        inset 1px 0 0 rgba(255,255,255,0.10),
+        inset 0 1px 0 rgba(255,255,255,0.12),
+        inset 0 -1px 0 rgba(255,255,255,0.08);
       overflow:auto;
     }
 
     body.scrolled .search-container:not(.expanded) .search-input::placeholder{
-      color:#667085;
+      color:rgba(247,251,255,0.58);
     }
 
     body.scrolled .search-container:not(.expanded) .upload-shell{
