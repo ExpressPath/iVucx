@@ -1968,6 +1968,22 @@
       text-align:center;
     }
 
+    .login-popup-hero{
+      position:relative;
+      z-index:1;
+      display:block;
+      width:100%;
+      aspect-ratio:2.35 / 1;
+      max-height:166px;
+      margin:0 0 18px;
+      border-radius:18px;
+      object-fit:cover;
+      object-position:center 43%;
+      box-shadow:
+        0 18px 42px rgba(0,0,0,0.26),
+        inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+
     .login-popup-switch{
       position:relative;
       z-index:1;
@@ -2014,7 +2030,8 @@
     }
 
     .login-popup-loading{
-      position:relative;
+      position:absolute;
+      inset:0;
       z-index:1;
       min-height:190px;
       display:flex;
@@ -2027,6 +2044,10 @@
       transform:translateY(4px);
       transition:opacity .32s ease,transform .32s ease;
       pointer-events:none;
+    }
+
+    .login-popup.loading .login-popup-card{
+      min-height:270px;
     }
 
     .login-popup-main{
@@ -2677,6 +2698,13 @@
         margin-bottom:14px;
       }
 
+      .login-popup-hero{
+        aspect-ratio:2.05 / 1;
+        max-height:138px;
+        margin-bottom:14px;
+        border-radius:16px;
+      }
+
       .credential-row{
         flex-direction:column;
         align-items:stretch;
@@ -2831,6 +2859,7 @@
       <div class="login-popup-main" id="loginPopupMain">
         <h2 class="login-popup-title is-hidden" id="loginPopupTitle">Google sign in</h2>
         <p class="login-popup-copy" id="loginPopupCopy">Sign in with a Google account.</p>
+        <img class="login-popup-hero" src="assets/provf-login-hero.jpg" alt="provf" />
         <section class="login-popup-view is-active" data-auth-panel="login">
           <form class="login-popup-form" id="loginPopupForm">
             <button class="login-popup-submit google-login-btn" type="submit" aria-label="Sign in with Google">
