@@ -6,9 +6,12 @@
   <title>iVucx</title>
   <style>
     :root{
-      --bg-white:#ffffff;
-      --bg-black:#000000;
+      --bg-white:Canvas;
+      --bg-black:Canvas;
       --bg-navy:#0b1e3d;
+      --system-text:CanvasText;
+      --brand-base:#050505;
+      --brand-shimmer-base:#050505;
       --visible-vw:100vw;
       --visible-vh:100vh;
       --visible-left:0px;
@@ -23,6 +26,13 @@
       --pose-problem-center-x:50%;
     }
 
+    @media (prefers-color-scheme:dark){
+      :root{
+        --brand-base:#ffffff;
+        --brand-shimmer-base:#ffffff;
+      }
+    }
+
     *,*::before,*::after{box-sizing:border-box}
 
     html,body{
@@ -35,12 +45,14 @@
 
     body{
       background:var(--bg-white);
+      color:var(--system-text);
+      color-scheme:light dark;
       transition:background .45s ease,color .35s ease;
     }
 
     body.mode-q{
-      background:var(--bg-black);
-      color:#fff;
+      background:var(--bg-white);
+      color:var(--system-text);
     }
 
     body.scrolled{
@@ -163,7 +175,7 @@
       right:16px;
       top:16px;
       margin:0;
-      color:#050505;
+      color:var(--brand-base);
       font-size:clamp(48px, 8vw, 84px);
       font-weight:500;
       line-height:1.14;
@@ -178,11 +190,11 @@
     }
 
     body.mode-q .entrance-brand{
-      color:#ffffff;
+      color:var(--brand-base);
     }
 
     .entrance-brand::before{
-      content:"theorem";
+      content:"Search";
       position:absolute;
       right:calc(50% + clamp(58px, 10vw, 100px));
       top:50%;
@@ -196,14 +208,14 @@
     }
 
     body.mode-q .entrance-brand::before{
-      content:"problem";
-      color:#4c8dff;
+      content:"Search";
+      color:#1a73e8;
     }
 
     .entrance-brand.is-shimmering{
       color:transparent;
       background:
-        linear-gradient(92deg, #050505 0%, #050505 42%, #f58529 52%, #dd2a7b 62%, #8134af 72%, #515bd4 82%, #050505 92%, #050505 100%);
+        linear-gradient(92deg, var(--brand-shimmer-base) 0%, var(--brand-shimmer-base) 42%, #f58529 52%, #dd2a7b 62%, #8134af 72%, #515bd4 82%, var(--brand-shimmer-base) 92%, var(--brand-shimmer-base) 100%);
       background-size:260% 100%;
       background-position:100% 50%;
       background-repeat:no-repeat;
@@ -213,19 +225,19 @@
     }
 
     .entrance-brand.shimmer-finished{
-      color:#050505;
+      color:var(--brand-base);
       background:none;
       transition:opacity .2s ease, transform .24s ease, color 0s;
     }
 
     body.mode-q .entrance-brand.shimmer-finished{
-      color:#ffffff;
+      color:var(--brand-base);
     }
 
     body.mode-q .entrance-brand.is-shimmering{
       color:transparent;
       background:
-        linear-gradient(92deg, #ffffff 0%, #ffffff 42%, #f58529 52%, #dd2a7b 62%, #8134af 72%, #515bd4 82%, #ffffff 92%, #ffffff 100%);
+        linear-gradient(92deg, var(--brand-shimmer-base) 0%, var(--brand-shimmer-base) 42%, #f58529 52%, #dd2a7b 62%, #8134af 72%, #515bd4 82%, var(--brand-shimmer-base) 92%, var(--brand-shimmer-base) 100%);
       background-size:260% 100%;
       background-position:100% 50%;
       background-repeat:no-repeat;
@@ -298,12 +310,12 @@
     @media (prefers-reduced-motion:reduce){
       .entrance-brand.is-shimmering{
         animation:none;
-        color:#050505;
+        color:var(--brand-base);
         background:none;
       }
 
       body.mode-q .entrance-brand.is-shimmering{
-        color:#ffffff;
+        color:var(--brand-base);
       }
 
       .pose-problem-brand.is-shimmering{
@@ -1362,7 +1374,7 @@
     body.scrolled .icon-arrow{display:block;}
 
     .button-group{
-      display:flex;
+      display:none;
       justify-content:center;
       gap:12px;
       margin-top:22px;
@@ -3017,54 +3029,24 @@
   }
 
   function setMode(isQ){
-    if(isQ){
-      bodyEl.classList.add('mode-q');
-      qBtn.classList.add('active');
-      aBtn.classList.remove('active');
-    } else {
-      bodyEl.classList.remove('mode-q');
-      aBtn.classList.add('active');
-      qBtn.classList.remove('active');
-    }
+    bodyEl.classList.remove('mode-q');
+    if(qBtn) qBtn.classList.remove('active');
+    if(aBtn) aBtn.classList.add('active');
   }
 
   setMode(false);
 
   function getCurrentProblemKind(){
-    return bodyEl.classList.contains('mode-q') ? 'problem' : 'theorem';
-  }
-
-  function switchSearchMode(isQ, reason = 'qa-mode'){
-    if(bodyEl.classList.contains('mode-q') === !!isQ) return false;
-    setMode(!!isQ);
-    persistModeState();
-    scheduleCookieHistorySnapshot(reason);
-    return true;
+    return state === 1 || selectionMode ? 'problem' : 'search';
   }
 
   qBtn.addEventListener('click',e=>{
     e.preventDefault();
-    switchSearchMode(true);
+    setMode(false);
   });
   aBtn.addEventListener('click',e=>{
     e.preventDefault();
-    switchSearchMode(false);
-  });
-
-  window.addEventListener('keydown', e=>{
-    if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.isComposing) return;
-    if(state !== 0 || bodyEl.classList.contains('suggestions-open')) return;
-    const activeEl = document.activeElement;
-    const isTextInput = activeEl && (
-      activeEl === input
-      || activeEl.tagName === 'TEXTAREA'
-      || activeEl.tagName === 'INPUT'
-      || activeEl.isContentEditable
-    );
-    if(isTextInput && String(input.value || '').length > 0) return;
-    e.preventDefault();
-    switchSearchMode(e.key === 'ArrowRight', 'qa-mode-key');
+    setMode(false);
   });
 
   function formatFileSize(bytes){
@@ -5449,20 +5431,15 @@
     });
   }
 
-  function getModeFromProblemKind(kind){
-    return String(kind || '').trim().toLowerCase() === 'problem' ? 'q' : 'a';
-  }
-
-  function buildSuggestionTurnKey(query, fileNames, targetKind = getCurrentProblemKind()){
+  function buildSuggestionTurnKey(query, fileNames){
     const normalizedQuery = String(query || '').trim().toLowerCase();
-    const normalizedKind = String(targetKind || getCurrentProblemKind()).trim().toLowerCase() || 'theorem';
     const normalizedFiles = Array.isArray(fileNames)
       ? fileNames
           .map(name=>String(name || '').trim().toLowerCase())
           .filter(Boolean)
           .sort()
       : [];
-    return normalizedKind + '||' + normalizedQuery + '||' + normalizedFiles.join('|');
+    return normalizedQuery + '||' + normalizedFiles.join('|');
   }
 
   function buildSuggestionHistory(activeTurn){
@@ -5516,7 +5493,7 @@
 
       const head = document.createElement('div');
       head.className = 'chat-assistant-head';
-      head.textContent = turn.targetKind === 'problem' ? 'Problem search' : 'Theorem search';
+      head.textContent = 'Search';
       assistantCard.appendChild(head);
 
       if(turn.loading && turn.suggestions.length === 0){
@@ -5560,6 +5537,7 @@
             }
 
             const metaParts = [];
+            if(citation.kind) metaParts.push(`source: ${citation.kind}`);
             if(citation.fileName) metaParts.push(citation.fileName);
             if(citation.language) metaParts.push(citation.language);
             if(citation.normalizedFormat) metaParts.push(citation.normalizedFormat);
@@ -5671,13 +5649,9 @@
     renderSuggestionThread();
 
     try{
-      const targetKind = String(turn.targetKind || getCurrentProblemKind()).trim().toLowerCase() === 'problem'
-        ? 'problem'
-        : 'theorem';
       const payload = {
-        mode: getModeFromProblemKind(targetKind),
-        targetKind,
-        problemKind: targetKind,
+        mode: 'search',
+        searchKind: 'all',
         state,
         query: turn.query,
         files: turn.files || [],
@@ -5714,7 +5688,7 @@
         turn.suggestions = normalized;
         turn.answer = String(data && data.answer || '').trim();
         turn.citations = normalizedCitations;
-        turn.targetKind = String(data && data.targetKind || turn.targetKind || '').trim();
+        turn.targetKind = String(data && data.targetKind || 'search').trim();
       }
 
       turn.hasMore = typeof (data && data.hasMore) === 'boolean'
@@ -5739,11 +5713,10 @@
 
   async function requestSuggestions(query, fileNames){
     if(!query) return;
-    const targetKind = getCurrentProblemKind();
-    const turnKey = buildSuggestionTurnKey(query, fileNames, targetKind);
+    const turnKey = buildSuggestionTurnKey(query, fileNames);
     const alreadyShown = suggestionTurns.some(turn=>{
       if(typeof turn.key === 'string') return turn.key === turnKey;
-      return buildSuggestionTurnKey(turn.query, turn.files, turn.targetKind) === turnKey;
+      return buildSuggestionTurnKey(turn.query, turn.files) === turnKey;
     });
     if(alreadyShown){
       renderSuggestionThread();
@@ -5758,7 +5731,7 @@
       suggestions:[],
       answer:'',
       citations:[],
-      targetKind,
+      targetKind:'search',
       loading:true,
       loadingMore:false,
       hasMore:true,

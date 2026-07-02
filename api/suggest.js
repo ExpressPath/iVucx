@@ -209,9 +209,8 @@ function readRowKind(row) {
   return storedKind || inferLegacyRowKind(row);
 }
 
-function scoreRow(row, terms, targetKind) {
+function scoreRow(row, terms) {
   const rowKind = readRowKind(row);
-  if (rowKind !== targetKind) return -1;
 
   const title = String(row.title || '').toLowerCase();
   const fileName = String(row.file_name || '').toLowerCase();
@@ -219,7 +218,7 @@ function scoreRow(row, terms, targetKind) {
   const cic = stringifyPreview(row.normalized_term, MAX_CIC_CHARS).toLowerCase();
   const haystack = `${title} ${fileName} ${source} ${cic}`;
 
-  let score = 4;
+  let score = rowKind ? 4 : 2;
   if (terms.length === 0) score += 1;
   for (const term of terms) {
     if (title.includes(term)) score += 12;
@@ -253,7 +252,7 @@ function buildCitation(row, index) {
   };
 }
 
-async function searchSavedProblems({ query, targetKind, limit, offset }) {
+async function searchSavedProblems({ query, limit, offset }) {
   const { client, error } = getSupabaseAdmin();
   if (!client) {
     throw new Error(error || 'Supabase is not configured.');
@@ -271,7 +270,7 @@ async function searchSavedProblems({ query, targetKind, limit, offset }) {
 
   const terms = tokenize(query);
   const ranked = (Array.isArray(data) ? data : [])
-    .map((row) => ({ row, score: scoreRow(row, terms, targetKind) }))
+    .map((row) => ({ row, score: scoreRow(row, terms) }))
     .filter((entry) => entry.score >= 0)
     .sort((a, b) => b.score - a.score || String(b.row.created_at || '').localeCompare(String(a.row.created_at || '')));
 
@@ -300,7 +299,10 @@ function buildGeminiPrompt({ query, targetKind, citations, history }) {
 
   return [
     'You are the iVucx saved-problem search assistant.',
-    `Search target: ${targetKind}.`,
+    'Search target: unified saved problem/theorem search.',
+    'Do not force the conversation into only problem or only theorem search.',
+    'Use any provided saved row that is relevant, regardless of whether its kind is problem, theorem, or unknown.',
+    'Each saved row has a kind field. Keep that source-kind distinction available in citations and mention it when useful.',
     `User query: ${query}`,
     '',
     conversation.length
@@ -311,7 +313,7 @@ function buildGeminiPrompt({ query, targetKind, citations, history }) {
     'Answer in Japanese unless the user query is clearly in another language.',
     'Every factual claim about a saved problem/theorem must cite source ids like [P1].',
     'If no saved row supports an answer, say that the saved database does not contain enough information.',
-    'Suggestions must be short follow-up searches that can help refine the same problem/theorem lookup.',
+    'Suggestions must be short follow-up searches that can help refine the same saved-database lookup.',
     'Return JSON only with this shape:',
     '{"answer":"string","suggestions":["string"],"usedCitationIds":["P1"]}',
     '',
@@ -687,6 +689,42 @@ function buildFallbackAnswer(query, targetKind, citations, geminiError) {
   };
 }
 
+function describeUnifiedGeminiFallbackReason(error) {
+  const status = Number(error && (error.status || error.code));
+  if (status === 429) {
+    return 'Gemini API が現在レート制限またはクォータ上限に達しているため';
+  }
+  if (status === 400 || status === 401 || status === 403) {
+    return 'Gemini API の認証またはプロジェクト設定で拒否されたため';
+  }
+  if (error && /not configured/i.test(String(error.message || ''))) {
+    return 'Gemini API の接続情報が未設定のため';
+  }
+  return 'Gemini API が一時的に利用できないため';
+}
+
+function buildUnifiedFallbackAnswer(query, citations, geminiError) {
+  const reason = describeUnifiedGeminiFallbackReason(geminiError);
+  if (citations.length === 0) {
+    return {
+      answer: `${reason}、保存済みデータから検索しましたが、「${query}」に十分一致する情報が見つかりませんでした。`,
+      suggestions: [],
+      usedCitationIds: []
+    };
+  }
+
+  const lines = citations.slice(0, 4).map((item) => {
+    const file = item.fileName ? ` (${item.fileName})` : '';
+    const kind = item.kind && item.kind !== 'unknown' ? ` ${item.kind}` : '';
+    return `${item.title}${file}${kind}: ${item.quote} [${item.id}]`;
+  });
+  return {
+    answer: `${reason}、保存済みデータから一致度の高い引用を返します。\n${lines.join('\n')}`,
+    suggestions: citations.map((item) => `${item.title} [${item.id}]`),
+    usedCitationIds: citations.map((item) => item.id)
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -696,14 +734,14 @@ export default async function handler(req, res) {
   try {
     const body = req.body || {};
     const query = safeString(body.query);
-    const mode = safeString(body.mode, 'a');
+    const mode = safeString(body.mode, 'search');
     const limit = clamp(Number(body.limit) || 6, 1, 10);
     const offset = clamp(Number(body.offset) || 0, 0, 5000);
     const history = normalizeHistory(body.history);
     const includeAnswer = body.includeAnswer !== false;
-    const targetKind = getRequestTargetKind(body);
+    const targetKind = 'search';
     const pageSize = Math.max(limit, MAX_CONTEXT_DOCS);
-    const searchResult = await searchSavedProblems({ query, targetKind, limit: pageSize, offset });
+    const searchResult = await searchSavedProblems({ query, limit: pageSize, offset });
     const context = searchResult.citations.slice(0, MAX_CONTEXT_DOCS);
 
     let generated;
@@ -716,7 +754,7 @@ export default async function handler(req, res) {
         model = geminiResult.model;
         geminiUsed = true;
       } catch (geminiError) {
-        generated = buildFallbackAnswer(query, targetKind, context, geminiError);
+        generated = buildUnifiedFallbackAnswer(query, context, geminiError);
         model = '';
       }
     } else {
