@@ -94,46 +94,59 @@
     .view-switch{
       display:flex;
       align-items:center;
-      gap:10px;
-      padding:6px 10px;
-      border:1px solid rgba(255,255,255,0.1);
-      border-radius:13px;
-      background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);
+      gap:0;
+      padding:0;
+      border:none;
+      border-radius:0;
+      background:transparent;
+      box-shadow:none;
     }
     .view-switch:hover .view-divider{
-      background:rgba(92,144,255,0.62);
-      box-shadow:0 0 10px var(--accent-glow);
+      color:rgba(143,184,255,0.56);
     }
     .view-tab{
       border:none;
       background:transparent;
-      color:rgba(230,237,243,0.68);
-      padding:8px 12px;
-      border-radius:10px;
+      color:rgba(230,237,243,0.52);
+      padding:8px 7px;
+      border-radius:0;
       font-size:13px;
       font-weight:700;
       letter-spacing:.04em;
       text-transform:uppercase;
       cursor:pointer;
-      transition:color .18s ease, background-color .18s ease, transform .12s ease;
+      transition:color .18s ease, text-shadow .18s ease;
     }
     .view-tab:hover{
       color:#f0f6fc;
-      background:rgba(255,255,255,0.06);
-      transform:translateY(-1px);
+    }
+    .view-tab:focus,
+    .view-tab:focus-visible{
+      outline:none;
+    }
+    .view-tab:focus-visible{
+      color:#b9d3ff;
+      text-shadow:0 0 18px rgba(79,140,255,0.48);
     }
     .view-tab[aria-selected="true"]{
-      color:#f8fbff;
-      background:linear-gradient(135deg, #101826 0%, #1668ff 52%, #7b5cff 100%);
-      box-shadow:0 12px 28px rgba(58,103,255,0.28);
+      color:#8fb8ff;
+      background:transparent;
+      box-shadow:none;
+      text-shadow:0 0 18px rgba(79,140,255,0.42);
     }
     .view-divider{
-      width:1px;
-      height:24px;
-      border-radius:4px;
-      background:rgba(255,255,255,0.14);
-      transition:background-color .18s ease, box-shadow .18s ease;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:auto;
+      height:auto;
+      margin:0 -2px;
+      color:rgba(255,255,255,0.24);
+      font-size:19px;
+      font-weight:300;
+      line-height:1;
+      transform:skewX(-10deg);
+      transition:color .18s ease;
     }
     .future-btn{
       border:1px solid rgba(255,255,255,0.1);
@@ -276,6 +289,68 @@
       background:linear-gradient(180deg, rgba(15,20,28,0.96), rgba(9,12,17,0.98));
       box-shadow:0 28px 70px rgba(0,0,0,0.22);
     }
+    .stage-layout,
+    .source-layout{
+      width:100%;
+      height:100%;
+      min-height:0;
+      display:grid;
+      grid-template-columns:minmax(150px, 210px) minmax(0, 1fr);
+    }
+    .stage-layout.sidebar-empty,
+    .source-layout.sidebar-empty{
+      grid-template-columns:minmax(0, 1fr);
+    }
+    .preview-sidebar{
+      min-width:0;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      padding:14px 10px;
+      overflow:auto;
+      border-right:1px solid rgba(255,255,255,0.07);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+        rgba(6,10,16,0.44);
+    }
+    .preview-sidebar[hidden]{
+      display:none;
+    }
+    .preview-item{
+      width:100%;
+      min-width:0;
+      min-height:38px;
+      border:none;
+      border-radius:8px;
+      background:transparent;
+      color:rgba(230,237,243,0.58);
+      padding:8px 10px;
+      text-align:left;
+      font:inherit;
+      font-size:12px;
+      font-weight:700;
+      line-height:1.25;
+      letter-spacing:.01em;
+      cursor:pointer;
+      transition:background-color .18s ease, color .18s ease, box-shadow .18s ease;
+    }
+    .preview-item:hover{
+      color:#eef5ff;
+      background:rgba(255,255,255,0.045);
+    }
+    .preview-item.is-active{
+      color:#f8fbff;
+      background:linear-gradient(90deg, rgba(47,111,255,0.22), rgba(109,93,252,0.11));
+      box-shadow:inset 2px 0 0 #4f8cff;
+    }
+    .preview-item-name{
+      display:block;
+      min-width:0;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+    }
     .stage-viewport{
       position:relative;
       width:100%;
@@ -311,6 +386,7 @@
         #f8fafc;
     }
     .stage-counter{
+      display:none;
       position:absolute;
       right:18px;
       bottom:18px;
@@ -328,7 +404,7 @@
     }
     .bounty-panel{
       position:absolute;
-      left:18px;
+      right:18px;
       top:18px;
       z-index:3;
       width:min(340px, calc(100% - 36px));
@@ -446,25 +522,27 @@
       color:#9fc4ff;
     }
     .source-panel{
-      display:flex;
-      align-items:stretch;
-      justify-content:center;
+      display:block;
+      border-radius:18px;
+      border:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(16,22,29,0.98), rgba(10,14,19,0.98));
+      box-shadow:0 28px 70px rgba(0,0,0,0.22);
+      overflow:hidden;
     }
     .source-shell{
       width:100%;
       height:100%;
       min-height:0;
-      border-radius:18px;
-      border:1px solid var(--line);
-      background:
-        linear-gradient(180deg, rgba(16,22,29,0.98), rgba(10,14,19,0.98));
-      box-shadow:0 28px 70px rgba(0,0,0,0.22);
+      border-radius:0;
+      border:none;
+      background:#0d1117;
+      box-shadow:none;
       overflow:hidden;
       display:flex;
       flex-direction:column;
     }
     .source-meta{
-      display:flex;
+      display:none;
       align-items:center;
       justify-content:space-between;
       gap:16px;
@@ -588,28 +666,6 @@
       flex-direction:column;
       background:#fff;
     }
-    .doc-meta{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      padding:18px 22px;
-      border-bottom:1px solid rgba(15,23,42,0.08);
-      background:#f8fafc;
-      color:#0f172a;
-    }
-    .doc-title{
-      min-width:0;
-      font-size:20px;
-      font-weight:700;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-    }
-    .doc-kind{
-      font-size:13px;
-      color:#64748b;
-    }
     .doc-body{
       flex:1;
       min-height:0;
@@ -703,37 +759,11 @@
       color:#475569;
       text-align:center;
     }
-    .doc-preview-fallback-title{
-      max-width:760px;
-      color:#0f172a;
-      font-size:24px;
-      font-weight:800;
-      line-height:1.25;
-      word-break:break-word;
-    }
     .doc-preview-fallback-note{
       max-width:760px;
       color:#64748b;
       font-size:14px;
       line-height:1.55;
-    }
-    .doc-facts{
-      display:flex;
-      flex-wrap:wrap;
-      justify-content:center;
-      gap:8px;
-      max-width:820px;
-    }
-    .doc-fact{
-      padding:6px 10px;
-      border-radius:8px;
-      border:1px solid rgba(15,23,42,0.1);
-      background:#ffffff;
-      color:#475569;
-      font-size:12px;
-      font-weight:700;
-      line-height:1;
-      white-space:nowrap;
     }
     .doc-empty small{
       display:block;
@@ -799,6 +829,30 @@
         flex:1 1 auto;
         justify-content:center;
       }
+      .stage-layout,
+      .source-layout{
+        grid-template-columns:minmax(0, 1fr);
+        grid-template-rows:auto minmax(0, 1fr);
+      }
+      .stage-layout.sidebar-empty,
+      .source-layout.sidebar-empty{
+        grid-template-rows:minmax(0, 1fr);
+      }
+      .preview-sidebar{
+        flex-direction:row;
+        gap:6px;
+        padding:8px;
+        overflow-x:auto;
+        overflow-y:hidden;
+        border-right:none;
+        border-bottom:1px solid rgba(255,255,255,0.07);
+      }
+      .preview-item{
+        width:auto;
+        max-width:170px;
+        flex:0 0 auto;
+        min-height:34px;
+      }
       .source-editor{
         grid-template-columns:46px minmax(0,1fr);
       }
@@ -820,8 +874,8 @@
     </div>
     <div class="topbar-actions">
       <div class="view-switch" role="tablist" aria-label="Preview mode">
-        <button class="view-tab" id="slideTab" type="button" role="tab" aria-selected="true">Upload</button>
-        <span class="view-divider" aria-hidden="true"></span>
+        <button class="view-tab" id="slideTab" type="button" role="tab" aria-selected="true">Uploads</button>
+        <span class="view-divider" aria-hidden="true">/</span>
         <button class="view-tab" id="sourceTab" type="button" role="tab" aria-selected="false">Source</button>
       </div>
       <button class="future-btn" id="futureBtn" type="button" aria-label="Continue" title="Submit proof to helper server">→</button>
@@ -849,25 +903,31 @@
           <button class="bounty-submit" id="bountyCheckoutBtn" type="button">Fund bounty</button>
           <div class="bounty-status" id="bountyStatus" role="status" aria-live="polite"></div>
         </section>
-        <div class="stage-viewport" id="stageViewport">
-          <div class="stage" id="stage"></div>
+        <div class="stage-layout sidebar-empty" id="stageLayout">
+          <aside class="preview-sidebar" id="uploadSidebar" aria-label="Uploaded files" hidden></aside>
+          <div class="stage-viewport" id="stageViewport">
+            <div class="stage" id="stage"></div>
+          </div>
         </div>
         <div class="stage-counter" id="counter">No slides</div>
       </section>
       <section class="source-panel view-pane" id="sourceView" hidden>
-        <div class="source-shell">
-          <div class="source-meta">
-            <div>
-              <div class="source-kicker">Read-only source snapshot</div>
-              <div class="source-file-row">
-                <div class="source-file" id="sourceFile">Main.lean</div>
-                <div class="source-language" id="sourceLanguage">Lean</div>
+        <div class="source-layout sidebar-empty" id="sourceLayout">
+          <aside class="preview-sidebar" id="sourceSidebar" aria-label="Source files" hidden></aside>
+          <div class="source-shell">
+            <div class="source-meta">
+              <div>
+                <div class="source-kicker">Read-only source snapshot</div>
+                <div class="source-file-row">
+                  <div class="source-file" id="sourceFile">Main.lean</div>
+                  <div class="source-language" id="sourceLanguage">Lean</div>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="source-editor">
-            <pre class="source-gutter" id="sourceGutter"></pre>
-            <pre class="source-code" id="sourceCode"></pre>
+            <div class="source-editor">
+              <pre class="source-gutter" id="sourceGutter"></pre>
+              <pre class="source-code" id="sourceCode"></pre>
+            </div>
           </div>
         </div>
       </section>
@@ -887,6 +947,10 @@
       const titleEl = document.getElementById('title');
       const slideViewEl = document.getElementById('slideView');
       const sourceViewEl = document.getElementById('sourceView');
+      const stageLayoutEl = document.getElementById('stageLayout');
+      const sourceLayoutEl = document.getElementById('sourceLayout');
+      const uploadSidebarEl = document.getElementById('uploadSidebar');
+      const sourceSidebarEl = document.getElementById('sourceSidebar');
       const stageViewport = document.getElementById('stageViewport');
       const stageEl = document.getElementById('stage');
       const counterEl = document.getElementById('counter');
@@ -915,6 +979,8 @@
 
       let slides = [];
       let slideIndex = 0;
+      let sourceFiles = [];
+      let sourceActiveIndex = 0;
       let currentView = 'slide';
       let currentLanguage = 'Lean';
       let currentFileName = 'Main.lean';
@@ -938,6 +1004,14 @@
         if(input === 'isabelle') return 'Isabelle';
         if(input === 'agda') return 'Agda';
         return 'Lean';
+      }
+
+      function getDefaultFileNameForLanguage(language){
+        const normalized = resolveLanguage(language);
+        if(normalized === 'Coq') return 'Main.v';
+        if(normalized === 'Isabelle') return 'Main.thy';
+        if(normalized === 'Agda') return 'Main.agda';
+        return 'Main.lean';
       }
 
       function isMobileLikeDevice(){
@@ -2347,6 +2421,121 @@
         sourceLanguageEl.textContent = currentLanguage;
       }
 
+      function normalizeSourceFile(rawFile, index, fallbackLanguage){
+        if(!rawFile || typeof rawFile !== 'object') return null;
+        const language = resolveLanguage(rawFile.language || fallbackLanguage || currentLanguage);
+        const name = typeof rawFile.name === 'string' && rawFile.name.trim()
+          ? rawFile.name.trim()
+          : (typeof rawFile.fileName === 'string' && rawFile.fileName.trim()
+            ? rawFile.fileName.trim()
+            : getDefaultFileNameForLanguage(language));
+        return {
+          id: typeof rawFile.id === 'string' && rawFile.id.trim()
+            ? rawFile.id.trim()
+            : 'source-file-' + index,
+          name,
+          language,
+          code: typeof rawFile.code === 'string' ? rawFile.code : ''
+        };
+      }
+
+      function collectSourceFiles(draft){
+        const proof = draft && draft.proof && typeof draft.proof === 'object'
+          ? draft.proof
+          : null;
+        if(!proof){
+          return [{
+            id: 'source-file-empty',
+            name: getDefaultFileNameForLanguage(currentLanguage),
+            language: currentLanguage,
+            code: ''
+          }];
+        }
+        const fallbackLanguage = resolveLanguage(proof.language || currentLanguage);
+        const files = Array.isArray(proof.files)
+          ? proof.files
+            .map((file, index)=>normalizeSourceFile(file, index, fallbackLanguage))
+            .filter(Boolean)
+          : [];
+        if(files.length){
+          return files;
+        }
+        const name = typeof proof.fileName === 'string' && proof.fileName.trim()
+          ? proof.fileName.trim()
+          : getDefaultFileNameForLanguage(fallbackLanguage);
+        return [{
+          id: 'source-file-main',
+          name,
+          language: fallbackLanguage,
+          code: typeof proof.code === 'string' ? proof.code : ''
+        }];
+      }
+
+      function resolveSourceActiveIndex(draft, files){
+        if(!Array.isArray(files) || !files.length) return 0;
+        const proof = draft && draft.proof && typeof draft.proof === 'object'
+          ? draft.proof
+          : null;
+        const activeFileId = proof && typeof proof.activeFileId === 'string'
+          ? proof.activeFileId.trim()
+          : '';
+        if(activeFileId){
+          const byId = files.findIndex(file=>file.id === activeFileId);
+          if(byId >= 0) return byId;
+        }
+        const activeFileName = proof && typeof proof.fileName === 'string'
+          ? proof.fileName.trim()
+          : '';
+        if(activeFileName){
+          const byName = files.findIndex(file=>file.name === activeFileName);
+          if(byName >= 0) return byName;
+        }
+        return 0;
+      }
+
+      function renderSourceSidebar(){
+        if(!sourceSidebarEl || !sourceLayoutEl) return;
+        sourceSidebarEl.innerHTML = '';
+        const hasFiles = Array.isArray(sourceFiles) && sourceFiles.length > 0;
+        sourceSidebarEl.hidden = !hasFiles;
+        sourceLayoutEl.classList.toggle('sidebar-empty', !hasFiles);
+        if(!hasFiles) return;
+        sourceFiles.forEach((file, index)=>{
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'preview-item' + (index === sourceActiveIndex ? ' is-active' : '');
+          button.setAttribute('aria-current', index === sourceActiveIndex ? 'true' : 'false');
+          button.title = file.name;
+          const name = document.createElement('span');
+          name.className = 'preview-item-name';
+          name.textContent = file.name;
+          button.appendChild(name);
+          button.addEventListener('click', ()=>{
+            if(index === sourceActiveIndex) return;
+            sourceActiveIndex = index;
+            renderActiveSourceFile();
+          });
+          sourceSidebarEl.appendChild(button);
+        });
+      }
+
+      function renderActiveSourceFile(){
+        if(!Array.isArray(sourceFiles) || !sourceFiles.length){
+          sourceFiles = [{
+            id: 'source-file-empty',
+            name: getDefaultFileNameForLanguage(currentLanguage),
+            language: currentLanguage,
+            code: ''
+          }];
+        }
+        sourceActiveIndex = Math.max(0, Math.min(sourceFiles.length - 1, sourceActiveIndex));
+        const file = sourceFiles[sourceActiveIndex];
+        currentFileName = file.name;
+        currentLanguage = resolveLanguage(file.language || currentLanguage);
+        renderSourceSnapshot(file.code);
+        renderSourceSidebar();
+      }
+
       function normalizeSlides(record){
         const editorState = record && record.editorState && typeof record.editorState === 'object'
           ? record.editorState
@@ -2411,6 +2600,51 @@
         }
         slideIndex = Math.max(0, Math.min(visible.length - 1, slideIndex));
         return visible;
+      }
+
+      function getUploadSidebarLabel(slide, visibleIndex){
+        if(slide && slide.type === 'document'){
+          const title = getDocumentTitle(slide.document);
+          if(title) return title;
+        }
+        const candidates = [
+          slide && slide.title,
+          slide && slide.name,
+          slide && slide.label
+        ];
+        for(const candidate of candidates){
+          const text = String(candidate || '').trim();
+          if(text) return text;
+        }
+        return deckItemLabel + ' ' + (visibleIndex + 1);
+      }
+
+      function renderUploadSidebar(visibleSlides){
+        if(!uploadSidebarEl || !stageLayoutEl) return;
+        const items = Array.isArray(visibleSlides) ? visibleSlides : [];
+        uploadSidebarEl.innerHTML = '';
+        const hasItems = items.length > 0;
+        uploadSidebarEl.hidden = !hasItems;
+        stageLayoutEl.classList.toggle('sidebar-empty', !hasItems);
+        if(!hasItems) return;
+        items.forEach((slide, index)=>{
+          const label = getUploadSidebarLabel(slide, index);
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'preview-item' + (index === slideIndex ? ' is-active' : '');
+          button.setAttribute('aria-current', index === slideIndex ? 'true' : 'false');
+          button.title = label;
+          const name = document.createElement('span');
+          name.className = 'preview-item-name';
+          name.textContent = label;
+          button.appendChild(name);
+          button.addEventListener('click', ()=>{
+            if(index === slideIndex) return;
+            slideIndex = index;
+            renderCurrentSlide();
+          });
+          uploadSidebarEl.appendChild(button);
+        });
       }
 
       function createNode(className){
@@ -2589,14 +2823,6 @@
         return String(documentInfo && (documentInfo.url || documentInfo.webViewLink) || '').trim();
       }
 
-      function formatBytes(bytes){
-        const value = Number(bytes) || 0;
-        if(value < 1024) return `${value} B`;
-        if(value < 1024 * 1024) return `${Math.round(value / 102.4) / 10} KB`;
-        if(value < 1024 * 1024 * 1024) return `${Math.round(value / 1024 / 102.4) / 10} MB`;
-        return `${Math.round(value / 1024 / 1024 / 102.4) / 10} GB`;
-      }
-
       function inferDocumentKind(documentInfo){
         const explicit = String(documentInfo && documentInfo.kind || '').toLowerCase();
         const ext = getDocumentExt(documentInfo);
@@ -2616,15 +2842,6 @@
         if(['xls','xlsx','ods'].includes(ext)) return 'spreadsheet';
         if(['zip','7z','rar','tar','gz','bz2','xz'].includes(ext)) return 'archive';
         return explicit || 'file';
-      }
-
-      function formatDocumentKind(documentInfo, kind){
-        const parts = [kind || 'file'];
-        const ext = getDocumentExt(documentInfo);
-        const size = Number(documentInfo && documentInfo.size) || 0;
-        if(ext) parts.push(ext.toUpperCase());
-        if(size) parts.push(formatBytes(size));
-        return parts.join(' - ');
       }
 
       function clearPreviewObjectUrls(){
@@ -2658,39 +2875,13 @@
         };
       }
 
-      function appendDocumentFacts(parent, documentInfo, kind, mime){
-        const facts = document.createElement('div');
-        facts.className = 'doc-facts';
-        const ext = getDocumentExt(documentInfo);
-        const size = Number(documentInfo && documentInfo.size) || 0;
-        [
-          kind || 'file',
-          ext ? ext.toUpperCase() : '',
-          mime || getDocumentMime(documentInfo),
-          size ? formatBytes(size) : '',
-          documentInfo && documentInfo.scanLabel ? documentInfo.scanLabel : ''
-        ].filter(Boolean).forEach(value=>{
-          const fact = document.createElement('span');
-          fact.className = 'doc-fact';
-          fact.textContent = value;
-          facts.appendChild(fact);
-        });
-        if(facts.childNodes.length){
-          parent.appendChild(facts);
-        }
-      }
-
       function createDocumentFallback(documentInfo, kind, source, noteText){
         const fallback = document.createElement('div');
         fallback.className = 'doc-preview-fallback';
-        const title = document.createElement('div');
-        title.className = 'doc-preview-fallback-title';
-        title.textContent = getDocumentTitle(documentInfo);
         const note = document.createElement('div');
         note.className = 'doc-preview-fallback-note';
         note.textContent = noteText || 'This browser does not provide a native preview for this file type.';
-        fallback.append(title, note);
-        appendDocumentFacts(fallback, documentInfo, kind, source && source.mime);
+        fallback.appendChild(note);
         const href = documentInfo && (source && source.url || documentInfo.webViewLink || documentInfo.url);
         if(href){
           const link = document.createElement('a');
@@ -2748,7 +2939,6 @@
           audio.preload = 'metadata';
           audio.src = url;
           wrap.append(mark, audio);
-          appendDocumentFacts(wrap, documentInfo, kind, mime);
           body.appendChild(wrap);
           return;
         }
@@ -2794,18 +2984,6 @@
         shell.className = 'doc';
         const documentInfo = slide && slide.document ? slide.document : null;
         const previewKind = inferDocumentKind(documentInfo);
-        const meta = document.createElement('div');
-        meta.className = 'doc-meta';
-        const title = document.createElement('div');
-        title.className = 'doc-title';
-        title.textContent = getDocumentTitle(documentInfo);
-        const kind = document.createElement('div');
-        kind.className = 'doc-kind';
-        kind.textContent = formatDocumentKind(documentInfo, previewKind);
-        meta.appendChild(title);
-        meta.appendChild(kind);
-        shell.appendChild(meta);
-
         const body = document.createElement('div');
         body.className = 'doc-body';
         body.appendChild(createDocumentFallback(documentInfo, previewKind, null, 'Loading preview...'));
@@ -2851,6 +3029,7 @@
         clearPreviewObjectUrls();
         stageEl.innerHTML = '';
         const visible = clampSlideIndex();
+        renderUploadSidebar(visible);
         counterEl.textContent = visible.length
           ? deckItemLabel + ' ' + (slideIndex + 1) + ' / ' + visible.length
           : 'No uploads';
@@ -2903,18 +3082,9 @@
         );
         draft = await handleBountyReturn(draft);
         syncBountyPanel(draft);
-        currentFileName = draft
-          && draft.proof
-          && typeof draft.proof === 'object'
-          && typeof draft.proof.fileName === 'string'
-          && draft.proof.fileName.trim()
-          ? draft.proof.fileName.trim()
-          : (currentLanguage === 'Coq' ? 'Main.v' : 'Main.lean');
-        renderSourceSnapshot(
-          draft && draft.proof && typeof draft.proof === 'object' && typeof draft.proof.code === 'string'
-            ? draft.proof.code
-            : ''
-        );
+        sourceFiles = collectSourceFiles(draft);
+        sourceActiveIndex = resolveSourceActiveIndex(draft, sourceFiles);
+        renderActiveSourceFile();
         const record = draft && draft.summarySlide && draft.summarySlide.record && typeof draft.summarySlide.record === 'object'
           ? draft.summarySlide.record
           : null;
