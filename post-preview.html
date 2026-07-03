@@ -587,16 +587,23 @@
       min-height:0;
       display:grid;
       grid-template-columns:auto minmax(0,1fr);
+      align-items:start;
+      overflow:auto;
       background:#0d1117;
     }
     .source-gutter{
+      position:sticky;
+      left:0;
+      z-index:1;
       min-width:56px;
+      min-height:100%;
       margin:0;
       padding:18px 12px 18px 18px;
       border-right:1px solid rgba(255,255,255,0.06);
       color:rgba(139,148,158,0.72);
       font-size:13px;
       line-height:1.75;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
       text-align:right;
       white-space:pre;
       user-select:none;
@@ -604,9 +611,10 @@
       overflow:hidden;
     }
     .source-code{
+      min-width:max-content;
       margin:0;
       padding:18px 20px;
-      overflow:auto;
+      overflow:visible;
       white-space:pre;
       word-break:normal;
       font-size:13px;
@@ -2823,6 +2831,17 @@
         return String(documentInfo && (documentInfo.url || documentInfo.webViewLink) || '').trim();
       }
 
+      function applyPdfPreviewOptions(url){
+        const value = String(url || '').trim();
+        if(!value) return '';
+        const options = 'toolbar=0&navpanes=0&scrollbar=0&view=FitH';
+        const hashIndex = value.indexOf('#');
+        if(hashIndex < 0) return value + '#' + options;
+        const base = value.slice(0, hashIndex);
+        const hash = value.slice(hashIndex + 1);
+        return base + '#' + (hash ? hash + '&' + options : options);
+      }
+
       function inferDocumentKind(documentInfo){
         const explicit = String(documentInfo && documentInfo.kind || '').toLowerCase();
         const ext = getDocumentExt(documentInfo);
@@ -2904,8 +2923,8 @@
         if(kind === 'pdf' && url){
           const frame = document.createElement('iframe');
           frame.className = 'doc-frame';
-          frame.src = url;
-          frame.title = title;
+          frame.src = applyPdfPreviewOptions(url);
+          frame.title = 'PDF preview';
           body.appendChild(frame);
           return;
         }
