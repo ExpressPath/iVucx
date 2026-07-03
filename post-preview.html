@@ -1489,6 +1489,13 @@
         return getDraftProblemKind(draft) === 'problem' && getDraftProofState(draft) === 'NY';
       }
 
+      function resolvePostKindFromProofState(draftKind, proofState){
+        const normalizedState = normalizeProofState(proofState);
+        if(normalizedState === 'YY') return 'theorem';
+        if(normalizedState === 'NY') return 'problem';
+        return draftKind === 'problem' || draftKind === 'theorem' ? draftKind : 'theorem';
+      }
+
       function syncBountyPanel(draft){
         if(!bountyPanelEl) return;
         const isUnresolvedProblem = isUnresolvedProblemDraft(draft);
@@ -2053,8 +2060,8 @@
         const title = draft && draft.title && typeof draft.title.text === 'string'
           ? draft.title.text.trim()
           : '';
-        const problemKind = getDraftProblemKind(draft);
         const proofState = getDraftProofState(draft);
+        const problemKind = resolvePostKindFromProofState(getDraftProblemKind(draft), proofState);
         return {
           title,
           language: resolveLanguage(proof.language || currentLanguage),

@@ -112,6 +112,18 @@ function normalizeProblemKind(value) {
   return '';
 }
 
+function normalizeProofState(value) {
+  const text = String(value || '').trim().toUpperCase();
+  return /^(YY|NY|YN|NN)$/.test(text) ? text : '';
+}
+
+function kindFromProofState(value) {
+  const proofState = normalizeProofState(value);
+  if (proofState === 'YY') return 'theorem';
+  if (proofState === 'NY') return 'problem';
+  return '';
+}
+
 function getRequestTargetKind(body) {
   const source = isPlainObject(body) ? body : {};
   return normalizeProblemKind(
@@ -199,6 +211,8 @@ function inferLegacyRowKind(row) {
 function readRowKind(row) {
   const requestMeta = isPlainObject(row.request_meta) ? row.request_meta : {};
   const adapterMeta = isPlainObject(row.adapter_meta) ? row.adapter_meta : {};
+  const proofKind = kindFromProofState(row.proof_state);
+  if (proofKind) return proofKind;
   const storedKind = normalizeProblemKind(
     requestMeta.problemKind
       || requestMeta.postKind
@@ -242,6 +256,7 @@ function buildCitation(row, index) {
     title,
     fileName: safeString(row.file_name),
     language: safeString(row.language),
+    proofState: normalizeProofState(row.proof_state),
     createdAt: row.created_at || '',
     kind: readRowKind(row) || 'unknown',
     normalizedFormat: safeString(row.normalized_format),
@@ -260,7 +275,7 @@ async function searchSavedProblems({ query, limit, offset }) {
 
   const { data, error: queryError } = await client
     .from('problems')
-    .select('id,title,language,file_name,source_code,normalized_format,normalized_term,adapter_meta,request_meta,created_at')
+    .select('id,title,language,file_name,source_code,proof_state,normalized_format,normalized_term,adapter_meta,request_meta,created_at')
     .order('created_at', { ascending: false })
     .limit(MAX_SEARCH_ROWS);
 
@@ -288,6 +303,7 @@ function buildGeminiPrompt({ query, targetKind, citations, history }) {
     title: item.title,
     fileName: item.fileName,
     language: item.language,
+    proofState: item.proofState,
     kind: item.kind,
     normalizedFormat: item.normalizedFormat,
     requestedFormat: item.requestedFormat,
