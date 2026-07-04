@@ -3185,6 +3185,68 @@
       text-transform:uppercase;
     }
 
+    .problem-preview-switch{
+      display:flex;
+      align-items:center;
+      gap:0;
+      padding:0;
+      border:none;
+      border-radius:0;
+      background:transparent;
+      box-shadow:none;
+    }
+
+    .problem-preview-tab{
+      border:none;
+      background:transparent;
+      color:rgba(230,237,243,0.52);
+      padding:8px 7px;
+      border-radius:0;
+      font:inherit;
+      font-size:13px;
+      font-weight:700;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+      cursor:pointer;
+      transition:color .18s ease, text-shadow .18s ease;
+    }
+
+    .problem-preview-tab:hover{
+      color:#f0f6fc;
+    }
+
+    .problem-preview-tab:focus,
+    .problem-preview-tab:focus-visible{
+      outline:none;
+    }
+
+    .problem-preview-tab:focus-visible{
+      color:#b9d3ff;
+      text-shadow:0 0 18px rgba(79,140,255,0.48);
+    }
+
+    .problem-preview-tab[aria-selected="true"]{
+      color:#8fb8ff;
+      text-shadow:0 0 18px rgba(79,140,255,0.42);
+    }
+
+    .problem-preview-divider{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      margin:0 -2px;
+      color:rgba(255,255,255,0.24);
+      font-size:19px;
+      font-weight:300;
+      line-height:1;
+      transform:skewX(-10deg);
+      transition:color .18s ease;
+    }
+
+    .problem-preview-switch:hover .problem-preview-divider{
+      color:rgba(143,184,255,0.56);
+    }
+
     .problem-preview-main{
       flex:1;
       min-height:0;
@@ -3207,6 +3269,20 @@
       padding:0;
     }
 
+    .problem-preview-card.is-overview,
+    .problem-preview-card.is-source{
+      grid-template-columns:minmax(0, 1fr);
+    }
+
+    .problem-preview-card.is-overview .problem-preview-source-shell,
+    .problem-preview-card.is-source .problem-preview-summary{
+      display:none;
+    }
+
+    .problem-preview-card.is-overview .problem-preview-summary{
+      border-right:0;
+    }
+
     body.mode-q .problem-preview-card{
       border-color:rgba(255,255,255,0.08);
       background:linear-gradient(180deg, rgba(15,20,28,0.96), rgba(9,12,17,0.98));
@@ -3218,7 +3294,7 @@
       min-width:0;
       min-height:0;
       overflow:auto;
-      padding:22px;
+      padding:28px;
       border-right:1px solid rgba(255,255,255,0.07);
       background:
         linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
@@ -3228,7 +3304,8 @@
     .problem-preview-heading{
       margin:0 0 14px;
       color:#f0f6fc;
-      font-size:clamp(24px, 4vw, 38px);
+      max-width:1100px;
+      font-size:clamp(28px, 4.4vw, 48px);
       line-height:1.08;
       letter-spacing:0;
     }
@@ -3601,10 +3678,14 @@
         <h1 class="problem-preview-title" id="problemPreviewTitle"></h1>
       </div>
     </div>
-    <div class="problem-preview-mode" id="problemPreviewMode">Source</div>
+    <div class="problem-preview-switch" role="tablist" aria-label="Preview view">
+      <button class="problem-preview-tab" id="problemPreviewOverviewTab" type="button" role="tab" aria-selected="true">Overview</button>
+      <span class="problem-preview-divider" aria-hidden="true">/</span>
+      <button class="problem-preview-tab" id="problemPreviewSourceTab" type="button" role="tab" aria-selected="false">Source</button>
+    </div>
   </header>
   <main class="problem-preview-main">
-    <article class="problem-preview-card">
+    <article class="problem-preview-card is-overview" id="problemPreviewCard">
       <section class="problem-preview-summary">
         <h2 class="problem-preview-heading" id="problemPreviewHeading"></h2>
         <div class="citation-preview-meta" id="problemPreviewMeta"></div>
@@ -3765,9 +3846,11 @@
   const citationPreviewSource = document.getElementById('citationPreviewSource');
   const problemPreviewPage = document.getElementById('problemPreviewPage');
   const problemPreviewBack = document.getElementById('problemPreviewBack');
+  const problemPreviewCard = document.getElementById('problemPreviewCard');
+  const problemPreviewOverviewTab = document.getElementById('problemPreviewOverviewTab');
+  const problemPreviewSourceTab = document.getElementById('problemPreviewSourceTab');
   const problemPreviewTitle = document.getElementById('problemPreviewTitle');
   const problemPreviewHeading = document.getElementById('problemPreviewHeading');
-  const problemPreviewMode = document.getElementById('problemPreviewMode');
   const problemPreviewMeta = document.getElementById('problemPreviewMeta');
   const problemPreviewQuote = document.getElementById('problemPreviewQuote');
   const problemPreviewDetails = document.getElementById('problemPreviewDetails');
@@ -6658,7 +6741,6 @@
     const lineCount = Math.max(1, sourceText.split(/\r?\n/).length);
     if(problemPreviewTitle) problemPreviewTitle.textContent = title;
     if(problemPreviewHeading) problemPreviewHeading.textContent = title;
-    if(problemPreviewMode) problemPreviewMode.textContent = citation.kind ? citation.kind : 'Source';
     appendCitationMetaPills(problemPreviewMeta, citation);
     if(problemPreviewQuote) problemPreviewQuote.textContent = citation.quote || 'No quote preview available.';
     if(problemPreviewDetails) problemPreviewDetails.textContent = getCitationDetailText(citation);
@@ -6671,10 +6753,25 @@
     }
   }
 
+  function setProblemPreviewView(view){
+    const normalized = view === 'source' ? 'source' : 'overview';
+    if(problemPreviewCard){
+      problemPreviewCard.classList.toggle('is-overview', normalized === 'overview');
+      problemPreviewCard.classList.toggle('is-source', normalized === 'source');
+    }
+    if(problemPreviewOverviewTab){
+      problemPreviewOverviewTab.setAttribute('aria-selected', normalized === 'overview' ? 'true' : 'false');
+    }
+    if(problemPreviewSourceTab){
+      problemPreviewSourceTab.setAttribute('aria-selected', normalized === 'source' ? 'true' : 'false');
+    }
+  }
+
   function openProblemPreviewPage(citation){
     if(!problemPreviewPage || !citation) return;
     activeCitationPreview = citation;
     renderProblemPreviewPage(citation);
+    setProblemPreviewView('overview');
     closeCitationPreview();
     problemPreviewPage.hidden = false;
     problemPreviewPage.setAttribute('aria-hidden', 'false');
@@ -7030,6 +7127,18 @@
 
   if(problemPreviewBack){
     problemPreviewBack.addEventListener('click', closeProblemPreviewPage);
+  }
+
+  if(problemPreviewOverviewTab){
+    problemPreviewOverviewTab.addEventListener('click', ()=>{
+      setProblemPreviewView('overview');
+    });
+  }
+
+  if(problemPreviewSourceTab){
+    problemPreviewSourceTab.addEventListener('click', ()=>{
+      setProblemPreviewView('source');
+    });
   }
 
   document.addEventListener('keydown', e=>{
