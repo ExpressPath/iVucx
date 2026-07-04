@@ -221,6 +221,220 @@
       background:#0d1117;
     }
 
+    .output-pane-head{
+      gap:10px;
+    }
+
+    .output-head-left{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      min-width:0;
+    }
+
+    .output-mode-tabs{
+      display:flex;
+      align-items:center;
+      height:24px;
+      border:1px solid rgba(139,148,158,0.18);
+      border-radius:7px;
+      overflow:hidden;
+      background:#0d1117;
+    }
+
+    .output-mode-tab{
+      height:100%;
+      border:0;
+      border-radius:0;
+      padding:0 10px;
+      background:transparent;
+      color:var(--muted);
+      font-size:11px;
+      font-weight:650;
+      cursor:pointer;
+      transition:background-color .18s ease,color .18s ease;
+    }
+
+    .output-mode-tab + .output-mode-tab{
+      border-left:1px solid rgba(139,148,158,0.18);
+    }
+
+    .output-mode-tab.active{
+      background:#1f6feb;
+      color:#fff;
+    }
+
+    .output-view{
+      flex:1;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+    }
+
+    .output-view.hidden{
+      display:none;
+    }
+
+    .ai-panel{
+      flex:1;
+      min-height:0;
+      display:none;
+      flex-direction:column;
+      gap:10px;
+      padding:12px;
+      overflow-y:auto;
+      overflow-x:hidden;
+      background:#0d1117;
+    }
+
+    .ai-panel.active{
+      display:flex;
+    }
+
+    .ai-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+    }
+
+    .ai-field{
+      display:flex;
+      flex-direction:column;
+      gap:5px;
+      min-width:0;
+    }
+
+    .ai-field.full{
+      grid-column:1 / -1;
+    }
+
+    .ai-label{
+      color:var(--muted);
+      font-size:11px;
+      font-weight:650;
+    }
+
+    .ai-select,
+    .ai-input,
+    .ai-prompt{
+      width:100%;
+      min-width:0;
+      border:1px solid rgba(139,148,158,0.22);
+      border-radius:7px;
+      background:#0f1520;
+      color:#e6edf3;
+      outline:none;
+      font:inherit;
+      font-size:12px;
+    }
+
+    .ai-select,
+    .ai-input{
+      height:34px;
+      padding:0 10px;
+    }
+
+    .ai-prompt{
+      min-height:118px;
+      max-height:220px;
+      resize:vertical;
+      padding:10px;
+      line-height:1.45;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+
+    .ai-key-row{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto auto;
+      gap:8px;
+      align-items:end;
+      min-width:0;
+    }
+
+    .ai-action-row{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
+    .ai-actions{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
+    .ai-btn{
+      min-height:32px;
+      border:1px solid rgba(139,148,158,0.24);
+      border-radius:7px;
+      padding:0 11px;
+      background:#161b22;
+      color:#e6edf3;
+      font-size:12px;
+      font-weight:650;
+      cursor:pointer;
+      transition:background-color .18s ease,border-color .18s ease,transform .18s ease;
+    }
+
+    .ai-btn.primary{
+      border-color:#1f6feb;
+      background:#1f6feb;
+      color:#fff;
+    }
+
+    .ai-btn:hover{
+      border-color:#58a6ff;
+      background:#1b2430;
+      transform:translateY(-1px);
+    }
+
+    .ai-btn.primary:hover{
+      background:#2f81f7;
+    }
+
+    .ai-btn:disabled{
+      opacity:.62;
+      cursor:not-allowed;
+      transform:none;
+    }
+
+    .ai-status{
+      min-height:18px;
+      min-width:0;
+      overflow-wrap:anywhere;
+      text-align:right;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.35;
+    }
+
+    .ai-status.error{
+      color:#ff7b72;
+    }
+
+    .ai-response{
+      flex:1;
+      min-width:0;
+      min-height:140px;
+      border:1px solid rgba(139,148,158,0.18);
+      border-radius:8px;
+      padding:12px;
+      overflow:auto;
+      background:#090d13;
+      color:#c9d1d9;
+      white-space:pre-wrap;
+      word-break:break-word;
+      font-size:13px;
+      line-height:1.5;
+    }
+
+    .ai-response.empty{
+      color:#7d8590;
+    }
+
     .lean-panel{
       border-top:1px solid var(--line);
       background:#0f1520;
@@ -760,24 +974,79 @@
     </section>
 
     <section class="pane output-pane">
-      <div class="pane-head">
-        <span id="outputTitle">Server Output</span>
+      <div class="pane-head output-pane-head">
+        <div class="output-head-left">
+          <div class="output-mode-tabs" role="tablist" aria-label="Right pane mode">
+            <button class="output-mode-tab active" id="outputModeOutput" type="button" role="tab" aria-selected="true" aria-controls="serverOutputView">Output</button>
+            <button class="output-mode-tab" id="outputModeAi" type="button" role="tab" aria-selected="false" aria-controls="aiPanel">AI</button>
+          </div>
+          <span id="outputTitle">Server Output</span>
+        </div>
         <span id="outputHint">Ctrl/Cmd + Enter to run</span>
       </div>
-      <pre id="outputPanel"></pre>
-      <div class="lean-panel" id="leanPanel">
-        <div class="lean-panel-head">
-          <span>Lean Server</span>
-        </div>
-        <div class="lean-goals">
-          <div class="lean-goals-row">
-            <span>Goals Snapshot</span>
-            <button class="btn btn-small" id="leanGoalsVerifyBtn" type="button">Verify</button>
+      <div class="output-view" id="serverOutputView" role="tabpanel" aria-labelledby="outputModeOutput">
+        <pre id="outputPanel"></pre>
+        <div class="lean-panel" id="leanPanel">
+          <div class="lean-panel-head">
+            <span>Lean Server</span>
           </div>
-          <textarea id="leanGoalsInput" placeholder="Paste goals/infoview text here"></textarea>
-          <div id="leanGoalsSummary">Paste goals/infoview text here to summarize.</div>
+          <div class="lean-goals">
+            <div class="lean-goals-row">
+              <span>Goals Snapshot</span>
+              <button class="btn btn-small" id="leanGoalsVerifyBtn" type="button">Verify</button>
+            </div>
+            <textarea id="leanGoalsInput" placeholder="Paste goals/infoview text here"></textarea>
+            <div id="leanGoalsSummary">Paste goals/infoview text here to summarize.</div>
+          </div>
         </div>
       </div>
+      <section class="ai-panel" id="aiPanel" role="tabpanel" aria-labelledby="outputModeAi" aria-hidden="true">
+        <div class="ai-grid">
+          <label class="ai-field">
+            <span class="ai-label">Provider</span>
+            <select class="ai-select" id="aiProviderSelect">
+              <option value="deepseek-v4">DeepSeek-V4</option>
+              <option value="deepseek-prover">DeepSeek-Prover</option>
+              <option value="chatgpt">ChatGPT</option>
+              <option value="claude">Claude</option>
+            </select>
+          </label>
+          <label class="ai-field">
+            <span class="ai-label">Proof context</span>
+            <select class="ai-select" id="aiContextSelect">
+              <option value="auto">Auto</option>
+              <option value="coq-lsp">coq-lsp</option>
+              <option value="pycoq">pycoq</option>
+              <option value="lean-repl">Lean REPL</option>
+              <option value="leandojo">LeanDojo</option>
+            </select>
+          </label>
+          <label class="ai-field full">
+            <span class="ai-label">Model</span>
+            <input class="ai-input" id="aiModelInput" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+        </div>
+        <div class="ai-key-row">
+          <label class="ai-field">
+            <span class="ai-label">API key</span>
+            <input class="ai-input" id="aiApiKeyInput" type="password" autocomplete="off" spellcheck="false" placeholder="Required if server env is not configured" />
+          </label>
+          <button class="ai-btn" id="aiSaveKeyBtn" type="button">Save</button>
+          <button class="ai-btn" id="aiForgetKeyBtn" type="button">Forget</button>
+        </div>
+        <label class="ai-field">
+          <span class="ai-label">Prompt</span>
+          <textarea class="ai-prompt" id="aiPromptInput" spellcheck="false" placeholder="Ask for a proof strategy, next tactic, error explanation, or theorem search direction."></textarea>
+        </label>
+        <div class="ai-action-row">
+          <div class="ai-actions">
+            <button class="ai-btn primary" id="aiAskBtn" type="button">Ask AI</button>
+            <button class="ai-btn" id="aiPromptTemplateBtn" type="button">Template</button>
+          </div>
+          <div class="ai-status" id="aiStatus">API keys stay local unless you send a request.</div>
+        </div>
+        <div class="ai-response empty" id="aiResponse">AI response will appear here.</div>
+      </section>
     </section>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite" aria-hidden="true">
@@ -817,6 +1086,21 @@
       const outputEl = document.getElementById('outputPanel');
       const outputTitleEl = document.getElementById('outputTitle');
       const outputHintEl = document.getElementById('outputHint');
+      const outputModeOutputBtn = document.getElementById('outputModeOutput');
+      const outputModeAiBtn = document.getElementById('outputModeAi');
+      const serverOutputView = document.getElementById('serverOutputView');
+      const aiPanel = document.getElementById('aiPanel');
+      const aiProviderSelect = document.getElementById('aiProviderSelect');
+      const aiContextSelect = document.getElementById('aiContextSelect');
+      const aiModelInput = document.getElementById('aiModelInput');
+      const aiApiKeyInput = document.getElementById('aiApiKeyInput');
+      const aiSaveKeyBtn = document.getElementById('aiSaveKeyBtn');
+      const aiForgetKeyBtn = document.getElementById('aiForgetKeyBtn');
+      const aiPromptInput = document.getElementById('aiPromptInput');
+      const aiPromptTemplateBtn = document.getElementById('aiPromptTemplateBtn');
+      const aiAskBtn = document.getElementById('aiAskBtn');
+      const aiStatus = document.getElementById('aiStatus');
+      const aiResponse = document.getElementById('aiResponse');
       const leanPanel = document.getElementById('leanPanel');
       const leanGoalsInput = document.getElementById('leanGoalsInput');
       const leanGoalsVerifyBtn = document.getElementById('leanGoalsVerifyBtn');
@@ -894,6 +1178,26 @@
         }
       };
 
+      const AI_KEYS_STORAGE_KEY = 'ivucxAiProviderKeysV1';
+      const AI_PROVIDER_DEFAULTS = {
+        'deepseek-v4': {
+          label: 'DeepSeek-V4',
+          model: 'deepseek-v4-flash'
+        },
+        'deepseek-prover': {
+          label: 'DeepSeek-Prover',
+          model: 'deepseek-v4-pro'
+        },
+        chatgpt: {
+          label: 'ChatGPT',
+          model: 'gpt-5.4-mini'
+        },
+        claude: {
+          label: 'Claude',
+          model: 'claude-sonnet-4-5'
+        }
+      };
+
       const initPayload = readInitPayload();
       const params = new URLSearchParams(window.location.search);
       const selectedLanguage = resolveLanguage(params.get('lang') || initPayload.proofAssistant || 'Lean');
@@ -936,6 +1240,9 @@
       let keepAliveTimer = null;
       let keepAliveInFlight = false;
       let proofDraftSaveTimer = null;
+      let outputViewMode = 'output';
+      let leanModeActive = false;
+      let aiRequestInFlight = false;
 
       backBtn.addEventListener('click', ()=>{
         handleBackNavigation();
@@ -945,6 +1252,57 @@
       runBtn.addEventListener('click', ()=>{
         runProof();
       });
+
+      if(outputModeOutputBtn){
+        outputModeOutputBtn.addEventListener('click', ()=>{
+          setOutputViewMode('output');
+        });
+      }
+
+      if(outputModeAiBtn){
+        outputModeAiBtn.addEventListener('click', ()=>{
+          setOutputViewMode('ai');
+        });
+      }
+
+      if(aiProviderSelect){
+        aiProviderSelect.addEventListener('change', ()=>{
+          syncAiProviderUi();
+        });
+      }
+
+      if(aiSaveKeyBtn){
+        aiSaveKeyBtn.addEventListener('click', ()=>{
+          saveAiProviderKey();
+        });
+      }
+
+      if(aiForgetKeyBtn){
+        aiForgetKeyBtn.addEventListener('click', ()=>{
+          forgetAiProviderKey();
+        });
+      }
+
+      if(aiPromptTemplateBtn){
+        aiPromptTemplateBtn.addEventListener('click', ()=>{
+          insertAiPromptTemplate();
+        });
+      }
+
+      if(aiAskBtn){
+        aiAskBtn.addEventListener('click', ()=>{
+          askProofAi();
+        });
+      }
+
+      if(aiPromptInput){
+        aiPromptInput.addEventListener('keydown', (event)=>{
+          const isAskShortcut = (event.ctrlKey || event.metaKey) && event.key === 'Enter';
+          if(!isAskShortcut) return;
+          event.preventDefault();
+          askProofAi();
+        });
+      }
 
       if(leanGoalsVerifyBtn){
         leanGoalsVerifyBtn.addEventListener('click', ()=>{
@@ -2164,24 +2522,229 @@
         }, { once: true });
       }
 
-      function setLeanMode(active){
-        if(!active){
-          if(outputTitleEl) outputTitleEl.textContent = 'Server Output';
-          if(outputHintEl) outputHintEl.textContent = 'Ctrl/Cmd + Enter to run';
-          if(runBtn) runBtn.style.display = '';
-          setLeanPanelActive(false);
+      function setOutputViewMode(mode){
+        outputViewMode = mode === 'ai' ? 'ai' : 'output';
+        if(serverOutputView) serverOutputView.classList.toggle('hidden', outputViewMode !== 'output');
+        if(aiPanel){
+          aiPanel.classList.toggle('active', outputViewMode === 'ai');
+          aiPanel.setAttribute('aria-hidden', outputViewMode === 'ai' ? 'false' : 'true');
+        }
+        if(outputModeOutputBtn){
+          outputModeOutputBtn.classList.toggle('active', outputViewMode === 'output');
+          outputModeOutputBtn.setAttribute('aria-selected', outputViewMode === 'output' ? 'true' : 'false');
+        }
+        if(outputModeAiBtn){
+          outputModeAiBtn.classList.toggle('active', outputViewMode === 'ai');
+          outputModeAiBtn.setAttribute('aria-selected', outputViewMode === 'ai' ? 'true' : 'false');
+        }
+        syncOutputHeader();
+        setLeanPanelActive(leanModeActive && outputViewMode === 'output');
+        if(outputViewMode === 'ai'){
+          syncAiProviderUi();
+          if(aiPromptInput && !aiPromptInput.value.trim()) insertAiPromptTemplate();
+          setTimeout(()=>{ if(aiPromptInput) aiPromptInput.focus(); }, 0);
+        }
+      }
+
+      function syncOutputHeader(){
+        if(outputViewMode === 'ai'){
+          if(outputTitleEl) outputTitleEl.textContent = 'AI Prompt';
+          if(outputHintEl) outputHintEl.textContent = 'Ctrl/Cmd + Enter to ask';
           return;
         }
-        if(outputTitleEl) outputTitleEl.textContent = 'Lean 4';
-        if(outputHintEl){
-          outputHintEl.textContent = 'Ctrl/Cmd + Enter to run (server)';
+        if(leanModeActive){
+          if(outputTitleEl) outputTitleEl.textContent = 'Lean 4';
+          if(outputHintEl) outputHintEl.textContent = 'Ctrl/Cmd + Enter to run (server)';
+          return;
         }
-        setLeanPanelActive(true);
+        if(outputTitleEl) outputTitleEl.textContent = 'Server Output';
+        if(outputHintEl) outputHintEl.textContent = 'Ctrl/Cmd + Enter to run';
+      }
+
+      function setLeanMode(active){
+        leanModeActive = !!active;
+        if(!active && runBtn) runBtn.style.display = '';
+        syncOutputHeader();
+        setLeanPanelActive(leanModeActive && outputViewMode === 'output');
       }
 
       function setLeanPanelActive(active){
         if(!leanPanel) return;
         leanPanel.classList.toggle('active', !!active);
+      }
+
+      function getDefaultAiContextEngine(){
+        return selectedLanguage === 'Coq' ? 'coq-lsp' : 'lean-repl';
+      }
+
+      function readAiKeys(){
+        try{
+          const raw = localStorage.getItem(AI_KEYS_STORAGE_KEY);
+          if(!raw) return {};
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === 'object' ? parsed : {};
+        }catch(err){
+          return {};
+        }
+      }
+
+      function writeAiKeys(keys){
+        try{
+          localStorage.setItem(AI_KEYS_STORAGE_KEY, JSON.stringify(keys || {}));
+        }catch(err){
+          setAiStatus('Could not save API key in this browser.', true);
+        }
+      }
+
+      function getSelectedAiProvider(){
+        return aiProviderSelect && aiProviderSelect.value ? aiProviderSelect.value : 'chatgpt';
+      }
+
+      function syncAiProviderUi(){
+        const provider = getSelectedAiProvider();
+        const defaults = AI_PROVIDER_DEFAULTS[provider] || AI_PROVIDER_DEFAULTS.chatgpt;
+        const defaultModels = Object.keys(AI_PROVIDER_DEFAULTS).map(key=>AI_PROVIDER_DEFAULTS[key].model);
+        if(aiModelInput && (!aiModelInput.value.trim() || defaultModels.includes(aiModelInput.value.trim()))){
+          aiModelInput.value = defaults.model;
+        }
+        if(aiContextSelect && aiContextSelect.value === 'auto'){
+          aiContextSelect.value = getDefaultAiContextEngine();
+        }
+        const keys = readAiKeys();
+        if(aiApiKeyInput){
+          aiApiKeyInput.value = keys[provider] ? keys[provider] : '';
+          aiApiKeyInput.placeholder = keys[provider]
+            ? defaults.label + ' key saved locally'
+            : 'Required if server env is not configured';
+        }
+        setAiStatus(defaults.label + ' ready. API keys stay local until a request is sent.', false);
+      }
+
+      function saveAiProviderKey(){
+        if(!aiApiKeyInput) return;
+        const key = aiApiKeyInput.value.trim();
+        const provider = getSelectedAiProvider();
+        if(!key){
+          setAiStatus('Paste an API key before saving.', true);
+          return;
+        }
+        const keys = readAiKeys();
+        keys[provider] = key;
+        writeAiKeys(keys);
+        setAiStatus('API key saved locally for ' + (AI_PROVIDER_DEFAULTS[provider] || {}).label + '.', false);
+      }
+
+      function forgetAiProviderKey(){
+        const provider = getSelectedAiProvider();
+        const keys = readAiKeys();
+        delete keys[provider];
+        writeAiKeys(keys);
+        if(aiApiKeyInput) aiApiKeyInput.value = '';
+        setAiStatus('Local API key removed.', false);
+      }
+
+      function setAiStatus(message, isError){
+        if(!aiStatus) return;
+        aiStatus.textContent = message || '';
+        aiStatus.classList.toggle('error', !!isError);
+      }
+
+      function setAiResponse(text, empty){
+        if(!aiResponse) return;
+        aiResponse.textContent = text || '';
+        aiResponse.classList.toggle('empty', !!empty);
+      }
+
+      function insertAiPromptTemplate(){
+        if(!aiPromptInput) return;
+        const engine = aiContextSelect && aiContextSelect.value ? aiContextSelect.value : getDefaultAiContextEngine();
+        const languageHint = selectedLanguage === 'Coq'
+          ? 'Use coq-lsp/pycoq style goal and hypothesis reasoning.'
+          : 'Use Lean REPL/LeanDojo style goal and tactic-state reasoning.';
+        aiPromptInput.value = [
+          'Analyze the current ' + selectedLanguage + ' proof.',
+          languageHint,
+          'Explain the latest validation output, identify the next proof step, and propose a minimal code edit.',
+          'Context engine: ' + engine + '.'
+        ].join('\n');
+        aiPromptInput.focus();
+      }
+
+      function buildAiFilePayload(){
+        saveActiveProofFileContent();
+        return proofFiles.map(file=>({
+          name:file.name,
+          path:file.path,
+          language:selectedLanguage,
+          active:file.id === activeProofFileId,
+          code:file.code
+        }));
+      }
+
+      async function askProofAi(){
+        if(aiRequestInFlight) return;
+        if(!aiPromptInput) return;
+        const prompt = aiPromptInput.value.trim();
+        if(!prompt){
+          setAiStatus('Write a prompt first.', true);
+          aiPromptInput.focus();
+          return;
+        }
+        const provider = getSelectedAiProvider();
+        const defaults = AI_PROVIDER_DEFAULTS[provider] || AI_PROVIDER_DEFAULTS.chatgpt;
+        const key = aiApiKeyInput ? aiApiKeyInput.value.trim() : '';
+        const model = aiModelInput && aiModelInput.value.trim() ? aiModelInput.value.trim() : defaults.model;
+        const contextEngine = aiContextSelect && aiContextSelect.value ? aiContextSelect.value : getDefaultAiContextEngine();
+
+        aiRequestInFlight = true;
+        if(aiAskBtn) aiAskBtn.disabled = true;
+        setOutputViewMode('ai');
+        setAiStatus('Asking ' + defaults.label + '...', false);
+        setAiResponse('Waiting for response...', true);
+
+        try{
+          const payload = {
+            provider,
+            model,
+            apiKey:key,
+            contextEngine,
+            language:selectedLanguage,
+            problemKind:getProblemKindFromInit(),
+            fileName:getActiveProofFileName(),
+            prompt,
+            code:getSafeEditorDraftForPersistence(),
+            validationOutput:outputEl ? outputEl.textContent : '',
+            files:buildAiFilePayload()
+          };
+          const response = await fetch('/api/proof-ai', {
+            method:'POST',
+            credentials:'same-origin',
+            headers:{
+              'Content-Type':'application/json',
+              'Accept':'application/json'
+            },
+            body:JSON.stringify(payload)
+          });
+          const data = await response.json().catch(()=>null);
+          if(!response.ok){
+            const message = data && data.error ? data.error : 'AI request failed.';
+            if(data && data.requiresApiKey && aiApiKeyInput){
+              aiApiKeyInput.focus();
+            }
+            throw new Error(message);
+          }
+          const label = data && data.label ? data.label : defaults.label;
+          const usedModel = data && data.model ? data.model : model;
+          const usedEngine = data && data.contextEngine ? data.contextEngine : contextEngine;
+          setAiStatus(label + ' / ' + usedModel + ' / ' + usedEngine, false);
+          setAiResponse(data && data.answer ? data.answer : '(empty response)', false);
+        }catch(err){
+          setAiStatus(err && err.message ? err.message : 'AI request failed.', true);
+          setAiResponse('No response. Check the API key, provider model, and network settings.', true);
+        }finally{
+          aiRequestInFlight = false;
+          if(aiAskBtn) aiAskBtn.disabled = false;
+        }
       }
 
       function summarizeLeanGoals(text){
@@ -2847,6 +3410,8 @@
 
         setInitialOutputMessage(selectedLanguage, getActiveProofFileName(), initPayload, summaryText);
         setLeanMode(selectedLanguage === 'Lean');
+        if(aiContextSelect) aiContextSelect.value = getDefaultAiContextEngine();
+        syncAiProviderUi();
         startKeepAlivePings();
 
         if(selectedLanguage === 'Lean'){

@@ -12,6 +12,7 @@ import checkLogin from './api/check-login.js';
 import cookieConsent from './api/cookie-consent.js';
 import googleApi from './api/google.js';
 import jscoqProxy from './api/jscoq-proxy.js';
+import proofAi from './api/proof-ai.js';
 import suggest from './api/suggest.js';
 import {
   canUseLocalExecutionFallback,
@@ -129,6 +130,7 @@ app.all('/api/google-files', wrap(googleRoute('files')));
 app.all('/api/google-import', wrap(googleRoute('import')));
 app.all('/api/google-one-tap', wrap(googleRoute('one-tap')));
 app.all('/api/google-status', wrap(googleRoute('status')));
+app.all('/api/proof-ai', wrap(proofAi));
 app.all('/api/stripe-setup', wrap(sendStripeSetupResponse));
 app.all('/api/suggest', wrap(suggest));
 
