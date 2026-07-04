@@ -11,6 +11,8 @@ const MAX_HISTORY_TURNS = 6;
 const MAX_HISTORY_CHARS = 700;
 const MIN_ANSWER_CHARS = 900;
 const MIN_ANSWER_LINES = 30;
+const MAX_CITATION_ATTACHMENTS = 24;
+const ATTACHMENT_SIGNED_URL_SECONDS = 60 * 60;
 const VERTEX_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
@@ -189,14 +191,75 @@ function stringifyPreview(value, limit) {
   }
 }
 
-function extractAttachmentNames(requestMeta) {
+function getPreviewExtension(value) {
+  const match = String(value || '').toLowerCase().match(/\.([a-z0-9][a-z0-9+_-]{0,16})($|[?#])/);
+  return match ? match[1] : '';
+}
+
+function getAttachmentLabel(item, fallback = '') {
+  if (typeof item === 'string') return safeString(item, fallback);
+  if (!isPlainObject(item)) return fallback;
+  return safeString(item.relativePath || item.fileName || item.title || item.name || item.path, fallback);
+}
+
+async function createAttachmentPreviewUrl(client, bucket, storagePath) {
+  if (!client || !bucket || !storagePath) return '';
+  try {
+    const signed = await client.storage
+      .from(bucket)
+      .createSignedUrl(storagePath, ATTACHMENT_SIGNED_URL_SECONDS);
+    return safeString(signed && signed.data && signed.data.signedUrl);
+  } catch (error) {
+    return '';
+  }
+}
+
+async function extractAttachmentRecords(requestMeta, client) {
   const attachments = requestMeta && Array.isArray(requestMeta.attachments)
     ? requestMeta.attachments
     : [];
-  return attachments
-    .map((item) => safeString(item && (item.relativePath || item.fileName || item.title)))
-    .filter(Boolean)
-    .slice(0, 8);
+  const defaultBucket = safeString(
+    requestMeta
+      && requestMeta.attachmentStorage
+      && requestMeta.attachmentStorage.bucket
+  );
+  const records = [];
+  for (let index = 0; index < attachments.length && records.length < MAX_CITATION_ATTACHMENTS; index += 1) {
+    const item = attachments[index];
+    if (typeof item === 'string') {
+      const title = safeString(item);
+      if (title) records.push({ title, fileName: title, relativePath: title, kind: 'file' });
+      continue;
+    }
+    if (!isPlainObject(item)) continue;
+
+    const title = getAttachmentLabel(item, `attachment-${index + 1}`);
+    const fileName = safeString(item.fileName || title.split(/[\\/]/).pop(), title);
+    const relativePath = safeString(item.relativePath || item.path || title, fileName);
+    const ext = safeString(item.ext || getPreviewExtension(fileName) || getPreviewExtension(relativePath));
+    const mime = safeString(item.mime || item.type);
+    const bucket = safeString(item.bucket, defaultBucket);
+    const storagePath = safeString(item.storagePath);
+    const explicitUrl = safeString(item.url || item.previewUrl || item.downloadUrl || item.webContentLink);
+    const signedUrl = explicitUrl || await createAttachmentPreviewUrl(client, bucket, storagePath);
+
+    records.push({
+      id: safeString(item.id || item.clientId || item.blobId, `attachment-${index + 1}`),
+      title,
+      fileName,
+      relativePath,
+      kind: safeString(item.kind, 'file'),
+      ext,
+      mime,
+      size: Math.max(0, Number(item.size) || 0),
+      source: safeString(item.source),
+      url: signedUrl,
+      webViewLink: safeString(item.webViewLink),
+      savedAt: safeString(item.savedAt),
+      storagePath: storagePath ? storagePath : ''
+    });
+  }
+  return records;
 }
 
 function inferLegacyRowKind(row) {
@@ -258,12 +321,13 @@ function scoreRow(row, terms) {
   return score;
 }
 
-function buildCitation(row, index) {
+async function buildCitation(row, index, client) {
   const requestMeta = isPlainObject(row.request_meta) ? row.request_meta : {};
   const title = safeString(row.title, 'Untitled');
   const sourcePreview = truncateText(row.source_code, MAX_SOURCE_CHARS);
   const cicPreview = stringifyPreview(row.normalized_term, MAX_CIC_CHARS);
   const quote = sourcePreview || cicPreview || title;
+  const attachments = await extractAttachmentRecords(requestMeta, client);
   return {
     id: `P${index + 1}`,
     problemId: row.id,
@@ -276,7 +340,8 @@ function buildCitation(row, index) {
     normalizedFormat: safeString(row.normalized_format),
     requestedFormat: safeString(requestMeta.requestedFormat),
     completedFormat: safeString(requestMeta.completedFormat),
-    attachments: extractAttachmentNames(requestMeta),
+    attachments,
+    attachmentNames: attachments.map((item) => getAttachmentLabel(item)).filter(Boolean),
     quote: truncateText(quote, 420),
     sourceCode: truncateSourceText(row.source_code, MAX_PREVIEW_SOURCE_CHARS),
     normalizedTermPreview: cicPreview
@@ -305,11 +370,15 @@ async function searchSavedProblems({ query, limit, offset }) {
     .filter((entry) => entry.score >= 0)
     .sort((a, b) => b.score - a.score || String(b.row.created_at || '').localeCompare(String(a.row.created_at || '')));
 
+  const pageRows = ranked.slice(offset, offset + limit);
+  const citations = [];
+  for (let index = 0; index < pageRows.length; index += 1) {
+    citations.push(await buildCitation(pageRows[index].row, offset + index, client));
+  }
+
   return {
     total: ranked.length,
-    citations: ranked
-      .slice(offset, offset + limit)
-      .map((entry, index) => buildCitation(entry.row, offset + index))
+    citations
   };
 }
 
@@ -324,7 +393,7 @@ function buildGeminiPrompt({ query, targetKind, citations, history, systemMode }
     normalizedFormat: item.normalizedFormat,
     requestedFormat: item.requestedFormat,
     completedFormat: item.completedFormat,
-    attachments: item.attachments,
+    attachments: Array.isArray(item.attachmentNames) ? item.attachmentNames : [],
     quote: item.quote,
     sourceExcerpt: truncateText(item.sourceCode || item.quote, 1100)
   }));
@@ -828,8 +897,13 @@ function buildCitationDetailLines(citations) {
     if (item.quote) {
       lines.push(`  - 引用部分: ${truncateText(item.quote, 260)} [${item.id}]。`);
     }
-    if (Array.isArray(item.attachments) && item.attachments.length) {
-      lines.push(`  - 添付またはアップロードとして ${item.attachments.join(', ')} が関連付けられています [${item.id}]。`);
+    const attachmentNames = Array.isArray(item.attachmentNames)
+      ? item.attachmentNames
+      : Array.isArray(item.attachments)
+        ? item.attachments.map((attachment) => getAttachmentLabel(attachment)).filter(Boolean)
+        : [];
+    if (attachmentNames.length) {
+      lines.push(`  - 添付またはアップロードとして ${attachmentNames.join(', ')} が関連付けられています [${item.id}]。`);
     }
   });
 

@@ -3270,12 +3270,17 @@
     }
 
     .problem-preview-card.is-overview,
-    .problem-preview-card.is-source{
+    .problem-preview-card.is-source,
+    .problem-preview-card.is-uploads{
       grid-template-columns:minmax(0, 1fr);
     }
 
     .problem-preview-card.is-overview .problem-preview-source-shell,
-    .problem-preview-card.is-source .problem-preview-summary{
+    .problem-preview-card.is-overview .problem-preview-attachments-shell,
+    .problem-preview-card.is-source .problem-preview-summary,
+    .problem-preview-card.is-source .problem-preview-attachments-shell,
+    .problem-preview-card.is-uploads .problem-preview-summary,
+    .problem-preview-card.is-uploads .problem-preview-source-shell{
       display:none;
     }
 
@@ -3414,6 +3419,157 @@
       font-style:italic;
     }
 
+    .problem-preview-attachments-shell{
+      min-width:0;
+      min-height:0;
+      display:grid;
+      grid-template-columns:minmax(180px, 260px) minmax(0, 1fr);
+      overflow:hidden;
+      background:#0d1117;
+    }
+
+    .problem-preview-upload-sidebar{
+      min-width:0;
+      overflow:auto;
+      padding:14px;
+      border-right:1px solid rgba(255,255,255,0.07);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)),
+        rgba(6,10,16,0.58);
+    }
+
+    .problem-preview-upload-item{
+      width:100%;
+      min-height:44px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin:0 0 8px;
+      padding:10px 11px;
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:10px;
+      background:rgba(255,255,255,0.035);
+      color:#dce7f7;
+      font:inherit;
+      font-size:12px;
+      font-weight:700;
+      text-align:left;
+      cursor:pointer;
+      transition:background .18s ease, border-color .18s ease, color .18s ease;
+    }
+
+    .problem-preview-upload-item:hover,
+    .problem-preview-upload-item.is-active{
+      border-color:rgba(95,153,255,0.44);
+      background:rgba(54,113,255,0.16);
+      color:#f0f6fc;
+    }
+
+    .problem-preview-upload-name{
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .problem-preview-upload-ext{
+      flex:0 0 auto;
+      color:#8fb8ff;
+      font-size:10px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    .problem-preview-attachment-stage{
+      min-width:0;
+      min-height:0;
+      overflow:hidden;
+      background:#0b0f15;
+    }
+
+    .problem-preview-attachment-body{
+      width:100%;
+      height:100%;
+      min-height:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow:auto;
+      padding:0;
+      background:#0b0f15;
+    }
+
+    .problem-preview-doc-frame,
+    .problem-preview-doc-object{
+      width:100%;
+      height:100%;
+      border:0;
+      background:#111827;
+    }
+
+    .problem-preview-doc-image{
+      display:block;
+      max-width:100%;
+      max-height:100%;
+      object-fit:contain;
+    }
+
+    .problem-preview-doc-video{
+      width:100%;
+      height:100%;
+      background:#000;
+    }
+
+    .problem-preview-doc-audio-wrap,
+    .problem-preview-doc-fallback{
+      width:min(560px, calc(100% - 40px));
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:14px;
+      margin:auto;
+      padding:24px;
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:14px;
+      background:rgba(255,255,255,0.035);
+      color:#dce7f7;
+      text-align:center;
+    }
+
+    .problem-preview-doc-audio{
+      width:100%;
+    }
+
+    .problem-preview-doc-text{
+      width:100%;
+      min-height:100%;
+      margin:0;
+      padding:20px;
+      color:#e6edf3;
+      background:#0d1117;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:13px;
+      line-height:1.65;
+      white-space:pre-wrap;
+      overflow-wrap:anywhere;
+    }
+
+    .problem-preview-doc-link{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-height:38px;
+      padding:0 14px;
+      border-radius:10px;
+      color:#f0f6fc;
+      text-decoration:none;
+      background:linear-gradient(135deg, #2563eb, #7c3aed);
+      font-size:13px;
+      font-weight:800;
+    }
+
     .problem-preview-section{
       margin-top:18px;
     }
@@ -3457,6 +3613,25 @@
 
       .problem-preview-source-shell{
         min-height:520px;
+      }
+
+      .problem-preview-attachments-shell{
+        min-height:520px;
+        grid-template-columns:1fr;
+      }
+
+      .problem-preview-upload-sidebar{
+        display:flex;
+        gap:8px;
+        border-right:0;
+        border-bottom:1px solid rgba(255,255,255,0.07);
+        overflow:auto hidden;
+      }
+
+      .problem-preview-upload-item{
+        width:auto;
+        min-width:150px;
+        margin:0;
       }
     }
 
@@ -3682,6 +3857,8 @@
       <button class="problem-preview-tab" id="problemPreviewOverviewTab" type="button" role="tab" aria-selected="true">Overview</button>
       <span class="problem-preview-divider" aria-hidden="true">/</span>
       <button class="problem-preview-tab" id="problemPreviewSourceTab" type="button" role="tab" aria-selected="false">Source</button>
+      <span class="problem-preview-divider" aria-hidden="true">/</span>
+      <button class="problem-preview-tab" id="problemPreviewUploadsTab" type="button" role="tab" aria-selected="false">Uploads</button>
     </div>
   </header>
   <main class="problem-preview-main">
@@ -3710,6 +3887,10 @@
           <pre class="problem-preview-source-gutter" id="problemPreviewSourceGutter"></pre>
           <pre class="problem-preview-source-code" id="problemPreviewSource"></pre>
         </div>
+      </section>
+      <section class="problem-preview-attachments-shell" aria-label="Uploaded attachment preview">
+        <aside class="problem-preview-upload-sidebar" id="problemPreviewUploadSidebar" aria-label="Uploaded files"></aside>
+        <div class="problem-preview-attachment-stage" id="problemPreviewAttachmentStage"></div>
       </section>
     </article>
   </main>
@@ -3849,6 +4030,7 @@
   const problemPreviewCard = document.getElementById('problemPreviewCard');
   const problemPreviewOverviewTab = document.getElementById('problemPreviewOverviewTab');
   const problemPreviewSourceTab = document.getElementById('problemPreviewSourceTab');
+  const problemPreviewUploadsTab = document.getElementById('problemPreviewUploadsTab');
   const problemPreviewTitle = document.getElementById('problemPreviewTitle');
   const problemPreviewHeading = document.getElementById('problemPreviewHeading');
   const problemPreviewMeta = document.getElementById('problemPreviewMeta');
@@ -3858,6 +4040,8 @@
   const problemPreviewSourceFile = document.getElementById('problemPreviewSourceFile');
   const problemPreviewSourceLanguage = document.getElementById('problemPreviewSourceLanguage');
   const problemPreviewSourceGutter = document.getElementById('problemPreviewSourceGutter');
+  const problemPreviewUploadSidebar = document.getElementById('problemPreviewUploadSidebar');
+  const problemPreviewAttachmentStage = document.getElementById('problemPreviewAttachmentStage');
   const EDITOR_RETURN_KEY = 'ivucxEditorReturn';
   let attachedFiles = [];
   let lastInputValue = input.value;
@@ -3876,6 +4060,8 @@
   const MAX_ATTACHMENTS = 5;
   const ATTACHMENT_ANIM_MS = 180;
   let selectionMode = false;
+  let activeProblemAttachmentIndex = 0;
+  let problemAttachmentRenderToken = 0;
   let rememberedContent = '';
   let rememberedFiles = [];
   let selectionReturnScreen = 'gray-compact';
@@ -6506,11 +6692,74 @@
     return normalized;
   }
 
+  function getPreviewExtension(value){
+    const match = String(value || '').toLowerCase().match(/\.([a-z0-9][a-z0-9+_-]{0,16})($|[?#])/);
+    return match ? match[1] : '';
+  }
+
+  function getCitationAttachmentLabel(attachment){
+    if(typeof attachment === 'string') return attachment.trim();
+    if(!attachment || typeof attachment !== 'object') return '';
+    return String(
+      attachment.relativePath
+        || attachment.fileName
+        || attachment.title
+        || attachment.name
+        || attachment.path
+        || ''
+    ).trim();
+  }
+
+  function normalizeCitationAttachment(rawAttachment, index){
+    if(typeof rawAttachment === 'string'){
+      const label = rawAttachment.trim();
+      if(!label) return null;
+      const fileName = label.split(/[\\/]/).pop() || label;
+      return {
+        id:`attachment-${index + 1}`,
+        title:label,
+        fileName,
+        relativePath:label,
+        kind:'file',
+        ext:getPreviewExtension(fileName || label),
+        mime:'',
+        size:0,
+        source:'',
+        url:'',
+        webViewLink:'',
+        text:''
+      };
+    }
+    if(!rawAttachment || typeof rawAttachment !== 'object') return null;
+    const label = getCitationAttachmentLabel(rawAttachment) || `attachment-${index + 1}`;
+    const fileName = String(rawAttachment.fileName || label.split(/[\\/]/).pop() || label).trim();
+    const relativePath = String(rawAttachment.relativePath || rawAttachment.path || label).trim();
+    const url = String(rawAttachment.url || rawAttachment.previewUrl || rawAttachment.downloadUrl || rawAttachment.webContentLink || '').trim();
+    const webViewLink = String(rawAttachment.webViewLink || '').trim();
+    return {
+      id:String(rawAttachment.id || rawAttachment.clientId || rawAttachment.blobId || `attachment-${index + 1}`).trim(),
+      title:String(rawAttachment.title || label).trim(),
+      fileName,
+      relativePath,
+      kind:String(rawAttachment.kind || 'file').trim(),
+      ext:String(rawAttachment.ext || getPreviewExtension(fileName) || getPreviewExtension(relativePath) || getPreviewExtension(url)).trim().toLowerCase(),
+      mime:String(rawAttachment.mime || rawAttachment.type || '').trim().toLowerCase(),
+      size:Math.max(0, Number(rawAttachment.size) || 0),
+      source:String(rawAttachment.source || '').trim(),
+      url,
+      webViewLink,
+      text:typeof rawAttachment.text === 'string' ? rawAttachment.text : ''
+    };
+  }
+
   function normalizeCitationBatch(rawCitations){
     const source = Array.isArray(rawCitations) ? rawCitations : [];
     return source.map((item, index)=>{
       const citation = item && typeof item === 'object' ? item : {};
       const fallbackId = `P${index + 1}`;
+      const attachments = Array.isArray(citation.attachments)
+        ? citation.attachments.map((attachment, attachmentIndex)=>normalizeCitationAttachment(attachment, attachmentIndex)).filter(Boolean)
+        : [];
       return {
         id: String(citation.id || fallbackId).trim() || fallbackId,
         problemId: String(citation.problemId || citation.id || '').trim(),
@@ -6526,9 +6775,8 @@
         requestedFormat: String(citation.requestedFormat || '').trim(),
         completedFormat: String(citation.completedFormat || '').trim(),
         used: !!citation.used,
-        attachments: Array.isArray(citation.attachments)
-          ? citation.attachments.map(name=>String(name || '').trim()).filter(Boolean)
-          : []
+        attachments,
+        attachmentNames: attachments.map(attachment=>getCitationAttachmentLabel(attachment)).filter(Boolean)
       };
     });
   }
@@ -6607,7 +6855,8 @@
     if(citation.requestedFormat) lines.push('Requested format: ' + citation.requestedFormat);
     if(citation.completedFormat) lines.push('Completed format: ' + citation.completedFormat);
     if(Array.isArray(citation.attachments) && citation.attachments.length){
-      lines.push('Uploads: ' + citation.attachments.join(', '));
+      const names = citation.attachments.map(attachment=>getCitationAttachmentLabel(attachment)).filter(Boolean);
+      lines.push('Uploads: ' + names.join(', '));
     }
     return lines.join('\n') || 'No additional details.';
   }
@@ -6712,6 +6961,214 @@
     }
   }
 
+  function getAttachmentMime(attachment){
+    return String(attachment && attachment.mime || '').toLowerCase();
+  }
+
+  function getAttachmentExt(attachment){
+    return String(
+      attachment && (
+        attachment.ext
+        || getPreviewExtension(attachment.fileName)
+        || getPreviewExtension(attachment.relativePath)
+        || getPreviewExtension(attachment.url)
+      )
+      || ''
+    ).toLowerCase();
+  }
+
+  function getAttachmentUrl(attachment){
+    return String(attachment && (attachment.url || attachment.webViewLink) || '').trim();
+  }
+
+  function inferAttachmentKind(attachment){
+    const explicit = String(attachment && attachment.kind || '').toLowerCase();
+    const ext = getAttachmentExt(attachment);
+    const mime = getAttachmentMime(attachment);
+    if(mime === 'application/pdf' || ext === 'pdf') return 'pdf';
+    if(mime.startsWith('image/')) return 'image';
+    if(mime.startsWith('video/')) return 'video';
+    if(mime.startsWith('audio/')) return 'audio';
+    if(mime === 'text/html' || ['html','htm','xhtml'].includes(ext)) return 'html';
+    if(mime.startsWith('text/') || [
+      'txt','md','markdown','json','jsonl','csv','tsv','xml','yaml','yml','toml','ini','log',
+      'lean','v','coq','tex','bib','js','jsx','ts','tsx','css','scss','sass','less','py','rb',
+      'rs','go','java','c','cc','cpp','h','hpp','cs','php','swift','kt','kts','r','sql','sh','bash','zsh'
+    ].includes(ext)) return 'text';
+    if(['ppt','pptx','key'].includes(ext)) return 'presentation';
+    if(['doc','docx','odt','rtf'].includes(ext)) return 'document';
+    if(['xls','xlsx','ods'].includes(ext)) return 'spreadsheet';
+    if(['zip','7z','rar','tar','gz','bz2','xz'].includes(ext)) return 'archive';
+    return explicit || 'file';
+  }
+
+  function applyProblemPdfPreviewOptions(url){
+    const value = String(url || '').trim();
+    if(!value) return '';
+    const options = 'toolbar=0&navpanes=0&scrollbar=0&view=FitH';
+    const hashIndex = value.indexOf('#');
+    if(hashIndex < 0) return value + '#' + options;
+    const base = value.slice(0, hashIndex);
+    const hash = value.slice(hashIndex + 1);
+    return base + '#' + (hash ? hash + '&' + options : options);
+  }
+
+  function createProblemAttachmentFallback(attachment, noteText){
+    const fallback = document.createElement('div');
+    fallback.className = 'problem-preview-doc-fallback';
+    const note = document.createElement('div');
+    note.textContent = noteText || 'This browser does not provide a native preview for this file type.';
+    fallback.appendChild(note);
+    const href = getAttachmentUrl(attachment);
+    if(href){
+      const link = document.createElement('a');
+      link.className = 'problem-preview-doc-link';
+      link.href = href;
+      link.rel = 'noopener';
+      link.target = attachment && attachment.webViewLink ? '_blank' : '_self';
+      link.download = attachment && !attachment.webViewLink ? (attachment.fileName || attachment.title || '') : '';
+      link.textContent = attachment && attachment.webViewLink ? 'Open original' : 'Open file';
+      fallback.appendChild(link);
+    }
+    return fallback;
+  }
+
+  function renderProblemAttachmentBody(body, attachment, token){
+    const kind = inferAttachmentKind(attachment);
+    const url = getAttachmentUrl(attachment);
+    const mime = getAttachmentMime(attachment);
+    const title = getCitationAttachmentLabel(attachment) || 'Uploaded file';
+    body.innerHTML = '';
+
+    if(kind === 'pdf' && url){
+      const frame = document.createElement('iframe');
+      frame.className = 'problem-preview-doc-frame';
+      frame.src = applyProblemPdfPreviewOptions(url);
+      frame.title = 'PDF preview';
+      body.appendChild(frame);
+      return;
+    }
+    if(kind === 'image' && url){
+      const image = document.createElement('img');
+      image.className = 'problem-preview-doc-image';
+      image.src = url;
+      image.alt = title;
+      body.appendChild(image);
+      return;
+    }
+    if(kind === 'video' && url){
+      const video = document.createElement('video');
+      video.className = 'problem-preview-doc-video';
+      video.controls = true;
+      video.playsInline = true;
+      video.preload = 'metadata';
+      video.src = url;
+      body.appendChild(video);
+      return;
+    }
+    if(kind === 'audio' && url){
+      const wrap = document.createElement('div');
+      wrap.className = 'problem-preview-doc-audio-wrap';
+      const audio = document.createElement('audio');
+      audio.className = 'problem-preview-doc-audio';
+      audio.controls = true;
+      audio.preload = 'metadata';
+      audio.src = url;
+      wrap.appendChild(audio);
+      body.appendChild(wrap);
+      return;
+    }
+    if(kind === 'html' && (attachment && attachment.text || url)){
+      const frame = document.createElement('iframe');
+      frame.className = 'problem-preview-doc-frame';
+      frame.title = title;
+      frame.setAttribute('sandbox', '');
+      if(attachment && attachment.text){
+        frame.srcdoc = attachment.text;
+      }else{
+        frame.src = url;
+      }
+      body.appendChild(frame);
+      return;
+    }
+    if(kind === 'text'){
+      const pre = document.createElement('pre');
+      pre.className = 'problem-preview-doc-text';
+      if(attachment && attachment.text){
+        pre.textContent = attachment.text;
+        body.appendChild(pre);
+        return;
+      }
+      if(url){
+        pre.textContent = 'Loading preview...';
+        body.appendChild(pre);
+        fetch(url).then(response=>{
+          if(!response.ok) throw new Error('Preview failed.');
+          return response.text();
+        }).then(text=>{
+          if(token !== problemAttachmentRenderToken) return;
+          pre.textContent = text;
+        }).catch(()=>{
+          if(token !== problemAttachmentRenderToken) return;
+          body.innerHTML = '';
+          body.appendChild(createProblemAttachmentFallback(attachment, 'Text preview could not be loaded for this attachment.'));
+        });
+        return;
+      }
+    }
+    if(url){
+      const object = document.createElement('object');
+      object.className = 'problem-preview-doc-object';
+      object.data = url;
+      if(mime) object.type = mime;
+      object.appendChild(createProblemAttachmentFallback(attachment));
+      body.appendChild(object);
+      return;
+    }
+    body.appendChild(createProblemAttachmentFallback(
+      attachment,
+      'Preview data is not available for this saved attachment.'
+    ));
+  }
+
+  function renderProblemPreviewAttachments(citation){
+    if(!problemPreviewUploadSidebar || !problemPreviewAttachmentStage) return;
+    const attachments = citation && Array.isArray(citation.attachments) ? citation.attachments : [];
+    problemAttachmentRenderToken += 1;
+    const token = problemAttachmentRenderToken;
+    problemPreviewUploadSidebar.innerHTML = '';
+    problemPreviewAttachmentStage.innerHTML = '';
+
+    if(!attachments.length){
+      const empty = document.createElement('div');
+      empty.className = 'problem-preview-attachment-body';
+      empty.appendChild(createProblemAttachmentFallback(null, 'No uploaded attachments are saved for this source.'));
+      problemPreviewAttachmentStage.appendChild(empty);
+      return;
+    }
+
+    activeProblemAttachmentIndex = Math.max(0, Math.min(activeProblemAttachmentIndex, attachments.length - 1));
+    attachments.forEach((attachment, index)=>{
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'problem-preview-upload-item' + (index === activeProblemAttachmentIndex ? ' is-active' : '');
+      button.dataset.attachmentIndex = String(index);
+      const name = document.createElement('span');
+      name.className = 'problem-preview-upload-name';
+      name.textContent = getCitationAttachmentLabel(attachment) || `Attachment ${index + 1}`;
+      const ext = document.createElement('span');
+      ext.className = 'problem-preview-upload-ext';
+      ext.textContent = getAttachmentExt(attachment) || inferAttachmentKind(attachment);
+      button.append(name, ext);
+      problemPreviewUploadSidebar.appendChild(button);
+    });
+
+    const body = document.createElement('div');
+    body.className = 'problem-preview-attachment-body';
+    problemPreviewAttachmentStage.appendChild(body);
+    renderProblemAttachmentBody(body, attachments[activeProblemAttachmentIndex], token);
+  }
+
   function openCitationPreview(citation){
     if(!citationPreviewDrawer || !citation) return;
     activeCitationPreview = citation;
@@ -6739,6 +7196,7 @@
     const title = citation.title || 'Untitled';
     const sourceText = getCitationSourceText(citation) || 'No saved source preview available.';
     const lineCount = Math.max(1, sourceText.split(/\r?\n/).length);
+    activeProblemAttachmentIndex = 0;
     if(problemPreviewTitle) problemPreviewTitle.textContent = title;
     if(problemPreviewHeading) problemPreviewHeading.textContent = title;
     appendCitationMetaPills(problemPreviewMeta, citation);
@@ -6751,19 +7209,24 @@
       problemPreviewSource.textContent = sourceText;
       problemPreviewSource.classList.toggle('is-empty', !getCitationSourceText(citation));
     }
+    renderProblemPreviewAttachments(citation);
   }
 
   function setProblemPreviewView(view){
-    const normalized = view === 'source' ? 'source' : 'overview';
+    const normalized = view === 'source' || view === 'uploads' ? view : 'overview';
     if(problemPreviewCard){
       problemPreviewCard.classList.toggle('is-overview', normalized === 'overview');
       problemPreviewCard.classList.toggle('is-source', normalized === 'source');
+      problemPreviewCard.classList.toggle('is-uploads', normalized === 'uploads');
     }
     if(problemPreviewOverviewTab){
       problemPreviewOverviewTab.setAttribute('aria-selected', normalized === 'overview' ? 'true' : 'false');
     }
     if(problemPreviewSourceTab){
       problemPreviewSourceTab.setAttribute('aria-selected', normalized === 'source' ? 'true' : 'false');
+    }
+    if(problemPreviewUploadsTab){
+      problemPreviewUploadsTab.setAttribute('aria-selected', normalized === 'uploads' ? 'true' : 'false');
     }
   }
 
@@ -6867,7 +7330,7 @@
             if(citation.fileName) metaParts.push(citation.fileName);
             if(citation.language) metaParts.push(citation.language);
             if(citation.normalizedFormat) metaParts.push(citation.normalizedFormat);
-            if(citation.attachments.length) metaParts.push(`files: ${citation.attachments.join(', ')}`);
+            if(citation.attachments.length) metaParts.push(`files: ${citation.attachmentNames.join(', ')}`);
             if(metaParts.length){
               const meta = document.createElement('div');
               meta.className = 'citation-meta';
@@ -7138,6 +7601,25 @@
   if(problemPreviewSourceTab){
     problemPreviewSourceTab.addEventListener('click', ()=>{
       setProblemPreviewView('source');
+    });
+  }
+
+  if(problemPreviewUploadsTab){
+    problemPreviewUploadsTab.addEventListener('click', ()=>{
+      setProblemPreviewView('uploads');
+    });
+  }
+
+  if(problemPreviewUploadSidebar){
+    problemPreviewUploadSidebar.addEventListener('click', event=>{
+      const target = event.target && typeof event.target.closest === 'function'
+        ? event.target.closest('[data-attachment-index]')
+        : null;
+      if(!target || !activeCitationPreview) return;
+      const index = Number(target.dataset.attachmentIndex);
+      if(!Number.isFinite(index)) return;
+      activeProblemAttachmentIndex = Math.max(0, index);
+      renderProblemPreviewAttachments(activeCitationPreview);
     });
   }
 
