@@ -2584,6 +2584,39 @@
       overflow-wrap:anywhere;
     }
 
+    .citation-inline-link{
+      appearance:none;
+      border:0;
+      border-radius:999px;
+      margin:0 1px;
+      padding:0 4px;
+      background:transparent;
+      color:var(--search-chat-citation-id);
+      font:inherit;
+      font-weight:700;
+      line-height:inherit;
+      cursor:pointer;
+      text-decoration:none;
+      vertical-align:baseline;
+    }
+
+    .citation-inline-link:hover,
+    .citation-inline-link:focus-visible{
+      color:#0b57d0;
+      text-decoration:underline;
+      text-underline-offset:3px;
+      outline:none;
+    }
+
+    body.mode-q .citation-inline-link{
+      color:#9fc3ff;
+    }
+
+    body.mode-q .citation-inline-link:hover,
+    body.mode-q .citation-inline-link:focus-visible{
+      color:#cfe1ff;
+    }
+
     .citation-list{
       display:flex;
       flex-direction:column;
@@ -2597,12 +2630,28 @@
       padding:10px 11px;
       background:var(--search-chat-citation-bg);
       color:var(--search-chat-citation-text);
+      cursor:pointer;
+      transition:border-color .18s ease,background-color .18s ease,transform .18s ease;
+    }
+
+    .citation-item:hover,
+    .citation-item:focus-visible{
+      border-color:var(--search-chat-item-hover-border);
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+      transform:translateY(-1px);
     }
 
     body.mode-q .citation-item{
       border-color:rgba(255,255,255,0.12);
       background:rgba(255,255,255,0.04);
       color:#edf2ff;
+    }
+
+    body.mode-q .citation-item:hover,
+    body.mode-q .citation-item:focus-visible{
+      border-color:rgba(143,185,255,0.4);
+      background:rgba(87,132,209,0.14);
     }
 
     .citation-title{
@@ -2808,6 +2857,295 @@
       color:#ffb6b6;
     }
 
+    .citation-preview-drawer{
+      position:fixed;
+      top:0;
+      right:0;
+      width:min(420px, calc(100vw - 24px));
+      height:100vh;
+      height:100dvh;
+      z-index:48;
+      display:flex;
+      flex-direction:column;
+      border-left:1px solid var(--search-chat-card-border);
+      background:var(--search-chat-card-bg);
+      background:color-mix(in srgb, var(--bg-white) 92%, CanvasText 8%);
+      color:var(--search-chat-card-text);
+      box-shadow:-24px 0 54px rgba(15,23,42,0.18);
+      transform:translateX(104%);
+      opacity:0;
+      pointer-events:none;
+      transition:transform .26s cubic-bezier(.22,1,.36,1),opacity .2s ease;
+    }
+
+    .citation-preview-drawer.is-open{
+      transform:translateX(0);
+      opacity:1;
+      pointer-events:auto;
+    }
+
+    body.mode-q .citation-preview-drawer{
+      background:#05070d;
+      color:#eef4ff;
+      border-left-color:rgba(255,255,255,0.14);
+      box-shadow:-24px 0 54px rgba(0,0,0,0.42);
+    }
+
+    .citation-preview-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:18px 18px 12px;
+      border-bottom:1px solid var(--search-chat-card-border);
+    }
+
+    body.mode-q .citation-preview-head{
+      border-bottom-color:rgba(255,255,255,0.12);
+    }
+
+    .citation-preview-kicker{
+      color:var(--search-chat-muted);
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    .citation-preview-close,
+    .citation-preview-back,
+    .citation-preview-go{
+      border:1px solid var(--search-chat-more-border);
+      border-radius:999px;
+      background:var(--search-chat-more-bg);
+      color:var(--search-chat-more-text);
+      font:inherit;
+      font-size:13px;
+      font-weight:700;
+      cursor:pointer;
+      transition:background-color .18s ease,border-color .18s ease,transform .18s ease;
+    }
+
+    .citation-preview-close{
+      width:34px;
+      height:34px;
+      padding:0;
+      font-size:20px;
+      line-height:1;
+    }
+
+    .citation-preview-close:hover,
+    .citation-preview-back:hover,
+    .citation-preview-go:hover{
+      background:var(--search-chat-more-hover-bg);
+      border-color:var(--search-chat-more-hover-border);
+      transform:translateY(-1px);
+    }
+
+    body.mode-q .citation-preview-close,
+    body.mode-q .citation-preview-back,
+    body.mode-q .citation-preview-go{
+      border-color:rgba(153,184,235,0.5);
+      background:rgba(255,255,255,0.04);
+      color:#9fc3ff;
+    }
+
+    .citation-preview-body{
+      min-height:0;
+      flex:1;
+      overflow:auto;
+      padding:16px 18px 18px;
+    }
+
+    .citation-preview-title{
+      margin:0 0 10px;
+      color:inherit;
+      font-size:20px;
+      line-height:1.25;
+      letter-spacing:0;
+    }
+
+    .citation-preview-meta{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      margin-bottom:14px;
+    }
+
+    .citation-preview-pill{
+      border:1px solid var(--search-chat-citation-border);
+      border-radius:999px;
+      padding:4px 8px;
+      color:var(--search-chat-muted);
+      font-size:11px;
+      font-weight:700;
+      line-height:1.2;
+    }
+
+    body.mode-q .citation-preview-pill{
+      border-color:rgba(255,255,255,0.14);
+      color:#b8c7e7;
+    }
+
+    .citation-preview-section{
+      margin-top:16px;
+    }
+
+    .citation-preview-section-title{
+      margin:0 0 7px;
+      color:var(--search-chat-muted);
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+    }
+
+    .citation-preview-text,
+    .citation-preview-code{
+      margin:0;
+      border:1px solid var(--search-chat-citation-border);
+      border-radius:14px;
+      background:var(--search-chat-citation-bg);
+      color:var(--search-chat-citation-text);
+      padding:12px;
+      font-size:13px;
+      line-height:1.55;
+      white-space:pre-wrap;
+      overflow-wrap:anywhere;
+    }
+
+    .citation-preview-code{
+      max-height:320px;
+      overflow:auto;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:12px;
+    }
+
+    body.mode-q .citation-preview-text,
+    body.mode-q .citation-preview-code{
+      border-color:rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.04);
+      color:#edf2ff;
+    }
+
+    .citation-preview-foot{
+      padding:14px 18px calc(18px + env(safe-area-inset-bottom));
+      border-top:1px solid var(--search-chat-card-border);
+    }
+
+    .citation-preview-go{
+      width:100%;
+      height:42px;
+    }
+
+    .problem-preview-page{
+      position:fixed;
+      inset:0;
+      z-index:62;
+      display:flex;
+      flex-direction:column;
+      background:var(--bg-white);
+      color:var(--system-text);
+    }
+
+    .citation-preview-drawer[hidden],
+    .problem-preview-page[hidden]{
+      display:none;
+    }
+
+    body.mode-q .problem-preview-page{
+      background:#000;
+      color:#f3f6ff;
+    }
+
+    .problem-preview-topbar{
+      min-height:62px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      padding:12px 18px;
+      border-bottom:1px solid var(--search-chat-card-border);
+      background:var(--search-chat-card-bg);
+      background:color-mix(in srgb, var(--bg-white) 94%, CanvasText 6%);
+    }
+
+    body.mode-q .problem-preview-topbar{
+      border-bottom-color:rgba(255,255,255,0.14);
+      background:#05070d;
+    }
+
+    .citation-preview-back{
+      min-width:84px;
+      height:36px;
+      padding:0 14px;
+    }
+
+    .problem-preview-brand{
+      color:var(--search-chat-muted);
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    .problem-preview-main{
+      flex:1;
+      min-height:0;
+      overflow:auto;
+      padding:28px 18px 44px;
+    }
+
+    .problem-preview-card{
+      width:min(980px, 100%);
+      margin:0 auto;
+      border:1px solid var(--search-chat-card-border);
+      border-radius:18px;
+      background:var(--search-chat-card-bg);
+      color:var(--search-chat-card-text);
+      box-shadow:var(--search-chat-card-shadow);
+      padding:22px;
+    }
+
+    body.mode-q .problem-preview-card{
+      border-color:rgba(255,255,255,0.16);
+      background:rgba(255,255,255,0.04);
+      color:#eaf1ff;
+      box-shadow:none;
+    }
+
+    .problem-preview-title{
+      margin:0 0 12px;
+      font-size:clamp(24px, 5vw, 42px);
+      line-height:1.08;
+      letter-spacing:0;
+    }
+
+    .problem-preview-grid{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:14px;
+      margin-top:18px;
+    }
+
+    .problem-preview-block{
+      min-width:0;
+    }
+
+    .problem-preview-block.full{
+      grid-column:1 / -1;
+    }
+
+    @media (max-width:760px){
+      .citation-preview-drawer{
+        width:100vw;
+      }
+
+      .problem-preview-grid{
+        grid-template-columns:1fr;
+      }
+    }
+
     @media (max-width:700px){
       .suggestion-pane{
         padding:8px 8px calc(156px + env(safe-area-inset-bottom));
@@ -2995,6 +3333,55 @@
   </div>
 </section>
 
+<aside class="citation-preview-drawer" id="citationPreviewDrawer" aria-hidden="true" hidden>
+  <div class="citation-preview-head">
+    <div class="citation-preview-kicker">Source preview</div>
+    <button class="citation-preview-close" id="citationPreviewClose" type="button" aria-label="Close preview">&times;</button>
+  </div>
+  <div class="citation-preview-body">
+    <h2 class="citation-preview-title" id="citationPreviewTitle"></h2>
+    <div class="citation-preview-meta" id="citationPreviewMeta"></div>
+    <section class="citation-preview-section">
+      <h3 class="citation-preview-section-title">Quote</h3>
+      <div class="citation-preview-text" id="citationPreviewQuote"></div>
+    </section>
+    <section class="citation-preview-section">
+      <h3 class="citation-preview-section-title">Source</h3>
+      <pre class="citation-preview-code" id="citationPreviewSource"></pre>
+    </section>
+  </div>
+  <div class="citation-preview-foot">
+    <button class="citation-preview-go" id="citationPreviewGo" type="button">Go to page</button>
+  </div>
+</aside>
+
+<section class="problem-preview-page" id="problemPreviewPage" aria-hidden="true" hidden>
+  <header class="problem-preview-topbar">
+    <button class="citation-preview-back" id="problemPreviewBack" type="button">Back</button>
+    <div class="problem-preview-brand">provf preview</div>
+  </header>
+  <main class="problem-preview-main">
+    <article class="problem-preview-card">
+      <h1 class="problem-preview-title" id="problemPreviewTitle"></h1>
+      <div class="citation-preview-meta" id="problemPreviewMeta"></div>
+      <div class="problem-preview-grid">
+        <section class="problem-preview-block">
+          <h2 class="citation-preview-section-title">Quote</h2>
+          <div class="citation-preview-text" id="problemPreviewQuote"></div>
+        </section>
+        <section class="problem-preview-block">
+          <h2 class="citation-preview-section-title">Details</h2>
+          <div class="citation-preview-text" id="problemPreviewDetails"></div>
+        </section>
+        <section class="problem-preview-block full">
+          <h2 class="citation-preview-section-title">Source</h2>
+          <pre class="citation-preview-code" id="problemPreviewSource"></pre>
+        </section>
+      </div>
+    </article>
+  </main>
+</section>
+
 <div class="selection-mode" id="selectionMode" style="display:none;">
   <button class="selection-cancel" id="selectionCancel" type="button" aria-label="Cancel">&times;</button>
   <div class="selection-option" data-value="Lean">Lean</div>
@@ -3117,6 +3504,20 @@
   const suggestionPane = document.getElementById('suggestionPane');
   const suggestionBody = document.getElementById('suggestionBody');
   const suggestionPanel = suggestionPane ? suggestionPane.querySelector('.suggestion-panel') : null;
+  const citationPreviewDrawer = document.getElementById('citationPreviewDrawer');
+  const citationPreviewClose = document.getElementById('citationPreviewClose');
+  const citationPreviewGo = document.getElementById('citationPreviewGo');
+  const citationPreviewTitle = document.getElementById('citationPreviewTitle');
+  const citationPreviewMeta = document.getElementById('citationPreviewMeta');
+  const citationPreviewQuote = document.getElementById('citationPreviewQuote');
+  const citationPreviewSource = document.getElementById('citationPreviewSource');
+  const problemPreviewPage = document.getElementById('problemPreviewPage');
+  const problemPreviewBack = document.getElementById('problemPreviewBack');
+  const problemPreviewTitle = document.getElementById('problemPreviewTitle');
+  const problemPreviewMeta = document.getElementById('problemPreviewMeta');
+  const problemPreviewQuote = document.getElementById('problemPreviewQuote');
+  const problemPreviewDetails = document.getElementById('problemPreviewDetails');
+  const problemPreviewSource = document.getElementById('problemPreviewSource');
   const EDITOR_RETURN_KEY = 'ivucxEditorReturn';
   let attachedFiles = [];
   let lastInputValue = input.value;
@@ -4613,6 +5014,7 @@
   let hasSuggestionResults = false;
   let suggestionTurnSeq = 0;
   let suggestionTurns = [];
+  let activeCitationPreview = null;
   const SUGGESTION_COUNT = 10;
   const LOGIN_CHECK_TIMEOUT_MS = 3500;
   const POPUP_LOADING_TEXT = 'Checking account state...';
@@ -5723,6 +6125,8 @@
       suggestionBody.innerHTML = '';
     }
 
+    closeCitationPreview();
+    closeProblemPreviewPage();
     setSuggestionPaneOpen(false);
   }
 
@@ -5769,12 +6173,18 @@
       const fallbackId = `P${index + 1}`;
       return {
         id: String(citation.id || fallbackId).trim() || fallbackId,
+        problemId: String(citation.problemId || citation.id || '').trim(),
         title: String(citation.title || 'Untitled').trim() || 'Untitled',
         quote: String(citation.quote || '').trim(),
+        sourceCode: String(citation.sourceCode || citation.source || citation.code || '').trim(),
+        proofState: String(citation.proofState || '').trim(),
+        createdAt: String(citation.createdAt || '').trim(),
         fileName: String(citation.fileName || '').trim(),
         language: String(citation.language || '').trim(),
         kind: String(citation.kind || '').trim(),
         normalizedFormat: String(citation.normalizedFormat || '').trim(),
+        requestedFormat: String(citation.requestedFormat || '').trim(),
+        completedFormat: String(citation.completedFormat || '').trim(),
         used: !!citation.used,
         attachments: Array.isArray(citation.attachments)
           ? citation.attachments.map(name=>String(name || '').trim()).filter(Boolean)
@@ -5812,6 +6222,143 @@
       }
     });
     return history.slice(-6);
+  }
+
+  function findCitationById(turn, citationId){
+    const id = String(citationId || '').trim().toLowerCase();
+    if(!turn || !id || !Array.isArray(turn.citations)) return null;
+    return turn.citations.find(citation=>String(citation.id || '').trim().toLowerCase() === id) || null;
+  }
+
+  function appendCitationMetaPills(containerEl, citation){
+    if(!containerEl) return;
+    containerEl.innerHTML = '';
+    const parts = [];
+    if(citation && citation.kind) parts.push(citation.kind);
+    if(citation && citation.language) parts.push(citation.language);
+    if(citation && citation.fileName) parts.push(citation.fileName);
+    if(citation && citation.proofState) parts.push('proof ' + citation.proofState);
+    if(citation && citation.normalizedFormat) parts.push(citation.normalizedFormat);
+    if(citation && citation.createdAt){
+      const dateText = String(citation.createdAt).slice(0, 10);
+      if(dateText) parts.push(dateText);
+    }
+    parts.filter(Boolean).forEach(part=>{
+      const pill = document.createElement('span');
+      pill.className = 'citation-preview-pill';
+      pill.textContent = part;
+      containerEl.appendChild(pill);
+    });
+  }
+
+  function getCitationSourceText(citation){
+    if(!citation) return '';
+    return String(citation.sourceCode || citation.quote || '').trim();
+  }
+
+  function getCitationDetailText(citation){
+    if(!citation) return '';
+    const lines = [];
+    if(citation.problemId) lines.push('ID: ' + citation.problemId);
+    if(citation.kind) lines.push('Source kind: ' + citation.kind);
+    if(citation.language) lines.push('Language: ' + citation.language);
+    if(citation.fileName) lines.push('File: ' + citation.fileName);
+    if(citation.proofState) lines.push('Proof state: ' + citation.proofState);
+    if(citation.requestedFormat) lines.push('Requested format: ' + citation.requestedFormat);
+    if(citation.completedFormat) lines.push('Completed format: ' + citation.completedFormat);
+    if(Array.isArray(citation.attachments) && citation.attachments.length){
+      lines.push('Uploads: ' + citation.attachments.join(', '));
+    }
+    return lines.join('\n') || 'No additional details.';
+  }
+
+  function renderAnswerWithCitationLinks(answerEl, text, turn){
+    if(!answerEl) return;
+    answerEl.innerHTML = '';
+    const value = String(text || '');
+    const pattern = /[\[［](P\d+)[\]］]/gi;
+    let lastIndex = 0;
+    let match;
+    while((match = pattern.exec(value))){
+      if(match.index > lastIndex){
+        answerEl.appendChild(document.createTextNode(value.slice(lastIndex, match.index)));
+      }
+      const citationId = match[1].toUpperCase();
+      const citation = findCitationById(turn, citationId);
+      if(citation){
+        const link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'citation-inline-link';
+        link.dataset.turnId = String(turn.id);
+        link.dataset.citationId = citationId;
+        link.textContent = `[${citationId}]`;
+        answerEl.appendChild(link);
+      }else{
+        answerEl.appendChild(document.createTextNode(match[0]));
+      }
+      lastIndex = pattern.lastIndex;
+    }
+    if(lastIndex < value.length){
+      answerEl.appendChild(document.createTextNode(value.slice(lastIndex)));
+    }
+  }
+
+  function renderCitationPreview(citation){
+    if(!citation) return;
+    if(citationPreviewTitle) citationPreviewTitle.textContent = citation.title || 'Untitled';
+    appendCitationMetaPills(citationPreviewMeta, citation);
+    if(citationPreviewQuote){
+      citationPreviewQuote.textContent = citation.quote || 'No quote preview available.';
+    }
+    if(citationPreviewSource){
+      citationPreviewSource.textContent = getCitationSourceText(citation) || 'No saved source preview available.';
+    }
+  }
+
+  function openCitationPreview(citation){
+    if(!citationPreviewDrawer || !citation) return;
+    activeCitationPreview = citation;
+    renderCitationPreview(citation);
+    citationPreviewDrawer.hidden = false;
+    citationPreviewDrawer.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(()=>{
+      citationPreviewDrawer.classList.add('is-open');
+    });
+  }
+
+  function closeCitationPreview(){
+    if(!citationPreviewDrawer) return;
+    citationPreviewDrawer.classList.remove('is-open');
+    citationPreviewDrawer.setAttribute('aria-hidden', 'true');
+    window.setTimeout(()=>{
+      if(citationPreviewDrawer && !citationPreviewDrawer.classList.contains('is-open')){
+        citationPreviewDrawer.hidden = true;
+      }
+    }, 220);
+  }
+
+  function renderProblemPreviewPage(citation){
+    if(!citation) return;
+    if(problemPreviewTitle) problemPreviewTitle.textContent = citation.title || 'Untitled';
+    appendCitationMetaPills(problemPreviewMeta, citation);
+    if(problemPreviewQuote) problemPreviewQuote.textContent = citation.quote || 'No quote preview available.';
+    if(problemPreviewDetails) problemPreviewDetails.textContent = getCitationDetailText(citation);
+    if(problemPreviewSource) problemPreviewSource.textContent = getCitationSourceText(citation) || 'No saved source preview available.';
+  }
+
+  function openProblemPreviewPage(citation){
+    if(!problemPreviewPage || !citation) return;
+    activeCitationPreview = citation;
+    renderProblemPreviewPage(citation);
+    closeCitationPreview();
+    problemPreviewPage.hidden = false;
+    problemPreviewPage.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeProblemPreviewPage(){
+    if(!problemPreviewPage) return;
+    problemPreviewPage.hidden = true;
+    problemPreviewPage.setAttribute('aria-hidden', 'true');
   }
 
   function renderSuggestionThread(){
@@ -5857,7 +6404,7 @@
         if(turn.answer){
           const answer = document.createElement('div');
           answer.className = 'chat-answer';
-          answer.textContent = turn.answer;
+          renderAnswerWithCitationLinks(answer, turn.answer, turn);
           assistantCard.appendChild(answer);
         }
 
@@ -5868,6 +6415,11 @@
           turn.citations.forEach(citation=>{
             const item = document.createElement('article');
             item.className = 'citation-item';
+            item.tabIndex = 0;
+            item.setAttribute('role', 'button');
+            item.dataset.turnId = String(turn.id);
+            item.dataset.citationId = citation.id;
+            item.setAttribute('aria-label', 'Preview ' + citation.title);
 
             const title = document.createElement('div');
             title.className = 'citation-title';
@@ -6104,6 +6656,16 @@
       const target = e.target && typeof e.target.closest === 'function' ? e.target : null;
       if(!target) return;
 
+      const citationTrigger = target.closest('.citation-inline-link, .citation-item');
+      if(citationTrigger){
+        const turnId = Number(citationTrigger.dataset.turnId);
+        const citationId = citationTrigger.dataset.citationId;
+        const turn = suggestionTurns.find(entry=>entry.id === turnId);
+        const citation = findCitationById(turn, citationId);
+        if(citation) openCitationPreview(citation);
+        return;
+      }
+
       const button = target.closest('.show-more-button');
       if(!button) return;
 
@@ -6115,7 +6677,46 @@
 
       fetchSuggestionBatch(turn, true);
     });
+
+    suggestionBody.addEventListener('keydown', e=>{
+      if(e.key !== 'Enter' && e.key !== ' ') return;
+      const target = e.target && typeof e.target.closest === 'function' ? e.target : null;
+      if(!target) return;
+      const citationTrigger = target.closest('.citation-item');
+      if(!citationTrigger) return;
+      e.preventDefault();
+      const turnId = Number(citationTrigger.dataset.turnId);
+      const citationId = citationTrigger.dataset.citationId;
+      const turn = suggestionTurns.find(entry=>entry.id === turnId);
+      const citation = findCitationById(turn, citationId);
+      if(citation) openCitationPreview(citation);
+    });
   }
+
+  if(citationPreviewClose){
+    citationPreviewClose.addEventListener('click', closeCitationPreview);
+  }
+
+  if(citationPreviewGo){
+    citationPreviewGo.addEventListener('click', ()=>{
+      if(activeCitationPreview) openProblemPreviewPage(activeCitationPreview);
+    });
+  }
+
+  if(problemPreviewBack){
+    problemPreviewBack.addEventListener('click', closeProblemPreviewPage);
+  }
+
+  document.addEventListener('keydown', e=>{
+    if(e.key !== 'Escape') return;
+    if(problemPreviewPage && !problemPreviewPage.hidden){
+      closeProblemPreviewPage();
+      return;
+    }
+    if(citationPreviewDrawer && !citationPreviewDrawer.hidden){
+      closeCitationPreview();
+    }
+  });
 
   function readBooleanField(payload, key){
     if(!payload || typeof payload !== 'object') return null;

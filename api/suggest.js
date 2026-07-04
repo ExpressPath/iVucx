@@ -5,6 +5,7 @@ const DEFAULT_MODEL = 'gemini-2.5-flash';
 const MAX_SEARCH_ROWS = 500;
 const MAX_CONTEXT_DOCS = 12;
 const MAX_SOURCE_CHARS = 900;
+const MAX_PREVIEW_SOURCE_CHARS = 3600;
 const MAX_CIC_CHARS = 900;
 const MAX_HISTORY_TURNS = 6;
 const MAX_HISTORY_CHARS = 700;
@@ -268,7 +269,9 @@ function buildCitation(row, index) {
     requestedFormat: safeString(requestMeta.requestedFormat),
     completedFormat: safeString(requestMeta.completedFormat),
     attachments: extractAttachmentNames(requestMeta),
-    quote: truncateText(quote, 420)
+    quote: truncateText(quote, 420),
+    sourceCode: truncateText(row.source_code, MAX_PREVIEW_SOURCE_CHARS),
+    normalizedTermPreview: cicPreview
   };
 }
 
@@ -334,11 +337,13 @@ function buildGeminiPrompt({ query, targetKind, citations, history, systemMode }
     '',
     'Use only the provided saved rows as sources.',
     'Answer in Japanese unless the user query is clearly in another language.',
+    'Write the answer as natural ChatGPT-style prose.',
+    'Use inline citation markers like [P1] directly inside sentences, similar to Google AI Mode source links.',
     'Every factual claim about a saved problem/theorem must cite source ids like [P1].',
     'If no saved row supports an answer, say that the saved database does not contain enough information.',
-    'Suggestions must be short follow-up searches that can help refine the same saved-database lookup.',
+    'Do not include follow-up suggestions, next questions, related searches, or suggested replies.',
     'Return JSON only with this shape:',
-    '{"answer":"string","suggestions":["string"],"usedCitationIds":["P1"]}',
+    '{"answer":"string","usedCitationIds":["P1"]}',
     '',
     `Saved rows: ${JSON.stringify(context)}`
   ].join('\n');
@@ -748,6 +753,43 @@ function buildUnifiedFallbackAnswer(query, citations, geminiError) {
   };
 }
 
+function describeChatFallbackReason(error) {
+  const status = Number(error && (error.status || error.code));
+  if (status === 429) {
+    return 'Gemini API が現在レート制限またはクォータ上限に達しているため';
+  }
+  if (status === 400 || status === 401 || status === 403) {
+    return 'Gemini API の認証またはプロジェクト設定で拒否されたため';
+  }
+  if (error && /not configured/i.test(String(error.message || ''))) {
+    return 'Gemini API の接続情報が未設定のため';
+  }
+  return 'Gemini API が一時的に利用できないため';
+}
+
+function buildChatFallbackAnswer(query, citations, geminiError) {
+  const reason = describeChatFallbackReason(geminiError);
+  if (citations.length === 0) {
+    return {
+      answer: `${reason}、保存済みデータから検索しましたが、「${query}」に十分一致する情報は見つかりませんでした。`,
+      suggestions: [],
+      usedCitationIds: []
+    };
+  }
+
+  const lines = citations.slice(0, 4).map((item) => {
+    const kind = item.kind && item.kind !== 'unknown' ? `${item.kind}` : 'saved item';
+    const file = item.fileName ? `（${item.fileName}）` : '';
+    return `${item.title}${file} は ${kind} として保存されています [${item.id}]。${item.quote ? `内容は「${item.quote}」です [${item.id}]。` : ''}`;
+  });
+
+  return {
+    answer: `${reason}、保存済みデータをもとに回答します。\n\n${lines.join('\n\n')}`,
+    suggestions: [],
+    usedCitationIds: citations.map((item) => item.id)
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -778,21 +820,19 @@ export default async function handler(req, res) {
         model = geminiResult.model;
         geminiUsed = true;
       } catch (geminiError) {
-        generated = buildUnifiedFallbackAnswer(query, context, geminiError);
+        generated = buildChatFallbackAnswer(query, context, geminiError);
         model = '';
       }
     } else {
       generated = {
         answer: '',
-        suggestions: context.map((item) => `${item.title} [${item.id}]`),
+        suggestions: [],
         usedCitationIds: []
       };
       model = '';
     }
 
-    const suggestions = generated.suggestions && generated.suggestions.length
-      ? generated.suggestions
-      : context.map((item) => `${item.title} [${item.id}]`);
+    const suggestions = [];
     const usedCitationIds = Array.isArray(generated.usedCitationIds)
       ? generated.usedCitationIds.map((item) => safeString(item)).filter(Boolean)
       : [];
@@ -813,7 +853,7 @@ export default async function handler(req, res) {
       answer: generated.answer,
       citations,
       usedCitationIds,
-      suggestions: suggestions.slice(0, limit),
+      suggestions,
       hasMore: offset + searchResult.citations.length < searchResult.total
     });
   } catch (err) {
