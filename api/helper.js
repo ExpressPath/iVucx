@@ -10,6 +10,7 @@ import { sendBountyCheckoutResponse } from '../lib/bounty-checkout.js';
 import { sendStripeSetupResponse } from '../lib/stripe-setup.js';
 import { sendAttachmentCompleteResponse, sendAttachmentUploadPlanResponse } from '../lib/problem-attachments.js';
 import { sendPersistedProblemResponse, sendProblemPersistenceStatusResponse } from '../lib/problem-store.js';
+import { sendProofAiResponse } from '../lib/proof-ai.js';
 
 function getRouteSegments(req) {
   const raw = req && req.query ? req.query.route : undefined;
@@ -46,6 +47,11 @@ export default async function handler(req, res) {
 
   if (segments.length === 1 && segments[0] === 'stripe-setup') {
     await sendStripeSetupResponse(req, res);
+    return;
+  }
+
+  if (segments.length === 1 && segments[0] === 'proof-ai') {
+    await sendProofAiResponse(req, res);
     return;
   }
 

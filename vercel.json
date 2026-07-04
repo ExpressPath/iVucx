@@ -58,6 +58,10 @@
       "dest": "/api/helper?route=stripe-setup"
     },
     {
+      "src": "/api/proof-ai",
+      "dest": "/api/helper?route=proof-ai"
+    },
+    {
       "src": "/api/google-auth-start",
       "dest": "/api/google?route=auth-start"
     },
