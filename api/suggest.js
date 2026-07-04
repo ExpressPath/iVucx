@@ -158,6 +158,12 @@ function truncateText(value, limit) {
   return `${text.slice(0, Math.max(0, limit - 1)).trim()}...`;
 }
 
+function truncateSourceText(value, limit) {
+  const text = String(value || '').trim();
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}...`;
+}
+
 function normalizeHistory(rawHistory) {
   const source = Array.isArray(rawHistory) ? rawHistory : [];
   return source
@@ -272,7 +278,7 @@ function buildCitation(row, index) {
     completedFormat: safeString(requestMeta.completedFormat),
     attachments: extractAttachmentNames(requestMeta),
     quote: truncateText(quote, 420),
-    sourceCode: truncateText(row.source_code, MAX_PREVIEW_SOURCE_CHARS),
+    sourceCode: truncateSourceText(row.source_code, MAX_PREVIEW_SOURCE_CHARS),
     normalizedTermPreview: cicPreview
   };
 }
