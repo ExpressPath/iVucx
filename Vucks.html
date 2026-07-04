@@ -3269,23 +3269,14 @@
       padding:0;
     }
 
-    .problem-preview-card.is-overview,
     .problem-preview-card.is-source,
     .problem-preview-card.is-uploads{
       grid-template-columns:minmax(0, 1fr);
     }
 
-    .problem-preview-card.is-overview .problem-preview-source-shell,
-    .problem-preview-card.is-overview .problem-preview-attachments-shell,
-    .problem-preview-card.is-source .problem-preview-summary,
     .problem-preview-card.is-source .problem-preview-attachments-shell,
-    .problem-preview-card.is-uploads .problem-preview-summary,
     .problem-preview-card.is-uploads .problem-preview-source-shell{
       display:none;
-    }
-
-    .problem-preview-card.is-overview .problem-preview-summary{
-      border-right:0;
     }
 
     body.mode-q .problem-preview-card{
@@ -3854,27 +3845,13 @@
       </div>
     </div>
     <div class="problem-preview-switch" role="tablist" aria-label="Preview view">
-      <button class="problem-preview-tab" id="problemPreviewOverviewTab" type="button" role="tab" aria-selected="true">Overview</button>
-      <span class="problem-preview-divider" aria-hidden="true">/</span>
-      <button class="problem-preview-tab" id="problemPreviewSourceTab" type="button" role="tab" aria-selected="false">Source</button>
+      <button class="problem-preview-tab" id="problemPreviewSourceTab" type="button" role="tab" aria-selected="true">Source</button>
       <span class="problem-preview-divider" aria-hidden="true">/</span>
       <button class="problem-preview-tab" id="problemPreviewUploadsTab" type="button" role="tab" aria-selected="false">Uploads</button>
     </div>
   </header>
   <main class="problem-preview-main">
-    <article class="problem-preview-card is-overview" id="problemPreviewCard">
-      <section class="problem-preview-summary">
-        <h2 class="problem-preview-heading" id="problemPreviewHeading"></h2>
-        <div class="citation-preview-meta" id="problemPreviewMeta"></div>
-        <section class="problem-preview-section">
-          <h3 class="citation-preview-section-title">Quote</h3>
-          <div class="citation-preview-text" id="problemPreviewQuote"></div>
-        </section>
-        <section class="problem-preview-section">
-          <h3 class="citation-preview-section-title">Details</h3>
-          <div class="citation-preview-text" id="problemPreviewDetails"></div>
-        </section>
-      </section>
+    <article class="problem-preview-card is-source" id="problemPreviewCard">
       <section class="problem-preview-source-shell">
         <div class="problem-preview-source-head">
           <div>
@@ -4028,7 +4005,6 @@
   const problemPreviewPage = document.getElementById('problemPreviewPage');
   const problemPreviewBack = document.getElementById('problemPreviewBack');
   const problemPreviewCard = document.getElementById('problemPreviewCard');
-  const problemPreviewOverviewTab = document.getElementById('problemPreviewOverviewTab');
   const problemPreviewSourceTab = document.getElementById('problemPreviewSourceTab');
   const problemPreviewUploadsTab = document.getElementById('problemPreviewUploadsTab');
   const problemPreviewTitle = document.getElementById('problemPreviewTitle');
@@ -7213,14 +7189,10 @@
   }
 
   function setProblemPreviewView(view){
-    const normalized = view === 'source' || view === 'uploads' ? view : 'overview';
+    const normalized = view === 'uploads' ? 'uploads' : 'source';
     if(problemPreviewCard){
-      problemPreviewCard.classList.toggle('is-overview', normalized === 'overview');
       problemPreviewCard.classList.toggle('is-source', normalized === 'source');
       problemPreviewCard.classList.toggle('is-uploads', normalized === 'uploads');
-    }
-    if(problemPreviewOverviewTab){
-      problemPreviewOverviewTab.setAttribute('aria-selected', normalized === 'overview' ? 'true' : 'false');
     }
     if(problemPreviewSourceTab){
       problemPreviewSourceTab.setAttribute('aria-selected', normalized === 'source' ? 'true' : 'false');
@@ -7234,7 +7206,7 @@
     if(!problemPreviewPage || !citation) return;
     activeCitationPreview = citation;
     renderProblemPreviewPage(citation);
-    setProblemPreviewView('overview');
+    setProblemPreviewView('source');
     closeCitationPreview();
     problemPreviewPage.hidden = false;
     problemPreviewPage.setAttribute('aria-hidden', 'false');
@@ -7590,12 +7562,6 @@
 
   if(problemPreviewBack){
     problemPreviewBack.addEventListener('click', closeProblemPreviewPage);
-  }
-
-  if(problemPreviewOverviewTab){
-    problemPreviewOverviewTab.addEventListener('click', ()=>{
-      setProblemPreviewView('overview');
-    });
   }
 
   if(problemPreviewSourceTab){
