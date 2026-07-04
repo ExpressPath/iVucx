@@ -112,6 +112,11 @@ function normalizeProblemKind(value) {
   return '';
 }
 
+function normalizeSystemMode(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return text === 'dark' ? 'dark' : 'light';
+}
+
 function normalizeProofState(value) {
   const text = String(value || '').trim().toUpperCase();
   return /^(YY|NY|YN|NN)$/.test(text) ? text : '';
@@ -297,7 +302,7 @@ async function searchSavedProblems({ query, limit, offset }) {
   };
 }
 
-function buildGeminiPrompt({ query, targetKind, citations, history }) {
+function buildGeminiPrompt({ query, targetKind, citations, history, systemMode }) {
   const context = citations.map((item) => ({
     id: item.id,
     title: item.title,
@@ -316,6 +321,8 @@ function buildGeminiPrompt({ query, targetKind, citations, history }) {
   return [
     'You are the iVucx saved-problem search assistant.',
     'Search target: unified saved problem/theorem search.',
+    `Current display mode: ${normalizeSystemMode(systemMode)}.`,
+    'Match the tone and wording to the current display mode, but do not filter sources by display mode.',
     'Do not force the conversation into only problem or only theorem search.',
     'Use any provided saved row that is relevant, regardless of whether its kind is problem, theorem, or unknown.',
     'Each saved row has a kind field. Keep that source-kind distinction available in citations and mention it when useful.',
@@ -337,12 +344,12 @@ function buildGeminiPrompt({ query, targetKind, citations, history }) {
   ].join('\n');
 }
 
-function buildGeminiRequestBody({ query, targetKind, citations, history }) {
+function buildGeminiRequestBody({ query, targetKind, citations, history, systemMode }) {
   return {
     contents: [
       {
         role: 'user',
-        parts: [{ text: buildGeminiPrompt({ query, targetKind, citations, history }) }]
+        parts: [{ text: buildGeminiPrompt({ query, targetKind, citations, history, systemMode }) }]
       }
     ],
     generationConfig: {
@@ -482,7 +489,7 @@ async function getVertexAccessToken(config) {
   return accessToken;
 }
 
-async function askVertexGemini({ query, targetKind, citations, history, config }) {
+async function askVertexGemini({ query, targetKind, citations, history, systemMode, config }) {
   if (!config.project) {
     throw new Error('Vertex AI project is not configured. Set GOOGLE_CLOUD_PROJECT in Vercel.');
   }
@@ -497,7 +504,7 @@ async function askVertexGemini({ query, targetKind, citations, history, config }
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(buildGeminiRequestBody({ query, targetKind, citations, history }))
+    body: JSON.stringify(buildGeminiRequestBody({ query, targetKind, citations, history, systemMode }))
   });
 
   const payload = await response.json().catch(() => null);
@@ -529,7 +536,7 @@ async function askVertexGemini({ query, targetKind, citations, history, config }
   return { answer: text, suggestions: [], usedCitationIds: [] };
 }
 
-async function askGeminiProxy({ query, targetKind, citations, history, config }) {
+async function askGeminiProxy({ query, targetKind, citations, history, systemMode, config }) {
   const response = await fetch(config.url, {
     method: 'POST',
     headers: {
@@ -538,7 +545,7 @@ async function askGeminiProxy({ query, targetKind, citations, history, config })
     },
     body: JSON.stringify({
       model: config.model,
-      requestBody: buildGeminiRequestBody({ query, targetKind, citations, history })
+      requestBody: buildGeminiRequestBody({ query, targetKind, citations, history, systemMode })
     })
   });
 
@@ -569,7 +576,7 @@ async function askGeminiProxy({ query, targetKind, citations, history, config })
   return { answer: text, suggestions: [], usedCitationIds: [] };
 }
 
-async function askGemini({ query, targetKind, citations, history }) {
+async function askGemini({ query, targetKind, citations, history, systemMode }) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     throw new Error('Gemini API is not configured. Set GEMINI_API_KEY in Vercel.');
@@ -580,7 +587,7 @@ async function askGemini({ query, targetKind, citations, history }) {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildGeminiRequestBody({ query, targetKind, citations, history }))
+    body: JSON.stringify(buildGeminiRequestBody({ query, targetKind, citations, history, systemMode }))
   });
 
   const payload = await response.json().catch(() => null);
@@ -612,11 +619,11 @@ async function askGemini({ query, targetKind, citations, history }) {
   return { answer: text, suggestions: [], usedCitationIds: [] };
 }
 
-async function askConfiguredGemini({ query, targetKind, citations, history }) {
+async function askConfiguredGemini({ query, targetKind, citations, history, systemMode }) {
   const proxyConfig = getGeminiProxyConfig();
   if (proxyConfig.enabled) {
     return {
-      generated: await askGeminiProxy({ query, targetKind, citations, history, config: proxyConfig }),
+      generated: await askGeminiProxy({ query, targetKind, citations, history, systemMode, config: proxyConfig }),
       model: `vertex-proxy:${proxyConfig.model}`
     };
   }
@@ -624,13 +631,13 @@ async function askConfiguredGemini({ query, targetKind, citations, history }) {
   const vertexConfig = getVertexConfig();
   if (vertexConfig.enabled) {
     return {
-      generated: await askVertexGemini({ query, targetKind, citations, history, config: vertexConfig }),
+      generated: await askVertexGemini({ query, targetKind, citations, history, systemMode, config: vertexConfig }),
       model: `vertex:${vertexConfig.location}/${vertexConfig.model}`
     };
   }
 
   return {
-    generated: await askGemini({ query, targetKind, citations, history }),
+    generated: await askGemini({ query, targetKind, citations, history, systemMode }),
     model: getGeminiModel()
   };
 }
@@ -751,6 +758,7 @@ export default async function handler(req, res) {
     const body = req.body || {};
     const query = safeString(body.query);
     const mode = safeString(body.mode, 'search');
+    const systemMode = normalizeSystemMode(body.systemMode);
     const limit = clamp(Number(body.limit) || 6, 1, 10);
     const offset = clamp(Number(body.offset) || 0, 0, 5000);
     const history = normalizeHistory(body.history);
@@ -765,7 +773,7 @@ export default async function handler(req, res) {
     let geminiUsed = false;
     if (includeAnswer) {
       try {
-        const geminiResult = await askConfiguredGemini({ query, targetKind, citations: context, history });
+        const geminiResult = await askConfiguredGemini({ query, targetKind, citations: context, history, systemMode });
         generated = geminiResult.generated;
         model = geminiResult.model;
         geminiUsed = true;
@@ -796,6 +804,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({
       mode,
+      systemMode,
       targetKind,
       query,
       offset,

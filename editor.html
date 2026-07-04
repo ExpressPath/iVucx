@@ -2038,11 +2038,12 @@
         window.location.href = 'post-preview.html';
       }
 
-      function showToast(message, variant){
+      function showToast(message, variant, options){
         if(!toastEl || !toastMessageEl) return;
         const text = String(message || '').trim();
         if(!text) return;
-        toastPinned = false;
+        const shouldPin = !!(options && options.pinned);
+        toastPinned = shouldPin;
         syncToastPinUi();
         toastMessageEl.textContent = text;
         if(toastSubtitleEl){
@@ -2062,6 +2063,15 @@
           toastEl.classList.add('show');
         });
         scheduleToastHide();
+      }
+
+      function showValidationToast(proofState){
+        const isProblemPost = proofState === 'NY';
+        showToast(
+          isProblemPost ? 'Post as a problem?' : 'Post as a proof?',
+          isProblemPost ? 'warn' : 'ok',
+          { pinned: true }
+        );
       }
 
       if(toastEl){
@@ -2619,14 +2629,14 @@
         if(closure.proofState === 'NY'){
           setStatus('Coq proof accepted (NY)');
           outputEl.textContent = serverText + '\n\n[Coq Validation]\nProof ends with ' + closure.closer + ' (NY).';
-          showToast('Post as a problem?', 'warn');
+          showValidationToast('NY');
           return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
         }
 
         if(typeof checkProofText !== 'function'){
           setStatus('Coq proof verified (YY)');
           outputEl.textContent = serverText + '\n\n[CoqRunner]\nCoqRunner.js is not available (remaining goals: unknown).';
-          showToast('Post as a proof?', 'ok');
+          showValidationToast('YY');
           return { status: 'allowed', proof_state: 'YY', reason: 'Coq server ok' };
         }
 
@@ -2637,7 +2647,7 @@
             const detailsText = formatCoqRunnerDetails(result.details);
             const runnerText = '[CoqRunner]\nProof verified by CoqRunner (' + closure.closer + ').' + detailsText;
             outputEl.textContent = serverText + '\n\n' + runnerText;
-            showToast('Post as a proof?', 'ok');
+            showValidationToast('YY');
             return { status: 'allowed', proof_state: 'YY', reason: 'Valid closed proof' };
           }
           const err = result && result.error ? result.error : null;
@@ -2655,14 +2665,14 @@
           }
           setStatus('Coq proof verified (YY)');
           outputEl.textContent = serverText + '\n\n[CoqRunner]\n' + summary + detailsText;
-          showToast('Post as a proof?', 'ok');
+          showValidationToast('YY');
           return { status: 'allowed', proof_state: 'YY', reason: summary };
         } catch (err) {
           const errorMsg = err && err.message ? err.message : String(err);
           const summary = 'CoqRunner error: ' + errorMsg + ' (remaining goals: unknown).';
           setStatus('Coq proof verified (YY)');
           outputEl.textContent = serverText + '\n\n[CoqRunner]\n' + summary;
-          showToast('Post as a proof?', 'ok');
+          showValidationToast('YY');
           return { status: 'allowed', proof_state: 'YY', reason: summary };
         }
       }
@@ -3044,11 +3054,11 @@
         if(serverResult.ok){
           if(closure.proofState === 'NY'){
             setStatus('Lean proof accepted (NY)');
-            showToast('Post as a problem?', 'warn');
+            showValidationToast('NY');
             return { status: 'allowed', proof_state: 'NY', reason: 'Temporary acceptance (NY)' };
           }
           setStatus('Lean validated');
-          showToast('Post as a proof?', 'ok');
+          showValidationToast('YY');
           return { status: 'allowed', proof_state: 'YY', reason: 'Lean server ok' };
         }
 
@@ -4164,11 +4174,7 @@
           }
 
           if(validationResult && validationResult.status === 'allowed'){
-            const shouldShowToast = !toastEl || toastEl.getAttribute('aria-hidden') !== 'false';
-            if(shouldShowToast){
-              const isProblemPost = validationResult.proof_state === 'NY';
-              showToast(isProblemPost ? 'Post as a problem?' : 'Post as a proof?', isProblemPost ? 'warn' : 'ok');
-            }
+            showValidationToast(validationResult.proof_state);
           }
         } finally {
           if(shouldResetCoq){

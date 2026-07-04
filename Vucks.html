@@ -14,6 +14,34 @@
       --brand-shimmer-base:#050505;
       --search-surface:rgba(0,0,0,0.055);
       --search-surface-text:#111111;
+      --search-chat-panel-text:#0f172a;
+      --search-chat-user-bg:#111827;
+      --search-chat-user-text:#ffffff;
+      --search-chat-user-shadow:0 10px 24px rgba(15,23,42,0.18);
+      --search-chat-card-bg:#ffffff;
+      --search-chat-card-text:#111827;
+      --search-chat-card-border:rgba(15,23,42,0.11);
+      --search-chat-card-shadow:0 8px 22px rgba(15,23,42,0.08);
+      --search-chat-muted:#52637f;
+      --search-chat-subtle:#6b7280;
+      --search-chat-citation-bg:#f8fafc;
+      --search-chat-citation-border:rgba(15,23,42,0.08);
+      --search-chat-citation-text:#0f172a;
+      --search-chat-citation-quote:#52637f;
+      --search-chat-citation-id:#1a73e8;
+      --search-chat-index-bg:#e8eefb;
+      --search-chat-index-text:#2f4b7a;
+      --search-chat-item-bg:#ffffff;
+      --search-chat-item-hover-bg:#f8fbff;
+      --search-chat-item-border:rgba(15,23,42,0.08);
+      --search-chat-item-hover-border:rgba(26,115,232,0.3);
+      --search-chat-loading:#4f647f;
+      --search-chat-error:#b42318;
+      --search-chat-more-bg:#ffffff;
+      --search-chat-more-text:#1a73e8;
+      --search-chat-more-border:#dadce0;
+      --search-chat-more-hover-bg:#f8f9fa;
+      --search-chat-more-hover-border:#c6c9ce;
       --visible-vw:100vw;
       --visible-vh:100vh;
       --visible-left:0px;
@@ -36,6 +64,34 @@
         --brand-shimmer-base:#ffffff;
         --search-surface:rgba(255,255,255,0.075);
         --search-surface-text:#f7f7f7;
+        --search-chat-panel-text:#f3f6ff;
+        --search-chat-user-bg:#dbe7ff;
+        --search-chat-user-text:#121a2d;
+        --search-chat-user-shadow:0 10px 24px rgba(0,0,0,0.3);
+        --search-chat-card-bg:rgba(255,255,255,0.04);
+        --search-chat-card-text:#eaf1ff;
+        --search-chat-card-border:rgba(255,255,255,0.16);
+        --search-chat-card-shadow:none;
+        --search-chat-muted:#9bb0d4;
+        --search-chat-subtle:#9bb0d4;
+        --search-chat-citation-bg:rgba(255,255,255,0.04);
+        --search-chat-citation-border:rgba(255,255,255,0.12);
+        --search-chat-citation-text:#edf2ff;
+        --search-chat-citation-quote:#b8c7e7;
+        --search-chat-citation-id:#9fc3ff;
+        --search-chat-index-bg:rgba(153,184,235,0.2);
+        --search-chat-index-text:#d9e8ff;
+        --search-chat-item-bg:rgba(255,255,255,0.04);
+        --search-chat-item-hover-bg:rgba(87,132,209,0.14);
+        --search-chat-item-border:rgba(255,255,255,0.12);
+        --search-chat-item-hover-border:rgba(143,185,255,0.4);
+        --search-chat-loading:#b2c4e7;
+        --search-chat-error:#ffb6b6;
+        --search-chat-more-bg:rgba(255,255,255,0.04);
+        --search-chat-more-text:#9fc3ff;
+        --search-chat-more-border:rgba(153,184,235,0.5);
+        --search-chat-more-hover-bg:rgba(133,171,241,0.14);
+        --search-chat-more-hover-border:rgba(153,184,235,0.75);
       }
     }
 
@@ -59,6 +115,34 @@
     body.mode-q{
       background:var(--bg-white);
       color:var(--system-text);
+      --search-chat-panel-text:#f3f6ff;
+      --search-chat-user-bg:#dbe7ff;
+      --search-chat-user-text:#121a2d;
+      --search-chat-user-shadow:0 10px 24px rgba(0,0,0,0.3);
+      --search-chat-card-bg:rgba(255,255,255,0.04);
+      --search-chat-card-text:#eaf1ff;
+      --search-chat-card-border:rgba(255,255,255,0.16);
+      --search-chat-card-shadow:none;
+      --search-chat-muted:#9bb0d4;
+      --search-chat-subtle:#9bb0d4;
+      --search-chat-citation-bg:rgba(255,255,255,0.04);
+      --search-chat-citation-border:rgba(255,255,255,0.12);
+      --search-chat-citation-text:#edf2ff;
+      --search-chat-citation-quote:#b8c7e7;
+      --search-chat-citation-id:#9fc3ff;
+      --search-chat-index-bg:rgba(153,184,235,0.2);
+      --search-chat-index-text:#d9e8ff;
+      --search-chat-item-bg:rgba(255,255,255,0.04);
+      --search-chat-item-hover-bg:rgba(87,132,209,0.14);
+      --search-chat-item-border:rgba(255,255,255,0.12);
+      --search-chat-item-hover-border:rgba(143,185,255,0.4);
+      --search-chat-loading:#b2c4e7;
+      --search-chat-error:#ffb6b6;
+      --search-chat-more-bg:rgba(255,255,255,0.04);
+      --search-chat-more-text:#9fc3ff;
+      --search-chat-more-border:rgba(153,184,235,0.5);
+      --search-chat-more-hover-bg:rgba(133,171,241,0.14);
+      --search-chat-more-hover-border:rgba(153,184,235,0.75);
     }
 
     body.scrolled{
@@ -2413,7 +2497,7 @@
       border-radius:0;
       border:none;
       background:transparent;
-      color:#0f172a;
+      color:var(--search-chat-panel-text);
       box-shadow:none;
       padding:0 2px 20px;
       backdrop-filter:none;
@@ -2442,12 +2526,12 @@
       max-width:min(90%, 960px);
       padding:11px 14px;
       border-radius:18px 18px 4px 18px;
-      background:#111827;
-      color:#fff;
+      background:var(--search-chat-user-bg);
+      color:var(--search-chat-user-text);
       font-size:15px;
       line-height:1.45;
       word-break:break-word;
-      box-shadow:0 10px 24px rgba(15,23,42,0.18);
+      box-shadow:var(--search-chat-user-shadow);
     }
 
     body.mode-q .chat-user-bubble{
@@ -2464,11 +2548,11 @@
     .chat-assistant-card{
       width:min(100%, 1140px);
       border-radius:18px;
-      border:1px solid rgba(15,23,42,0.11);
-      background:#ffffff;
+      border:1px solid var(--search-chat-card-border);
+      background:var(--search-chat-card-bg);
       padding:12px;
-      color:#111827;
-      box-shadow:0 8px 22px rgba(15,23,42,0.08);
+      color:var(--search-chat-card-text);
+      box-shadow:var(--search-chat-card-shadow);
     }
 
     body.mode-q .chat-assistant-card{
@@ -2482,7 +2566,7 @@
       font-size:12px;
       letter-spacing:.07em;
       text-transform:uppercase;
-      color:#52637f;
+      color:var(--search-chat-muted);
       margin-bottom:8px;
       font-weight:700;
     }
@@ -2508,11 +2592,11 @@
     }
 
     .citation-item{
-      border:1px solid rgba(15,23,42,0.08);
+      border:1px solid var(--search-chat-citation-border);
       border-radius:12px;
       padding:10px 11px;
-      background:#f8fafc;
-      color:#0f172a;
+      background:var(--search-chat-citation-bg);
+      color:var(--search-chat-citation-text);
     }
 
     body.mode-q .citation-item{
@@ -2531,7 +2615,7 @@
     }
 
     .citation-id{
-      color:#1a73e8;
+      color:var(--search-chat-citation-id);
       white-space:nowrap;
     }
 
@@ -2541,7 +2625,7 @@
 
     .citation-quote{
       margin-top:6px;
-      color:#52637f;
+      color:var(--search-chat-citation-quote);
       font-size:12px;
       line-height:1.55;
       white-space:pre-wrap;
@@ -2554,7 +2638,7 @@
 
     .citation-meta{
       margin-top:6px;
-      color:#6b7280;
+      color:var(--search-chat-subtle);
       font-size:11px;
       line-height:1.35;
     }
@@ -2569,7 +2653,7 @@
       align-items:center;
       justify-content:flex-start;
       gap:10px;
-      color:#4f647f;
+      color:var(--search-chat-loading);
       font-size:14px;
     }
 
@@ -2605,7 +2689,7 @@
 
     .related-search-title{
       margin:12px 0 8px;
-      color:#52637f;
+      color:var(--search-chat-muted);
       font-size:12px;
       font-weight:800;
       letter-spacing:.04em;
@@ -2622,15 +2706,15 @@
       gap:12px;
       padding:11px 12px;
       border-radius:12px;
-      border:1px solid rgba(15,23,42,0.08);
-      background:#ffffff;
-      color:#0f172a;
+      border:1px solid var(--search-chat-item-border);
+      background:var(--search-chat-item-bg);
+      color:var(--search-chat-citation-text);
       transition:border-color .18s ease,background-color .18s ease;
     }
 
     .suggestion-item:hover{
-      border-color:rgba(26,115,232,0.3);
-      background:#f8fbff;
+      border-color:var(--search-chat-item-hover-border);
+      background:var(--search-chat-item-hover-bg);
     }
 
     body.mode-q .suggestion-item{
@@ -2652,8 +2736,8 @@
       display:flex;
       align-items:center;
       justify-content:center;
-      background:#e8eefb;
-      color:#2f4b7a;
+      background:var(--search-chat-index-bg);
+      color:var(--search-chat-index-text);
       font-size:12px;
       font-weight:700;
       margin-top:1px;
@@ -2678,13 +2762,13 @@
     }
 
     .show-more-button{
-      border:1px solid #dadce0;
+      border:1px solid var(--search-chat-more-border);
       border-radius:999px;
       height:38px;
       min-width:152px;
       padding:0 20px;
-      background:#fff;
-      color:#1a73e8;
+      background:var(--search-chat-more-bg);
+      color:var(--search-chat-more-text);
       font-size:14px;
       font-weight:600;
       cursor:pointer;
@@ -2692,8 +2776,8 @@
     }
 
     .show-more-button:hover{
-      background:#f8f9fa;
-      border-color:#c6c9ce;
+      background:var(--search-chat-more-hover-bg);
+      border-color:var(--search-chat-more-hover-border);
       transform:translateY(-1px);
     }
 
@@ -2717,7 +2801,7 @@
     .suggestion-error{
       margin-top:8px;
       font-size:13px;
-      color:#b42318;
+      color:var(--search-chat-error);
     }
 
     body.mode-q .suggestion-error{
@@ -2994,6 +3078,9 @@
 <script src="theorem-draft-store.js"></script>
 <script>
   const bodyEl = document.body;
+  const systemDarkMedia = typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-color-scheme: dark)')
+    : null;
   const qBtn = document.getElementById('qBtn');
   const aBtn = document.getElementById('aBtn');
   const form = document.getElementById('searchForm');
@@ -3164,6 +3251,11 @@
 
   function getCurrentProblemKind(){
     return state === 1 || selectionMode ? 'problem' : 'search';
+  }
+
+  function getSearchSystemMode(){
+    if(bodyEl.classList.contains('mode-q')) return 'dark';
+    return systemDarkMedia && systemDarkMedia.matches ? 'dark' : 'light';
   }
 
   qBtn.addEventListener('click',e=>{
@@ -5912,6 +6004,7 @@
       const payload = {
         mode: 'search',
         searchKind: 'all',
+        systemMode: getSearchSystemMode(),
         state,
         query: turn.query,
         files: turn.files || [],
@@ -5949,6 +6042,7 @@
         turn.answer = String(data && data.answer || '').trim();
         turn.citations = normalizedCitations;
         turn.targetKind = String(data && data.targetKind || 'search').trim();
+        turn.systemMode = String(data && data.systemMode || getSearchSystemMode()).trim();
       }
 
       turn.hasMore = typeof (data && data.hasMore) === 'boolean'
@@ -5992,6 +6086,7 @@
       answer:'',
       citations:[],
       targetKind:'search',
+      systemMode:getSearchSystemMode(),
       loading:true,
       loadingMore:false,
       hasMore:true,
