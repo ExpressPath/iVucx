@@ -17,7 +17,39 @@
       --warn:#ff7b72;
       --header:#010409;
       --header-ink:#e6edf3;
+      --ai-panel-bg:#0d1117;
+      --ai-control-bg:#0f1520;
+      --ai-control-ink:#e6edf3;
+      --ai-control-muted:#8b949e;
+      --ai-control-border:rgba(139,148,158,0.22);
+      --ai-button-bg:#161b22;
+      --ai-button-hover:#1b2430;
+      --ai-button-ink:#e6edf3;
+      --ai-card-bg:linear-gradient(135deg, rgba(31,111,235,0.18), rgba(111,66,193,0.1));
+      --ai-card-border:rgba(88,166,255,0.26);
+      --ai-card-name:#f0f6fc;
+      --ai-response-bg:#090d13;
+      --ai-response-ink:#c9d1d9;
     }
+
+    @media (prefers-color-scheme: light){
+      :root{
+        --ai-panel-bg:#f6f8fa;
+        --ai-control-bg:#ffffff;
+        --ai-control-ink:#1f2328;
+        --ai-control-muted:#57606a;
+        --ai-control-border:rgba(31,35,40,0.16);
+        --ai-button-bg:#ffffff;
+        --ai-button-hover:#f0f4f8;
+        --ai-button-ink:#1f2328;
+        --ai-card-bg:linear-gradient(135deg, rgba(9,105,218,0.12), rgba(111,66,193,0.08));
+        --ai-card-border:rgba(9,105,218,0.2);
+        --ai-card-name:#1f2328;
+        --ai-response-bg:#ffffff;
+        --ai-response-ink:#24292f;
+      }
+    }
+
     html,body{
       width:100%;
       height:100%;
@@ -26,6 +58,7 @@
       font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
       background:var(--bg);
       color:var(--ink);
+      color-scheme:dark light;
     }
 
     body{
@@ -284,7 +317,7 @@
       padding:12px;
       overflow-y:auto;
       overflow-x:hidden;
-      background:#0d1117;
+      background:var(--ai-panel-bg);
     }
 
     .ai-panel.active{
@@ -319,13 +352,20 @@
     .ai-prompt{
       width:100%;
       min-width:0;
-      border:1px solid rgba(139,148,158,0.22);
+      border:1px solid var(--ai-control-border);
       border-radius:7px;
-      background:#0f1520;
-      color:#e6edf3;
+      background:var(--ai-control-bg);
+      color:var(--ai-control-ink);
       outline:none;
       font:inherit;
       font-size:12px;
+    }
+
+    .ai-select::placeholder,
+    .ai-input::placeholder,
+    .ai-prompt::placeholder{
+      color:var(--ai-control-muted);
+      opacity:.88;
     }
 
     .ai-select,
@@ -360,10 +400,10 @@
       align-items:center;
       justify-content:space-between;
       gap:10px;
-      border:1px solid rgba(88,166,255,0.26);
+      border:1px solid var(--ai-card-border);
       border-radius:8px;
       padding:10px 11px;
-      background:linear-gradient(135deg, rgba(31,111,235,0.18), rgba(111,66,193,0.1));
+      background:var(--ai-card-bg);
     }
 
     .ai-panel.is-authorized .ai-agent-card{
@@ -371,7 +411,7 @@
     }
 
     .ai-agent-name{
-      color:#f0f6fc;
+      color:var(--ai-card-name);
       font-size:13px;
       font-weight:750;
       line-height:1.25;
@@ -379,7 +419,7 @@
 
     .ai-agent-meta{
       margin-top:2px;
-      color:#8b949e;
+      color:var(--ai-control-muted);
       font-size:11px;
       line-height:1.35;
       overflow-wrap:anywhere;
@@ -402,11 +442,11 @@
 
     .ai-btn{
       min-height:32px;
-      border:1px solid rgba(139,148,158,0.24);
+      border:1px solid var(--ai-control-border);
       border-radius:7px;
       padding:0 11px;
-      background:#161b22;
-      color:#e6edf3;
+      background:var(--ai-button-bg);
+      color:var(--ai-button-ink);
       font-size:12px;
       font-weight:650;
       cursor:pointer;
@@ -421,7 +461,7 @@
 
     .ai-btn:hover{
       border-color:#58a6ff;
-      background:#1b2430;
+      background:var(--ai-button-hover);
       transform:translateY(-1px);
     }
 
@@ -453,12 +493,12 @@
       flex:1;
       min-width:0;
       min-height:140px;
-      border:1px solid rgba(139,148,158,0.18);
+      border:1px solid var(--ai-control-border);
       border-radius:8px;
       padding:12px;
       overflow:auto;
-      background:#090d13;
-      color:#c9d1d9;
+      background:var(--ai-response-bg);
+      color:var(--ai-response-ink);
       white-space:pre-wrap;
       word-break:break-word;
       font-size:13px;
