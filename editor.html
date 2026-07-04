@@ -351,6 +351,40 @@
       min-width:0;
     }
 
+    .ai-panel.is-authorized .ai-key-row{
+      display:none;
+    }
+
+    .ai-agent-card{
+      display:none;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      border:1px solid rgba(88,166,255,0.26);
+      border-radius:8px;
+      padding:10px 11px;
+      background:linear-gradient(135deg, rgba(31,111,235,0.18), rgba(111,66,193,0.1));
+    }
+
+    .ai-panel.is-authorized .ai-agent-card{
+      display:flex;
+    }
+
+    .ai-agent-name{
+      color:#f0f6fc;
+      font-size:13px;
+      font-weight:750;
+      line-height:1.25;
+    }
+
+    .ai-agent-meta{
+      margin-top:2px;
+      color:#8b949e;
+      font-size:11px;
+      line-height:1.35;
+      overflow-wrap:anywhere;
+    }
+
     .ai-action-row{
       display:flex;
       align-items:flex-start;
@@ -1034,6 +1068,13 @@
           <button class="ai-btn" id="aiSaveKeyBtn" type="button">Save</button>
           <button class="ai-btn" id="aiForgetKeyBtn" type="button">Forget</button>
         </div>
+        <div class="ai-agent-card" id="aiAgentCard">
+          <div>
+            <div class="ai-agent-name" id="aiAgentName">Agent chat</div>
+            <div class="ai-agent-meta" id="aiAgentMeta">Registered locally.</div>
+          </div>
+          <button class="ai-btn" id="aiChangeKeyBtn" type="button">Key</button>
+        </div>
         <label class="ai-field">
           <span class="ai-label">Prompt</span>
           <textarea class="ai-prompt" id="aiPromptInput" spellcheck="false" placeholder="Ask for a proof strategy, next tactic, error explanation, or theorem search direction."></textarea>
@@ -1096,6 +1137,10 @@
       const aiApiKeyInput = document.getElementById('aiApiKeyInput');
       const aiSaveKeyBtn = document.getElementById('aiSaveKeyBtn');
       const aiForgetKeyBtn = document.getElementById('aiForgetKeyBtn');
+      const aiAgentCard = document.getElementById('aiAgentCard');
+      const aiAgentName = document.getElementById('aiAgentName');
+      const aiAgentMeta = document.getElementById('aiAgentMeta');
+      const aiChangeKeyBtn = document.getElementById('aiChangeKeyBtn');
       const aiPromptInput = document.getElementById('aiPromptInput');
       const aiPromptTemplateBtn = document.getElementById('aiPromptTemplateBtn');
       const aiAskBtn = document.getElementById('aiAskBtn');
@@ -1179,6 +1224,7 @@
       };
 
       const AI_KEYS_STORAGE_KEY = 'ivucxAiProviderKeysV1';
+      const AI_REGISTRATIONS_STORAGE_KEY = 'ivucxAiProviderRegistrationsV1';
       const AI_PROVIDER_DEFAULTS = {
         'deepseek-v4': {
           label: 'DeepSeek-V4',
@@ -1280,6 +1326,13 @@
       if(aiForgetKeyBtn){
         aiForgetKeyBtn.addEventListener('click', ()=>{
           forgetAiProviderKey();
+        });
+      }
+
+      if(aiChangeKeyBtn){
+        aiChangeKeyBtn.addEventListener('click', ()=>{
+          setAiAgentAuthorized(false);
+          if(aiApiKeyInput) aiApiKeyInput.focus();
         });
       }
 
@@ -2588,6 +2641,41 @@
         }
       }
 
+      function readAiRegistrations(){
+        try{
+          const raw = localStorage.getItem(AI_REGISTRATIONS_STORAGE_KEY);
+          if(!raw) return {};
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === 'object' ? parsed : {};
+        }catch(err){
+          return {};
+        }
+      }
+
+      function writeAiRegistrations(records){
+        try{
+          localStorage.setItem(AI_REGISTRATIONS_STORAGE_KEY, JSON.stringify(records || {}));
+        }catch(err){
+          // Local registration state is only a UI hint; failure should not block chat.
+        }
+      }
+
+      function getAiRegistration(provider){
+        const records = readAiRegistrations();
+        const record = records[provider || getSelectedAiProvider()];
+        return record && typeof record === 'object' ? record : null;
+      }
+
+      function setAiRegistration(provider, partial){
+        const records = readAiRegistrations();
+        records[provider] = Object.assign({}, records[provider] || {}, partial || {}, {
+          provider,
+          updatedAt:new Date().toISOString()
+        });
+        writeAiRegistrations(records);
+        return records[provider];
+      }
+
       function writeAiKeys(keys){
         try{
           localStorage.setItem(AI_KEYS_STORAGE_KEY, JSON.stringify(keys || {}));
@@ -2598,6 +2686,23 @@
 
       function getSelectedAiProvider(){
         return aiProviderSelect && aiProviderSelect.value ? aiProviderSelect.value : 'chatgpt';
+      }
+
+      function setAiAgentAuthorized(authorized, registration){
+        if(!aiPanel) return;
+        const provider = getSelectedAiProvider();
+        const defaults = AI_PROVIDER_DEFAULTS[provider] || AI_PROVIDER_DEFAULTS.chatgpt;
+        const record = registration || getAiRegistration(provider);
+        aiPanel.classList.toggle('is-authorized', !!authorized);
+        if(aiAgentName){
+          aiAgentName.textContent = defaults.label + ' chat';
+        }
+        if(aiAgentMeta){
+          const model = aiModelInput && aiModelInput.value.trim() ? aiModelInput.value.trim() : defaults.model;
+          const engine = aiContextSelect && aiContextSelect.value ? aiContextSelect.value : getDefaultAiContextEngine();
+          const linked = record && record.linked ? 'Supabase linked' : (record && record.loggedIn ? 'Supabase pending' : 'Local registration');
+          aiAgentMeta.textContent = model + ' / ' + engine + ' / ' + linked;
+        }
       }
 
       function syncAiProviderUi(){
@@ -2617,7 +2722,79 @@
             ? defaults.label + ' key saved locally'
             : 'Required if server env is not configured';
         }
-        setAiStatus(defaults.label + ' ready. API keys stay local until a request is sent.', false);
+        const registration = getAiRegistration(provider);
+        const authorized = !!(registration && registration.approved) || !!keys[provider];
+        setAiAgentAuthorized(authorized, registration);
+        setAiStatus(
+          authorized
+            ? defaults.label + ' chat is ready.'
+            : defaults.label + ' ready. API keys stay local until a request is sent.',
+          false
+        );
+      }
+
+      async function registerAiProvider(options){
+        const provider = getSelectedAiProvider();
+        const defaults = AI_PROVIDER_DEFAULTS[provider] || AI_PROVIDER_DEFAULTS.chatgpt;
+        const model = aiModelInput && aiModelInput.value.trim() ? aiModelInput.value.trim() : defaults.model;
+        const contextEngine = aiContextSelect && aiContextSelect.value ? aiContextSelect.value : getDefaultAiContextEngine();
+        const keySource = options && options.keySource ? options.keySource : 'browser-local';
+        const localRecord = setAiRegistration(provider, {
+          approved:true,
+          linked:false,
+          loggedIn:false,
+          label:defaults.label,
+          model,
+          contextEngine,
+          keySource
+        });
+        setAiAgentAuthorized(true, localRecord);
+
+        try{
+          const response = await fetch('/api/proof-ai', {
+            method:'POST',
+            credentials:'same-origin',
+            headers:{
+              'Content-Type':'application/json',
+              'Accept':'application/json'
+            },
+            body:JSON.stringify({
+              action:'register',
+              provider,
+              model,
+              contextEngine,
+              language:selectedLanguage,
+              problemKind:getProblemKindFromInit(),
+              keySource,
+              hasLocalKey:keySource === 'browser-local'
+            })
+          });
+          const data = await response.json().catch(()=>null);
+          const nextRecord = setAiRegistration(provider, {
+            approved:true,
+            linked:!!(data && data.linked),
+            loggedIn:!!(data && data.loggedIn),
+            accountProvider:data && data.accountProvider ? data.accountProvider : '',
+            accountId:data && data.accountId ? data.accountId : '',
+            label:data && data.label ? data.label : defaults.label,
+            model:data && data.model ? data.model : model,
+            contextEngine:data && data.contextEngine ? data.contextEngine : contextEngine,
+            reason:data && data.reason ? data.reason : '',
+            keySource
+          });
+          setAiAgentAuthorized(true, nextRecord);
+          if(data && data.linked){
+            setAiStatus(defaults.label + ' chat is ready. Supabase account linked.', false);
+          }else if(data && data.loggedIn){
+            setAiStatus(defaults.label + ' chat is ready. Supabase link is pending schema setup.', false);
+          }else{
+            setAiStatus(defaults.label + ' chat is ready. Login to link it with Supabase.', false);
+          }
+          return nextRecord;
+        }catch(err){
+          setAiStatus(defaults.label + ' chat is ready. Supabase link will retry later.', false);
+          return localRecord;
+        }
       }
 
       function saveAiProviderKey(){
@@ -2631,7 +2808,7 @@
         const keys = readAiKeys();
         keys[provider] = key;
         writeAiKeys(keys);
-        setAiStatus('API key saved locally for ' + (AI_PROVIDER_DEFAULTS[provider] || {}).label + '.', false);
+        registerAiProvider({ keySource:'browser-local' });
       }
 
       function forgetAiProviderKey(){
@@ -2639,7 +2816,11 @@
         const keys = readAiKeys();
         delete keys[provider];
         writeAiKeys(keys);
+        const records = readAiRegistrations();
+        delete records[provider];
+        writeAiRegistrations(records);
         if(aiApiKeyInput) aiApiKeyInput.value = '';
+        setAiAgentAuthorized(false);
         setAiStatus('Local API key removed.', false);
       }
 
@@ -2738,6 +2919,7 @@
           const usedEngine = data && data.contextEngine ? data.contextEngine : contextEngine;
           setAiStatus(label + ' / ' + usedModel + ' / ' + usedEngine, false);
           setAiResponse(data && data.answer ? data.answer : '(empty response)', false);
+          registerAiProvider({ keySource:key ? 'browser-local' : 'server-env' });
         }catch(err){
           setAiStatus(err && err.message ? err.message : 'AI request failed.', true);
           setAiResponse('No response. Check the API key, provider model, and network settings.', true);
