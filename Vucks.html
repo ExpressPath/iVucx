@@ -42,6 +42,10 @@
       --search-chat-more-border:#dadce0;
       --search-chat-more-hover-bg:#f8f9fa;
       --search-chat-more-hover-border:#c6c9ce;
+      --search-prompt-shell-bg:color-mix(in srgb, Canvas 92%, CanvasText 8%);
+      --search-prompt-input-bg:color-mix(in srgb, Canvas 96%, CanvasText 4%);
+      --search-prompt-input-text:CanvasText;
+      --search-prompt-input-border:color-mix(in srgb, CanvasText 14%, transparent);
       --visible-vw:100vw;
       --visible-vh:100vh;
       --visible-left:0px;
@@ -92,6 +96,10 @@
         --search-chat-more-border:rgba(153,184,235,0.5);
         --search-chat-more-hover-bg:rgba(133,171,241,0.14);
         --search-chat-more-hover-border:rgba(153,184,235,0.75);
+        --search-prompt-shell-bg:color-mix(in srgb, Canvas 90%, CanvasText 10%);
+        --search-prompt-input-bg:color-mix(in srgb, Canvas 84%, CanvasText 16%);
+        --search-prompt-input-text:CanvasText;
+        --search-prompt-input-border:color-mix(in srgb, CanvasText 20%, transparent);
       }
     }
 
@@ -143,6 +151,10 @@
       --search-chat-more-border:rgba(153,184,235,0.5);
       --search-chat-more-hover-bg:rgba(133,171,241,0.14);
       --search-chat-more-hover-border:rgba(153,184,235,0.75);
+      --search-prompt-shell-bg:#0f141d;
+      --search-prompt-input-bg:#171d28;
+      --search-prompt-input-text:#eaf1ff;
+      --search-prompt-input-border:rgba(255,255,255,0.16);
     }
 
     body.scrolled{
@@ -434,15 +446,16 @@
 
     body.suggestions-open .search-box{
       border-radius:22px;
-      border:1px solid rgba(15,23,42,0.14);
+      border:1px solid var(--search-prompt-input-border);
       box-shadow:0 10px 30px rgba(15,23,42,0.12);
       background:#ffffff;
+      background:var(--search-prompt-shell-bg);
     }
 
     body.mode-q.suggestions-open .search-box{
-      border-color:rgba(255,255,255,0.2);
+      border-color:var(--search-prompt-input-border);
       box-shadow:0 14px 34px rgba(0,0,0,0.44);
-      background:#0f141d;
+      background:var(--search-prompt-shell-bg);
     }
 
     .search-container.expanded .search-box{
@@ -499,12 +512,17 @@
     body.login-check .search-input{ color:#fff; caret-color:#fff; }
 
     body.suggestions-open .search-input{
-      color:#111;
+      border:1px solid var(--search-prompt-input-border);
+      border-radius:16px;
+      padding:10px 12px;
+      background:var(--search-prompt-input-bg);
+      color:var(--search-prompt-input-text);
+      caret-color:var(--search-prompt-input-text);
     }
 
     body.mode-q.suggestions-open .search-input{
-      color:#eaf1ff;
-      caret-color:#eaf1ff;
+      color:var(--search-prompt-input-text);
+      caret-color:var(--search-prompt-input-text);
     }
 
     .send-button{
@@ -2550,7 +2568,7 @@
       border-radius:18px;
       border:1px solid var(--search-chat-card-border);
       background:var(--search-chat-card-bg);
-      padding:12px;
+      padding:18px;
       color:var(--search-chat-card-text);
       box-shadow:var(--search-chat-card-shadow);
     }
@@ -2578,10 +2596,43 @@
     .chat-answer{
       margin:0 0 12px;
       color:inherit;
-      font-size:14px;
-      line-height:1.62;
-      white-space:pre-wrap;
+      font-size:16px;
+      line-height:1.72;
       overflow-wrap:anywhere;
+    }
+
+    .chat-answer p{
+      margin:0 0 12px;
+    }
+
+    .chat-answer p:last-child,
+    .chat-answer ul:last-child,
+    .chat-answer ol:last-child{
+      margin-bottom:0;
+    }
+
+    .chat-answer-heading{
+      margin:18px 0 8px;
+      color:inherit;
+      font-size:18px;
+      line-height:1.35;
+      font-weight:780;
+      letter-spacing:0;
+    }
+
+    .chat-answer-heading:first-child{
+      margin-top:0;
+    }
+
+    .chat-answer ul,
+    .chat-answer ol{
+      margin:8px 0 14px;
+      padding-left:1.35em;
+    }
+
+    .chat-answer li{
+      margin:5px 0;
+      padding-left:2px;
     }
 
     .citation-inline-link{
@@ -6272,16 +6323,15 @@
     return lines.join('\n') || 'No additional details.';
   }
 
-  function renderAnswerWithCitationLinks(answerEl, text, turn){
-    if(!answerEl) return;
-    answerEl.innerHTML = '';
+  function appendInlineAnswerContent(targetEl, text, turn){
+    if(!targetEl) return;
     const value = String(text || '');
     const pattern = /[\[［](P\d+)[\]］]/gi;
     let lastIndex = 0;
     let match;
     while((match = pattern.exec(value))){
       if(match.index > lastIndex){
-        answerEl.appendChild(document.createTextNode(value.slice(lastIndex, match.index)));
+        targetEl.appendChild(document.createTextNode(value.slice(lastIndex, match.index)));
       }
       const citationId = match[1].toUpperCase();
       const citation = findCitationById(turn, citationId);
@@ -6292,14 +6342,72 @@
         link.dataset.turnId = String(turn.id);
         link.dataset.citationId = citationId;
         link.textContent = `[${citationId}]`;
-        answerEl.appendChild(link);
+        targetEl.appendChild(link);
       }else{
-        answerEl.appendChild(document.createTextNode(match[0]));
+        targetEl.appendChild(document.createTextNode(match[0]));
       }
       lastIndex = pattern.lastIndex;
     }
     if(lastIndex < value.length){
-      answerEl.appendChild(document.createTextNode(value.slice(lastIndex)));
+      targetEl.appendChild(document.createTextNode(value.slice(lastIndex)));
+    }
+  }
+
+  function flushAnswerList(answerEl, listState){
+    if(!answerEl || !listState || !listState.el) return;
+    answerEl.appendChild(listState.el);
+    listState.el = null;
+    listState.type = '';
+  }
+
+  function renderAnswerWithCitationLinks(answerEl, text, turn){
+    if(!answerEl) return;
+    answerEl.innerHTML = '';
+    const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+    const listState = { type:'', el:null };
+
+    lines.forEach(rawLine=>{
+      const line = String(rawLine || '');
+      const trimmed = line.trim();
+      if(!trimmed){
+        flushAnswerList(answerEl, listState);
+        return;
+      }
+
+      const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
+      if(headingMatch){
+        flushAnswerList(answerEl, listState);
+        const heading = document.createElement('div');
+        heading.className = 'chat-answer-heading';
+        appendInlineAnswerContent(heading, headingMatch[2], turn);
+        answerEl.appendChild(heading);
+        return;
+      }
+
+      const bulletMatch = trimmed.match(/^[-*•]\s+(.+)$/);
+      const orderedMatch = trimmed.match(/^\d+[.)]\s+(.+)$/);
+      if(bulletMatch || orderedMatch){
+        const nextType = orderedMatch ? 'ol' : 'ul';
+        if(listState.type !== nextType){
+          flushAnswerList(answerEl, listState);
+          listState.type = nextType;
+          listState.el = document.createElement(nextType);
+        }
+        const li = document.createElement('li');
+        appendInlineAnswerContent(li, bulletMatch ? bulletMatch[1] : orderedMatch[1], turn);
+        listState.el.appendChild(li);
+        return;
+      }
+
+      flushAnswerList(answerEl, listState);
+      const paragraph = document.createElement('p');
+      appendInlineAnswerContent(paragraph, trimmed, turn);
+      answerEl.appendChild(paragraph);
+    });
+
+    flushAnswerList(answerEl, listState);
+    if(!answerEl.childNodes.length){
+      answerEl.textContent = '';
     }
   }
 

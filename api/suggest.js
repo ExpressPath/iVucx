@@ -9,6 +9,8 @@ const MAX_PREVIEW_SOURCE_CHARS = 3600;
 const MAX_CIC_CHARS = 900;
 const MAX_HISTORY_TURNS = 6;
 const MAX_HISTORY_CHARS = 700;
+const MIN_ANSWER_CHARS = 900;
+const MIN_ANSWER_LINES = 30;
 const VERTEX_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
@@ -317,7 +319,8 @@ function buildGeminiPrompt({ query, targetKind, citations, history, systemMode }
     requestedFormat: item.requestedFormat,
     completedFormat: item.completedFormat,
     attachments: item.attachments,
-    quote: item.quote
+    quote: item.quote,
+    sourceExcerpt: truncateText(item.sourceCode || item.quote, 1100)
   }));
   const conversation = normalizeHistory(history);
 
@@ -337,7 +340,10 @@ function buildGeminiPrompt({ query, targetKind, citations, history, systemMode }
     '',
     'Use only the provided saved rows as sources.',
     'Answer in Japanese unless the user query is clearly in another language.',
-    'Write the answer as natural ChatGPT-style prose.',
+    'Write the answer as natural ChatGPT-style prose, but make it substantive rather than terse.',
+    'Use Markdown-style headings and bullet lists when they improve readability.',
+    'The answer must be at least about 900 Japanese characters or about 30 short lines whenever at least one relevant saved row exists.',
+    'Include more than a summary: cover what was found, why it matches, source kind, language/file, proof state, important quoted content, and limits of what the saved row can support.',
     'Use inline citation markers like [P1] directly inside sentences, similar to Google AI Mode source links.',
     'Every factual claim about a saved problem/theorem must cite source ids like [P1].',
     'If no saved row supports an answer, say that the saved database does not contain enough information.',
@@ -359,6 +365,7 @@ function buildGeminiRequestBody({ query, targetKind, citations, history, systemM
     ],
     generationConfig: {
       temperature: 0.2,
+      maxOutputTokens: 4096,
       responseMimeType: 'application/json'
     }
   };
@@ -790,6 +797,72 @@ function buildChatFallbackAnswer(query, citations, geminiError) {
   };
 }
 
+function countAnswerLines(answer) {
+  return String(answer || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .length;
+}
+
+function buildCitationDetailLines(citations) {
+  const rows = Array.isArray(citations) ? citations.filter(Boolean) : [];
+  const lines = [
+    '## 保存データから読めること',
+    'この回答は、保存済みの問題・定理データベースに入っている行だけを根拠にしています。外部の数学的事実や未保存の証明内容は、ここでは根拠として追加していません。'
+  ];
+
+  rows.slice(0, 8).forEach((item, index) => {
+    const kind = item.kind && item.kind !== 'unknown' ? item.kind : 'unknown kind';
+    const file = item.fileName ? `、ファイルは ${item.fileName}` : '';
+    const language = item.language ? `、言語は ${item.language}` : '';
+    const proofState = item.proofState ? `、proof state は ${item.proofState}` : '';
+    const format = item.normalizedFormat ? `、保存形式は ${item.normalizedFormat}` : '';
+    lines.push(`- ${index + 1}. ${item.title || 'Untitled'} は ${kind} として保存されています${language}${file}${proofState}${format} [${item.id}]。`);
+    if (item.quote) {
+      lines.push(`  - 引用部分: ${truncateText(item.quote, 260)} [${item.id}]。`);
+    }
+    if (Array.isArray(item.attachments) && item.attachments.length) {
+      lines.push(`  - 添付またはアップロードとして ${item.attachments.join(', ')} が関連付けられています [${item.id}]。`);
+    }
+  });
+
+  lines.push('## 読み取り上の注意');
+  lines.push('- 引用された保存行の kind は source の区別を示します。検索モードを片方に固定するものではありません。');
+  lines.push('- 引用に出ていない主張は、この検索結果だけからは確認できません。必要な場合は引用リンクを開いてソース preview を確認してください。');
+  lines.push('- 同じタイトルや似た名前の保存行が複数ある場合は、file、language、proof state、保存形式を見比べるのが安全です。');
+  return lines.join('\n');
+}
+
+function ensureDetailedAnswer(answer, citations) {
+  const base = safeString(answer);
+  if (!Array.isArray(citations) || citations.length === 0) {
+    return base;
+  }
+  if (base.length >= MIN_ANSWER_CHARS && countAnswerLines(base) >= MIN_ANSWER_LINES) {
+    return base;
+  }
+
+  const details = buildCitationDetailLines(citations);
+  const combined = base
+    ? `${base}\n\n${details}`
+    : details;
+  if (combined.length >= MIN_ANSWER_CHARS && countAnswerLines(combined) >= MIN_ANSWER_LINES) {
+    return combined;
+  }
+
+  const padding = [];
+  while (
+    combined.length + padding.join('\n').length < MIN_ANSWER_CHARS
+    || countAnswerLines(`${combined}\n${padding.join('\n')}`) < MIN_ANSWER_LINES
+  ) {
+    const item = citations[padding.length % citations.length];
+    padding.push(`- 追加確認点: ${item.title || 'Untitled'} の根拠は保存済み引用 ${item.id} に限定されています。本文・ファイル名・保存形式を合わせて確認してください [${item.id}]。`);
+    if (padding.length > 32) break;
+  }
+  return `${combined}\n\n## 追加の確認点\n${padding.join('\n')}`;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -841,6 +914,9 @@ export default async function handler(req, res) {
       ...item,
       used: usedSet.has(item.id)
     }));
+    const answer = includeAnswer
+      ? ensureDetailedAnswer(generated.answer, citations)
+      : generated.answer;
 
     res.status(200).json({
       mode,
@@ -850,7 +926,7 @@ export default async function handler(req, res) {
       offset,
       model,
       geminiUsed,
-      answer: generated.answer,
+      answer,
       citations,
       usedCitationIds,
       suggestions,
