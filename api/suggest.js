@@ -1392,10 +1392,17 @@ async function handleSuggestionStream(req, res, body) {
     citations
   );
   if (answer && answer !== accumulated) {
-    writeStreamJson(res, {
-      type: 'answer_replace',
-      answer
-    });
+    if (answer.startsWith(accumulated)) {
+      await emitTextInReadableChunks(answer.slice(accumulated.length), async (delta) => {
+        accumulated += delta;
+        writeStreamJson(res, { type: 'answer_delta', delta });
+      });
+    } else {
+      writeStreamJson(res, {
+        type: 'answer_replace',
+        answer
+      });
+    }
   }
   writeStreamJson(res, {
     type: 'done',
