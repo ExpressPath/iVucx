@@ -2569,17 +2569,17 @@
 
     .chat-assistant-card{
       width:min(100%, 1140px);
-      border-radius:18px;
-      border:1px solid var(--search-chat-card-border);
-      background:var(--search-chat-card-bg);
-      padding:18px;
+      border-radius:0;
+      border:0;
+      background:transparent;
+      padding:0;
       color:var(--search-chat-card-text);
-      box-shadow:var(--search-chat-card-shadow);
+      box-shadow:none;
     }
 
     body.mode-q .chat-assistant-card{
-      border-color:rgba(255,255,255,0.16);
-      background:rgba(255,255,255,0.04);
+      border-color:transparent;
+      background:transparent;
       color:#eaf1ff;
       box-shadow:none;
     }
@@ -3139,6 +3139,12 @@
       overflow:auto;
       max-height:calc(100vh - 300px);
       padding-right:2px;
+      scrollbar-width:none;
+      -ms-overflow-style:none;
+    }
+
+    .search-sidebar-turn-list::-webkit-scrollbar{
+      display:none;
     }
 
     .search-sidebar-turn{
@@ -5966,6 +5972,7 @@
   const MODE_PERSIST_KEY = 'ivucxModeSnapshotV1';
   const COOKIE_HISTORY_CONSENT_KEY = 'ivucxCookieHistoryConsentV1';
   const COOKIE_HISTORY_COOKIE = 'ivucxEditHistoryV1';
+  const SEARCH_KEEP_LOCAL_KEY = 'ivucxSearchChatKeepsV1';
   const COOKIE_HISTORY_LIMIT = 6;
   const COOKIE_HISTORY_MAX_BYTES = 3500;
   const COOKIE_HISTORY_MAX_AGE_DAYS = 30;
@@ -7401,6 +7408,28 @@
     };
   }
 
+  function saveSearchChatLocally(payload, reason = ''){
+    const source = payload && typeof payload === 'object' ? payload : {};
+    const entry = {
+      id:'local-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+      title:truncateSidebarText(source.title || 'Search chat', 180),
+      systemMode:String(source.systemMode || getSearchSystemMode()),
+      reason:String(reason || 'local_fallback'),
+      savedAt:new Date().toISOString(),
+      turns:Array.isArray(source.turns) ? source.turns : []
+    };
+    let previous = [];
+    try{
+      previous = JSON.parse(localStorage.getItem(SEARCH_KEEP_LOCAL_KEY) || '[]');
+      if(!Array.isArray(previous)) previous = [];
+    }catch(error){
+      previous = [];
+    }
+    const next = [entry, ...previous].slice(0, 30);
+    localStorage.setItem(SEARCH_KEEP_LOCAL_KEY, JSON.stringify(next));
+    return entry;
+  }
+
   async function keepCurrentSearchChat(){
     if(searchKeepBusy) return;
     const payload = buildSearchKeepPayload();
@@ -7433,6 +7462,25 @@
         })
       });
       const data = await res.json().catch(()=>null);
+      if(data && data.saved){
+        searchKeepSavedId = String(data.keepId || '');
+        if(chatKeepButton){
+          chatKeepButton.classList.add('is-saved');
+        }
+        setSearchKeepStatus('Saved to Keep.');
+        return;
+      }
+
+      if(res.ok && data && data.localFallbackAllowed){
+        const localEntry = saveSearchChatLocally(payload, data.reason || 'supabase_unavailable');
+        searchKeepSavedId = localEntry.id;
+        if(chatKeepButton){
+          chatKeepButton.classList.add('is-saved');
+        }
+        setSearchKeepStatus('Saved locally. Supabase setup needed.');
+        return;
+      }
+
       if(!res.ok || !data || !data.saved){
         const reason = data && (data.reason || data.error) ? data.reason || data.error : `save_failed_${res.status}`;
         if(reason === 'not_logged_in' && typeof showAuthPopup === 'function'){
@@ -7441,18 +7489,21 @@
         }
         throw new Error(reason);
       }
-      searchKeepSavedId = String(data.keepId || '');
-      if(chatKeepButton){
-        chatKeepButton.classList.add('is-saved');
-      }
-      setSearchKeepStatus('Saved to Keep.');
     }catch(error){
       if(chatKeepButton){
         chatKeepButton.classList.remove('is-saved');
       }
-      const message = error && error.message === 'schema_missing'
-        ? 'Supabase table is missing.'
-        : error && error.message === 'not_logged_in'
+      const canFallback = error && ['schema_missing', 'schema_incomplete', 'supabase_write_failed', 'supabase_unavailable'].includes(error.message);
+      if(canFallback){
+        const localEntry = saveSearchChatLocally(payload, error.message);
+        searchKeepSavedId = localEntry.id;
+        if(chatKeepButton){
+          chatKeepButton.classList.add('is-saved');
+        }
+        setSearchKeepStatus('Saved locally. Supabase setup needed.');
+        return;
+      }
+      const message = error && error.message === 'not_logged_in'
         ? 'Sign in before keeping.'
         : 'Could not save this chat.';
       setSearchKeepStatus(message, 'error');
@@ -8142,13 +8193,17 @@
       head.textContent = 'AI Overview';
       assistantCard.appendChild(head);
 
-      if(turn.loading && turn.suggestions.length === 0){
+      const hasAnswerText = String(turn.answer || '').trim().length > 0;
+      const shouldShowTypingDots = (turn.loading && turn.suggestions.length === 0) || (turn.streamingAnswer && !hasAnswerText);
+      if(shouldShowTypingDots){
         const loading = document.createElement('div');
         loading.className = 'suggestion-loading';
-        loading.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span><span>Building AI overview...</span>';
+        loading.innerHTML = turn.streamingAnswer && !hasAnswerText
+          ? '<span class="dot"></span><span class="dot"></span><span class="dot"></span>'
+          : '<span class="dot"></span><span class="dot"></span><span class="dot"></span><span>Building AI overview...</span>';
         assistantCard.appendChild(loading);
       }else{
-        if(turn.answer){
+        if(hasAnswerText){
           const answer = document.createElement('div');
           answer.className = 'chat-answer' + (turn.streamingAnswer ? ' is-streaming' : '');
           renderAnswerWithCitationLinks(answer, turn.answer, turn);
