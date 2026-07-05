@@ -7420,14 +7420,17 @@
     setSearchKeepStatus('Saving...');
 
     try{
-      const res = await fetch('/api/search-chat-keep', {
+      const res = await fetch('/api/suggest', {
         method:'POST',
         credentials:'include',
         headers:{
           'Content-Type':'application/json',
           'Accept':'application/json'
         },
-        body:JSON.stringify(payload)
+        body:JSON.stringify({
+          action:'keep',
+          ...payload
+        })
       });
       const data = await res.json().catch(()=>null);
       if(!res.ok || !data || !data.saved){

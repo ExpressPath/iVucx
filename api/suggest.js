@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { getSupabaseAdmin } from '../lib/supabase-admin.js';
+import { sendSearchChatKeepResponse } from '../lib/search-chat-keep.js';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 const MAX_SEARCH_ROWS = 500;
@@ -1425,6 +1426,11 @@ export default async function handler(req, res) {
 
   try {
     const body = req.body || {};
+    if (safeString(body.action).toLowerCase() === 'keep') {
+      await sendSearchChatKeepResponse(req, res);
+      return;
+    }
+
     if (wantsNdjsonStream(req, body)) {
       await handleSuggestionStream(req, res, body);
       return;
