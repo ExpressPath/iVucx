@@ -8731,6 +8731,10 @@
     return /^[、。，．,.!?！？:：;；)]$/.test(String(token || ''));
   }
 
+  function hasFlashReaderDisplaySymbol(text){
+    return /[、。，．,.!?！？:：;；()[\]{}（）」『』「"“”‘’]/u.test(String(text || ''));
+  }
+
   function isFlashReaderSentenceEnd(token){
     return /[。．.!?！？]$/.test(String(token || '').trim());
   }
@@ -8740,11 +8744,18 @@
   }
 
   function isOpeningPunctuation(token){
-    return /^[([{（「『]$/.test(String(token || ''));
+    return /^[([{（「『"“‘]$/.test(String(token || ''));
   }
 
   function isClosingPunctuation(token){
-    return /^[)\]}）」』]$/.test(String(token || ''));
+    return /^[)\]}）」』"”’]$/.test(String(token || ''));
+  }
+
+  function stripFlashReaderDisplaySymbols(text){
+    return String(text || '')
+      .replace(/^[\s([{（「『"“‘]+/u, '')
+      .replace(/[\s、。，．,.!?！？:：;；)\]}）」』"”’]+$/u, '')
+      .trim();
   }
 
   function stripFlashReaderMathDelimiters(text){
@@ -8928,48 +8939,33 @@
 
   function buildFlashReaderEnglishChunks(tokens){
     const chunks = [];
-    let current = '';
-    const pushCurrent = ()=>{
-      const value = current.trim();
-      if(value) chunks.push(value);
-      current = '';
-    };
+    let pendingPrefix = '';
     for(let index = 0; index < tokens.length; index += 1){
       const token = String(tokens[index] || '').trim();
       if(!token) continue;
-      const nextToken = String(tokens[index + 1] || '').trim();
       if(isOpeningPunctuation(token)){
-        pushCurrent();
-        current = token;
+        pendingPrefix += token;
         continue;
       }
       if(isClosingPunctuation(token) || isFlashReaderPunctuation(token)){
-        current += token;
-        pushCurrent();
+        if(chunks.length){
+          chunks[chunks.length - 1] += token;
+        }else{
+          pendingPrefix += token;
+        }
         continue;
       }
       if(isFlashReaderMathLike(token)){
-        pushCurrent();
-        current = stripFlashReaderMathDelimiters(token);
+        chunks.push(pendingPrefix + stripFlashReaderMathDelimiters(token));
+        pendingPrefix = '';
         continue;
       }
-      if(!current){
-        current = token;
-        continue;
-      }
-      if(isFlashReaderMathLike(current)){
-        pushCurrent();
-        current = token;
-        continue;
-      }
-      if(shouldMergeEnglishChunk(current, token, nextToken)){
-        current += ' ' + token;
-        continue;
-      }
-      pushCurrent();
-      current = token;
+      chunks.push(pendingPrefix + token);
+      pendingPrefix = '';
     }
-    pushCurrent();
+    if(pendingPrefix && chunks.length){
+      chunks[chunks.length - 1] += pendingPrefix;
+    }
     return chunks.length ? chunks : tokens;
   }
 
@@ -8977,6 +8973,7 @@
     const normalizedTokens = sourceHasCjk ? normalizeFlashReaderCjkTokens(tokens) : tokens;
     const chunks = [];
     let current = '';
+    let pendingPrefix = '';
 
     const pushCurrent = ()=>{
       const value = current.trim();
@@ -8990,19 +8987,26 @@
 
       if(isOpeningPunctuation(token)){
         pushCurrent();
-        current = token;
+        pendingPrefix += token;
         return;
       }
 
       if(isClosingPunctuation(token) || isFlashReaderPunctuation(token)){
-        current += token;
-        pushCurrent();
+        if(current){
+          current += token;
+          pushCurrent();
+        }else if(chunks.length){
+          chunks[chunks.length - 1] += token;
+        }else{
+          pendingPrefix += token;
+        }
         return;
       }
 
       if(isFlashReaderMathLike(token)){
         pushCurrent();
-        current = stripFlashReaderMathDelimiters(token);
+        current = pendingPrefix + stripFlashReaderMathDelimiters(token);
+        pendingPrefix = '';
         return;
       }
 
@@ -9012,7 +9016,8 @@
       }
 
       if(!current){
-        current = token;
+        current = pendingPrefix + token;
+        pendingPrefix = '';
         return;
       }
 
@@ -9029,10 +9034,14 @@
       }
 
       pushCurrent();
-      current = token;
+      current = pendingPrefix + token;
+      pendingPrefix = '';
     });
 
     pushCurrent();
+    if(pendingPrefix && chunks.length){
+      chunks[chunks.length - 1] += pendingPrefix;
+    }
     return chunks.length ? chunks : normalizedTokens;
   }
 
@@ -9118,23 +9127,26 @@
   function getFlashReaderInterval(word){
     const speed = getFlashReaderSpeed();
     const value = String(word || '').trim();
-    const cleanValue = stripFlashReaderMathDelimiters(value);
+    const cleanValue = stripFlashReaderDisplaySymbols(stripFlashReaderMathDelimiters(value));
     const effectiveLength = Math.max(1, Array.from(cleanValue).length);
     const lengthWeight = Math.min(1.82, Math.max(0.86, 0.78 + (effectiveLength / 13)));
     let pauseWeight = 1;
-    if(isFlashReaderMathLike(cleanValue)){
+    if(isFlashReaderMathLike(value)){
       pauseWeight *= 1.28;
     }
-    if(isFlashReaderSentenceEnd(cleanValue)){
+    if(isFlashReaderSentenceEnd(value)){
       pauseWeight *= 1.58;
-    }else if(isFlashReaderSoftPause(cleanValue)){
+    }else if(isFlashReaderSoftPause(value)){
       pauseWeight *= 1.24;
+    }
+    if(hasFlashReaderDisplaySymbol(value)){
+      pauseWeight *= 1.12;
     }
     return Math.round((1000 / speed.wps) * lengthWeight * pauseWeight);
   }
 
   function getFlashReaderOrpIndex(word){
-    const chars = Array.from(stripFlashReaderMathDelimiters(word));
+    const chars = Array.from(stripFlashReaderDisplaySymbols(stripFlashReaderMathDelimiters(word)));
     const length = chars.length;
     if(length <= 1) return 0;
     if(isFlashReaderMathLike(word)) return Math.max(0, Math.min(length - 1, Math.floor(length * 0.42)));
@@ -9177,7 +9189,7 @@
   }
 
   function formatFlashReaderMathDisplay(text){
-    let value = stripFlashReaderMathDelimiters(text);
+    let value = stripFlashReaderDisplaySymbols(stripFlashReaderMathDelimiters(text));
     value = value.replace(/\s+/g, ' ').trim();
     value = value.replace(/\^\{([^}]{1,8})\}|\^([A-Za-z0-9+\-=()]{1})/g, (match, braced, single)=>{
       const mapped = mapFlashReaderScriptText(braced || single, 'sup');
@@ -9205,7 +9217,7 @@
     const isMathWord = isFlashReaderMathLike(word);
     const displayWord = isMathWord
       ? formatFlashReaderMathDisplay(word)
-      : stripFlashReaderMathDelimiters(word);
+      : stripFlashReaderDisplaySymbols(stripFlashReaderMathDelimiters(word));
     const chars = Array.from(displayWord);
     const pivotIndex = getFlashReaderOrpIndex(displayWord);
     flashReaderWord.replaceChildren();
