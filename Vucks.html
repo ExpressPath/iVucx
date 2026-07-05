@@ -2516,6 +2516,8 @@
       height:100%;
       max-height:none;
       overflow:auto;
+      scrollbar-width:none;
+      -ms-overflow-style:none;
       border-radius:0;
       border:none;
       background:transparent;
@@ -2523,6 +2525,10 @@
       box-shadow:none;
       padding:0 2px 20px;
       backdrop-filter:none;
+    }
+
+    .suggestion-panel::-webkit-scrollbar{
+      display:none;
     }
 
     body.mode-q .suggestion-panel{
@@ -3112,6 +3118,16 @@
       color:#9bb0d4;
     }
 
+    .history-navigation{
+      margin-top:4px;
+      padding-top:10px;
+      border-top:1px solid var(--search-chat-item-border);
+    }
+
+    body.mode-q .history-navigation{
+      border-top-color:rgba(255,255,255,0.1);
+    }
+
     .search-keep-status{
       min-height:18px;
       margin-bottom:10px;
@@ -3148,17 +3164,36 @@
     }
 
     .search-sidebar-turn{
+      width:100%;
       border:1px solid var(--search-chat-item-border);
       border-radius:12px;
       padding:9px 10px;
       background:var(--search-chat-item-bg);
       color:var(--search-chat-citation-text);
+      text-align:left;
+      cursor:pointer;
+      font:inherit;
+      transition:border-color .18s ease,background-color .18s ease,transform .18s ease;
+    }
+
+    .search-sidebar-turn:hover,
+    .search-sidebar-turn:focus-visible{
+      border-color:var(--search-chat-item-hover-border);
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+      transform:translateY(-1px);
     }
 
     body.mode-q .search-sidebar-turn{
       border-color:rgba(255,255,255,0.1);
       background:rgba(255,255,255,0.04);
       color:#edf2ff;
+    }
+
+    body.mode-q .search-sidebar-turn:hover,
+    body.mode-q .search-sidebar-turn:focus-visible{
+      border-color:rgba(143,185,255,0.4);
+      background:rgba(87,132,209,0.16);
     }
 
     .search-sidebar-turn-title{
@@ -4269,9 +4304,11 @@
       <span class="chat-keep-label">Keep</span>
     </button>
     <div class="search-sidebar-expanded">
-      <div class="search-sidebar-title">Search chats</div>
+      <div class="search-sidebar-title">History Navigation</div>
       <div class="search-keep-status" id="searchKeepStatus">Keep this conversation in your account.</div>
-      <div class="search-sidebar-turn-list" id="searchSidebarTurnList" aria-live="polite"></div>
+      <div class="history-navigation">
+        <div class="search-sidebar-turn-list" id="searchSidebarTurnList" aria-live="polite"></div>
+      </div>
     </div>
   </div>
 </aside>
@@ -7350,7 +7387,9 @@
     searchSidebarTurnList.innerHTML = '';
     const turns = suggestionTurns.filter(turn=>turn && turn.query);
     if(turns.length === 0){
-      const empty = document.createElement('div');
+      const empty = document.createElement('button');
+      empty.type = 'button';
+      empty.disabled = true;
       empty.className = 'search-sidebar-turn';
       const title = document.createElement('div');
       title.className = 'search-sidebar-turn-title';
@@ -7361,8 +7400,11 @@
     }
 
     turns.slice(-8).reverse().forEach(turn=>{
-      const item = document.createElement('div');
+      const item = document.createElement('button');
+      item.type = 'button';
       item.className = 'search-sidebar-turn';
+      item.dataset.turnId = String(turn.id);
+      item.setAttribute('aria-label', 'Go to chat: ' + truncateSidebarText(turn.query, 96));
 
       const title = document.createElement('div');
       title.className = 'search-sidebar-turn-title';
@@ -7376,6 +7418,23 @@
 
       item.append(title, meta);
       searchSidebarTurnList.appendChild(item);
+    });
+  }
+
+  function scrollToSuggestionTurn(turnId){
+    const id = String(turnId || '').trim();
+    if(!id || !suggestionPanel) return;
+    const escapedId = window.CSS && typeof window.CSS.escape === 'function'
+      ? window.CSS.escape(id)
+      : id.replace(/["\\]/g, '\\$&');
+    const target = suggestionBody
+      ? suggestionBody.querySelector(`.chat-turn-user[data-turn-id="${escapedId}"]`)
+        || suggestionBody.querySelector(`.chat-turn-assistant[data-turn-id="${escapedId}"]`)
+      : null;
+    if(!target) return;
+    target.scrollIntoView({
+      behavior:'smooth',
+      block:'start'
     });
   }
 
@@ -8175,6 +8234,7 @@
     suggestionTurns.forEach(turn=>{
       const userRow = document.createElement('div');
       userRow.className = 'chat-turn-user';
+      userRow.dataset.turnId = String(turn.id);
 
       const userBubble = document.createElement('div');
       userBubble.className = 'chat-user-bubble';
@@ -8184,6 +8244,7 @@
 
       const assistantRow = document.createElement('div');
       assistantRow.className = 'chat-turn-assistant';
+      assistantRow.dataset.turnId = String(turn.id);
 
       const assistantCard = document.createElement('div');
       assistantCard.className = 'chat-assistant-card';
@@ -8637,6 +8698,16 @@
 
   if(chatKeepButton){
     chatKeepButton.addEventListener('click', keepCurrentSearchChat);
+  }
+
+  if(searchSidebarTurnList){
+    searchSidebarTurnList.addEventListener('click', event=>{
+      const target = event.target && typeof event.target.closest === 'function' ? event.target : null;
+      if(!target) return;
+      const item = target.closest('.search-sidebar-turn');
+      if(!item || item.disabled) return;
+      scrollToSuggestionTurn(item.dataset.turnId);
+    });
   }
 
   if(citationPreviewClose){
