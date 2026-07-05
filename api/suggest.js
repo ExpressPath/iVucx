@@ -483,6 +483,45 @@ function parseGeminiText(payload) {
   return '';
 }
 
+function readLooseJsonStringField(raw, fieldName) {
+  const text = String(raw || '');
+  const keyIndex = text.indexOf(`"${fieldName}"`);
+  if (keyIndex < 0) return '';
+  const colonIndex = text.indexOf(':', keyIndex + fieldName.length + 2);
+  if (colonIndex < 0) return '';
+  let index = colonIndex + 1;
+  while (index < text.length && /\s/.test(text.charAt(index))) index += 1;
+  if (text.charAt(index) !== '"') return '';
+
+  let value = '';
+  let escaped = false;
+  for (let cursor = index + 1; cursor < text.length; cursor += 1) {
+    const char = text.charAt(cursor);
+    if (escaped) {
+      if (char === 'n') value += '\n';
+      else if (char === 'r') value += '\r';
+      else if (char === 't') value += '\t';
+      else if (char === 'u' && cursor + 4 < text.length) {
+        const hex = text.slice(cursor + 1, cursor + 5);
+        const code = Number.parseInt(hex, 16);
+        value += Number.isFinite(code) ? String.fromCharCode(code) : `\\u${hex}`;
+        cursor += 4;
+      } else {
+        value += char;
+      }
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') return value.trim();
+    value += char;
+  }
+  return '';
+}
+
 function parseAnswerJson(text) {
   const raw = String(text || '').trim();
   if (!raw) return null;
@@ -499,6 +538,8 @@ function parseAnswerJson(text) {
     }
     return null;
   } catch (error) {
+    const looseAnswer = readLooseJsonStringField(stripped, 'answer');
+    if (looseAnswer) return { answer: looseAnswer, usedCitationIds: [] };
     return null;
   }
 }
