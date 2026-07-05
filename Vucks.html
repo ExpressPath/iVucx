@@ -3184,6 +3184,11 @@
       font-family:inherit;
     }
 
+    .flash-reader-word.is-math{
+      font-weight:720;
+      letter-spacing:.01em;
+    }
+
     .flash-reader-foot{
       display:flex;
       align-items:center;
@@ -8640,13 +8645,14 @@
     return String(value || '')
       .replace(/```[\s\S]*?```/g, ' ')
       .replace(/`([^`]+)`/g, '$1')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
       .replace(/\[\[([^\]]+)\]\]/g, '$1')
       .replace(/\[[^\]]+\]\([^)]+\)/g, ' ')
       .replace(/^#{1,6}\s+/gm, '')
       .replace(/^\s*[-*+]\s+/gm, '')
       .replace(/^\s*\d+[.)]\s+/gm, '')
       .replace(/\|/g, ' ')
-      .replace(/[*_~>#]/g, '')
+      .replace(/[~>#]/g, '')
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -8671,23 +8677,46 @@
   function tokenizeFlashReaderText(text){
     const source = String(text || '').trim();
     if(!source) return [];
+    return buildFlashReaderMeaningChunks(mergeFlashReaderMathRuns(collectFlashReaderBaseTokens(source)), source);
+  }
+
+  function segmentFlashReaderPlainText(source){
+    const value = String(source || '');
+    if(!value.trim()) return [];
     if(typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'){
       try{
         const segmenter = new Intl.Segmenter(navigator.language || 'ja', { granularity:'word' });
         const segmented = [];
-        for(const part of segmenter.segment(source)){
+        for(const part of segmenter.segment(value)){
           const word = String(part.segment || '').trim();
           if(!word) continue;
-          if(part.isWordLike || /[\p{L}\p{N}]/u.test(word)){
-            segmented.push(word);
-          }
+          if(part.isWordLike || /[^\s]/u.test(word)) segmented.push(word);
         }
-        if(segmented.length) return buildFlashReaderMeaningChunks(segmented, source);
+        if(segmented.length) return segmented;
       }catch(error){
         // Fall back to regex tokenization below.
       }
     }
-    return buildFlashReaderMeaningChunks(source.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)?|[^\s]/gu) || [], source);
+    return value.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)?|[^\s]/gu) || [];
+  }
+
+  function collectFlashReaderBaseTokens(source){
+    const value = String(source || '');
+    const tokens = [];
+    const mathPattern = /\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\$[^$\n]{1,180}\$/g;
+    let lastIndex = 0;
+    let match;
+    while((match = mathPattern.exec(value))){
+      if(match.index > lastIndex){
+        tokens.push(...segmentFlashReaderPlainText(value.slice(lastIndex, match.index)));
+      }
+      tokens.push(stripFlashReaderMathDelimiters(match[0]));
+      lastIndex = mathPattern.lastIndex;
+    }
+    if(lastIndex < value.length){
+      tokens.push(...segmentFlashReaderPlainText(value.slice(lastIndex)));
+    }
+    return tokens.filter(Boolean);
   }
 
   function containsCjkText(text){
@@ -8702,8 +8731,120 @@
     return /^[、。，．,.!?！？:：;；)]$/.test(String(token || ''));
   }
 
+  function isFlashReaderSentenceEnd(token){
+    return /[。．.!?！？]$/.test(String(token || '').trim());
+  }
+
+  function isFlashReaderSoftPause(token){
+    return /[、，,;；:：]$/.test(String(token || '').trim());
+  }
+
   function isOpeningPunctuation(token){
     return /^[([{（「『]$/.test(String(token || ''));
+  }
+
+  function isClosingPunctuation(token){
+    return /^[)\]}）」』]$/.test(String(token || ''));
+  }
+
+  function stripFlashReaderMathDelimiters(text){
+    const value = String(text || '').trim();
+    if((value.startsWith('\\(') && value.endsWith('\\)')) || (value.startsWith('\\[') && value.endsWith('\\]'))){
+      return value.slice(2, -2).trim();
+    }
+    if((value.startsWith('$$') && value.endsWith('$$'))){
+      return value.slice(2, -2).trim();
+    }
+    if(value.startsWith('$') && value.endsWith('$') && value.length > 1){
+      return value.slice(1, -1).trim();
+    }
+    return value;
+  }
+
+  function isDelimitedFlashReaderMath(text){
+    const value = String(text || '').trim();
+    return /^\\\([\s\S]+\\\)$/.test(value)
+      || /^\\\[[\s\S]+\\\]$/.test(value)
+      || /^\$\$[\s\S]+\$\$$/.test(value)
+      || /^\$[^$]+\$$/.test(value);
+  }
+
+  function hasFlashReaderMathOperator(text){
+    return /(?:[=<>≤≥≠≈∼+\-*/×÷^_√∑∫∞→←↔⇒⇔∧∨¬∈∉⊂⊆⊃⊇∪∩]|\\(?:forall|exists|sum|int|frac|sqrt|to|in|le|ge|neq|approx|Rightarrow|Leftarrow|rightarrow|leftarrow)\b)/u.test(String(text || ''));
+  }
+
+  function isFlashReaderMathLike(text){
+    const value = stripFlashReaderMathDelimiters(text).replace(/[。．.!?！？、，,;；:：]+$/u, '');
+    if(!value) return false;
+    if(isDelimitedFlashReaderMath(text)) return true;
+    if(hasFlashReaderMathOperator(value) && /[\p{L}\p{N}\\]/u.test(value)) return true;
+    if(/^[+-]?(?:\d+(?:[.,]\d+)*|\d*\.\d+)(?:e[+-]?\d+)?%?$/i.test(value)) return true;
+    return false;
+  }
+
+  function isFlashReaderMathRunToken(token){
+    const value = String(token || '').trim();
+    if(!value) return false;
+    if(isDelimitedFlashReaderMath(value)) return true;
+    if(/^[=<>≤≥≠≈∼+\-*/×÷^_√∑∫∞→←↔⇒⇔∧∨¬∈∉⊂⊆⊃⊇∪∩]$/.test(value)) return true;
+    if(/^[()[\]{}|,.;:]$/.test(value)) return true;
+    if(/^(?:\\[A-Za-z]+|[A-Za-zΑ-Ωα-ω]+|\d+(?:[.,]\d+)*|\d*\.\d+)$/.test(value)) return true;
+    return false;
+  }
+
+  function shouldStartFlashReaderMathRun(tokens, index){
+    const token = String(tokens[index] || '').trim();
+    const next = String(tokens[index + 1] || '').trim();
+    if(isDelimitedFlashReaderMath(token)) return true;
+    if(!isFlashReaderMathRunToken(token)) return false;
+    const looksLikeVariable = /^(?:\\[A-Za-z]+|[A-Za-zΑ-Ωα-ω]{1,2})$/.test(token);
+    return hasFlashReaderMathOperator(token)
+      || hasFlashReaderMathOperator(next)
+      || (looksLikeVariable && hasFlashReaderMathOperator(String(tokens[index + 2] || '')));
+  }
+
+  function mergeFlashReaderMathRuns(tokens){
+    const source = Array.isArray(tokens) ? tokens : [];
+    const merged = [];
+    for(let index = 0; index < source.length; index += 1){
+      const token = String(source[index] || '').trim();
+      if(!token) continue;
+      if(isDelimitedFlashReaderMath(token)){
+        merged.push(stripFlashReaderMathDelimiters(token));
+        continue;
+      }
+      if(!shouldStartFlashReaderMathRun(source, index)){
+        merged.push(token);
+        continue;
+      }
+      const run = [token];
+      let hasOperator = hasFlashReaderMathOperator(token);
+      let cursor = index + 1;
+      while(cursor < source.length && run.join(' ').length < 80){
+        const next = String(source[cursor] || '').trim();
+        if(!next) break;
+        if(isDelimitedFlashReaderMath(next)){
+          run.push(stripFlashReaderMathDelimiters(next));
+          cursor += 1;
+          break;
+        }
+        if(!isFlashReaderMathRunToken(next)) break;
+        if(isFlashReaderSentenceEnd(next)){
+          break;
+        }
+        hasOperator = hasOperator || hasFlashReaderMathOperator(next);
+        run.push(next);
+        cursor += 1;
+        if(hasOperator && cursor < source.length && !isFlashReaderMathRunToken(String(source[cursor] || '').trim())) break;
+      }
+      if(hasOperator && run.length > 1){
+        merged.push(run.join(' ').replace(/\s+([,.;:)\]}])/g, '$1').replace(/([([{])\s+/g, '$1'));
+        index = cursor - 1;
+      }else{
+        merged.push(token);
+      }
+    }
+    return merged;
   }
 
   function hasHanText(text){
@@ -8737,9 +8878,102 @@
     return combinedLength <= 6;
   }
 
-  function buildFlashReaderMeaningChunks(tokens, sourceText){
-    const source = String(sourceText || '');
-    const sourceHasCjk = containsCjkText(source);
+  function containsLatinText(text){
+    return /[A-Za-z]/.test(String(text || ''));
+  }
+
+  function isEnglishArticleOrDeterminer(token){
+    return /^(a|an|the|this|that|these|those|my|your|his|her|its|our|their|each|every|some|any|no|many|few|several|both|all|another|such)$/i.test(String(token || ''));
+  }
+
+  function isEnglishPreposition(token){
+    return /^(of|for|to|from|in|on|at|by|with|without|into|onto|over|under|between|among|through|during|before|after|about|against|within|across|around)$/i.test(String(token || ''));
+  }
+
+  function isEnglishConjunction(token){
+    return /^(and|or|but|yet|so|nor)$/i.test(String(token || ''));
+  }
+
+  function isEnglishAuxiliary(token){
+    return /^(can|could|may|might|must|shall|should|will|would|is|are|am|was|were|be|been|being|do|does|did|has|have|had)$/i.test(String(token || ''));
+  }
+
+  function isEnglishShortFunctionToken(token){
+    return isEnglishArticleOrDeterminer(token) || isEnglishPreposition(token) || isEnglishAuxiliary(token);
+  }
+
+  function countFlashReaderWords(text){
+    const words = String(text || '').match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)?/g);
+    return words ? words.length : 0;
+  }
+
+  function shouldMergeEnglishChunk(current, token, nextToken){
+    if(!current || !token) return false;
+    if(isFlashReaderMathLike(current) || isFlashReaderMathLike(token)) return false;
+    if(isFlashReaderPunctuation(token) || isOpeningPunctuation(token) || isClosingPunctuation(token)) return true;
+    if(isEnglishConjunction(token)) return false;
+    const currentWords = countFlashReaderWords(current);
+    const combinedLength = Array.from(`${current} ${token}`).length;
+    if(currentWords >= 4 || combinedLength > 34) return false;
+    if(isEnglishShortFunctionToken(current.split(/\s+/).pop()) && currentWords <= 2) return true;
+    if(isEnglishShortFunctionToken(token)) return true;
+    if(/ly$/i.test(token) && nextToken && !isEnglishConjunction(nextToken)) return true;
+    if(/^(not|very|more|most|less|least|only|also|just)$/i.test(token)) return true;
+    if(/(?:ing|ed|ive|al|ous|ful|less|able|ible|ic|ical)$/i.test(token) && currentWords <= 2) return true;
+    if(currentWords <= 2 && /^[A-Z]?[a-z]+(?:[-'][A-Za-z]+)?$/.test(token) && !/^(i|you|he|she|we|they)$/i.test(token)){
+      return true;
+    }
+    return false;
+  }
+
+  function buildFlashReaderEnglishChunks(tokens){
+    const chunks = [];
+    let current = '';
+    const pushCurrent = ()=>{
+      const value = current.trim();
+      if(value) chunks.push(value);
+      current = '';
+    };
+    for(let index = 0; index < tokens.length; index += 1){
+      const token = String(tokens[index] || '').trim();
+      if(!token) continue;
+      const nextToken = String(tokens[index + 1] || '').trim();
+      if(isOpeningPunctuation(token)){
+        pushCurrent();
+        current = token;
+        continue;
+      }
+      if(isClosingPunctuation(token) || isFlashReaderPunctuation(token)){
+        current += token;
+        pushCurrent();
+        continue;
+      }
+      if(isFlashReaderMathLike(token)){
+        pushCurrent();
+        current = stripFlashReaderMathDelimiters(token);
+        continue;
+      }
+      if(!current){
+        current = token;
+        continue;
+      }
+      if(isFlashReaderMathLike(current)){
+        pushCurrent();
+        current = token;
+        continue;
+      }
+      if(shouldMergeEnglishChunk(current, token, nextToken)){
+        current += ' ' + token;
+        continue;
+      }
+      pushCurrent();
+      current = token;
+    }
+    pushCurrent();
+    return chunks.length ? chunks : tokens;
+  }
+
+  function buildFlashReaderCjkChunks(tokens, sourceHasCjk = true){
     const normalizedTokens = sourceHasCjk ? normalizeFlashReaderCjkTokens(tokens) : tokens;
     const chunks = [];
     let current = '';
@@ -8760,9 +8994,15 @@
         return;
       }
 
-      if(isFlashReaderPunctuation(token)){
+      if(isClosingPunctuation(token) || isFlashReaderPunctuation(token)){
         current += token;
         pushCurrent();
+        return;
+      }
+
+      if(isFlashReaderMathLike(token)){
+        pushCurrent();
+        current = stripFlashReaderMathDelimiters(token);
         return;
       }
 
@@ -8772,6 +9012,12 @@
       }
 
       if(!current){
+        current = token;
+        return;
+      }
+
+      if(isFlashReaderMathLike(current)){
+        pushCurrent();
         current = token;
         return;
       }
@@ -8788,6 +9034,70 @@
 
     pushCurrent();
     return chunks.length ? chunks : normalizedTokens;
+  }
+
+  function isFlashReaderCjkToken(token){
+    return containsCjkText(token);
+  }
+
+  function buildFlashReaderMixedChunks(tokens){
+    const chunks = [];
+    let run = [];
+    let runType = '';
+    const flushRun = ()=>{
+      if(!run.length) return;
+      if(runType === 'latin'){
+        chunks.push(...buildFlashReaderEnglishChunks(run));
+      }else{
+        chunks.push(...buildFlashReaderCjkChunks(run, true));
+      }
+      run = [];
+      runType = '';
+    };
+
+    tokens.forEach(rawToken=>{
+      const token = String(rawToken || '').trim();
+      if(!token) return;
+      if(isFlashReaderMathLike(token)){
+        flushRun();
+        chunks.push(stripFlashReaderMathDelimiters(token));
+        return;
+      }
+      const tokenType = isFlashReaderCjkToken(token)
+        ? 'cjk'
+        : containsLatinText(token)
+          ? 'latin'
+          : '';
+      if(!tokenType){
+        if(run.length){
+          run.push(token);
+          if(isFlashReaderPunctuation(token) || isClosingPunctuation(token)) flushRun();
+        }else if(chunks.length){
+          chunks[chunks.length - 1] += token;
+        }else{
+          chunks.push(token);
+        }
+        return;
+      }
+      if(runType && runType !== tokenType) flushRun();
+      runType = tokenType;
+      run.push(token);
+    });
+    flushRun();
+    return chunks;
+  }
+
+  function buildFlashReaderMeaningChunks(tokens, sourceText){
+    const source = String(sourceText || '');
+    const sourceHasCjk = containsCjkText(source);
+    const sourceHasLatin = containsLatinText(source);
+    if(sourceHasCjk && sourceHasLatin){
+      return buildFlashReaderMixedChunks(tokens);
+    }
+    if(!sourceHasCjk && sourceHasLatin){
+      return buildFlashReaderEnglishChunks(tokens);
+    }
+    return buildFlashReaderCjkChunks(tokens, sourceHasCjk);
   }
 
   function refreshFlashReaderTokens(resetToStart = false){
@@ -8807,15 +9117,27 @@
 
   function getFlashReaderInterval(word){
     const speed = getFlashReaderSpeed();
-    const effectiveLength = Math.max(1, Array.from(String(word || '')).length);
-    const lengthWeight = Math.min(1.68, Math.max(0.86, 0.78 + (effectiveLength / 12)));
-    return Math.round((1000 / speed.wps) * lengthWeight);
+    const value = String(word || '').trim();
+    const cleanValue = stripFlashReaderMathDelimiters(value);
+    const effectiveLength = Math.max(1, Array.from(cleanValue).length);
+    const lengthWeight = Math.min(1.82, Math.max(0.86, 0.78 + (effectiveLength / 13)));
+    let pauseWeight = 1;
+    if(isFlashReaderMathLike(cleanValue)){
+      pauseWeight *= 1.28;
+    }
+    if(isFlashReaderSentenceEnd(cleanValue)){
+      pauseWeight *= 1.58;
+    }else if(isFlashReaderSoftPause(cleanValue)){
+      pauseWeight *= 1.24;
+    }
+    return Math.round((1000 / speed.wps) * lengthWeight * pauseWeight);
   }
 
   function getFlashReaderOrpIndex(word){
-    const chars = Array.from(String(word || ''));
+    const chars = Array.from(stripFlashReaderMathDelimiters(word));
     const length = chars.length;
     if(length <= 1) return 0;
+    if(isFlashReaderMathLike(word)) return Math.max(0, Math.min(length - 1, Math.floor(length * 0.42)));
     if(length <= 5) return 1;
     if(length <= 9) return 2;
     if(length <= 13) return 3;
@@ -8824,6 +9146,9 @@
 
   function getFlashReaderFontStack(text){
     const value = String(text || '');
+    if(isFlashReaderMathLike(value)){
+      return '"Cambria Math","STIX Two Math","Latin Modern Math","Noto Sans Math","Times New Roman",math,serif';
+    }
     if(/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(value)){
       return '"Hiragino Sans","Yu Gothic","Yu Gothic UI","Meiryo","Noto Sans JP",system-ui,sans-serif';
     }
@@ -8834,6 +9159,35 @@
       return '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif';
     }
     return '"Inter","SF Pro Text","Segoe UI",system-ui,sans-serif';
+  }
+
+  function mapFlashReaderScriptText(text, mode){
+    const superscript = {
+      '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹',
+      '+':'⁺','-':'⁻','=':'⁼','(':'⁽',')':'⁾','n':'ⁿ','i':'ⁱ'
+    };
+    const subscript = {
+      '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉',
+      '+':'₊','-':'₋','=':'₌','(':'₍',')':'₎','a':'ₐ','e':'ₑ','h':'ₕ','i':'ᵢ','j':'ⱼ','k':'ₖ','l':'ₗ','m':'ₘ','n':'ₙ','o':'ₒ','p':'ₚ','r':'ᵣ','s':'ₛ','t':'ₜ','u':'ᵤ','v':'ᵥ','x':'ₓ'
+    };
+    const table = mode === 'sub' ? subscript : superscript;
+    const value = String(text || '');
+    const mapped = Array.from(value).map(char=>table[char] || '').join('');
+    return mapped.length === Array.from(value).length ? mapped : '';
+  }
+
+  function formatFlashReaderMathDisplay(text){
+    let value = stripFlashReaderMathDelimiters(text);
+    value = value.replace(/\s+/g, ' ').trim();
+    value = value.replace(/\^\{([^}]{1,8})\}|\^([A-Za-z0-9+\-=()]{1})/g, (match, braced, single)=>{
+      const mapped = mapFlashReaderScriptText(braced || single, 'sup');
+      return mapped || match;
+    });
+    value = value.replace(/_\{([^}]{1,8})\}|_([A-Za-z0-9+\-=()]{1})/g, (match, braced, single)=>{
+      const mapped = mapFlashReaderScriptText(braced || single, 'sub');
+      return mapped || match;
+    });
+    return value;
   }
 
   function alignFlashReaderOrpLine(lineEl, pivotEl){
@@ -8848,10 +9202,15 @@
 
   function renderFlashReaderOrpWord(word){
     if(!flashReaderWord) return;
-    const chars = Array.from(String(word || ''));
-    const pivotIndex = getFlashReaderOrpIndex(word);
+    const isMathWord = isFlashReaderMathLike(word);
+    const displayWord = isMathWord
+      ? formatFlashReaderMathDisplay(word)
+      : stripFlashReaderMathDelimiters(word);
+    const chars = Array.from(displayWord);
+    const pivotIndex = getFlashReaderOrpIndex(displayWord);
     flashReaderWord.replaceChildren();
     flashReaderWord.classList.remove('is-placeholder');
+    flashReaderWord.classList.toggle('is-math', isMathWord);
     flashReaderWord.style.fontFamily = getFlashReaderFontStack(word);
 
     const line = document.createElement('span');
