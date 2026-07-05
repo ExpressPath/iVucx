@@ -7791,6 +7791,103 @@
     scrollSuggestionPanelToBottom();
   }
 
+  function applySuggestionStreamEvent(turn, event, append, offset){
+    if(!turn || !event || typeof event !== 'object') return;
+    const type = String(event.type || '').trim();
+    if(type === 'meta'){
+      const normalized = normalizeSuggestionBatch(event.suggestions, turn.query, offset);
+      const normalizedCitations = normalizeCitationBatch(event.citations);
+      if(append){
+        turn.suggestions = turn.suggestions.concat(normalized);
+        turn.citations = turn.citations.concat(normalizedCitations);
+      }else{
+        turn.suggestions = normalized;
+        turn.answer = '';
+        turn.pendingAnswer = '';
+        turn.fullAnswer = '';
+        turn.streamingAnswer = true;
+        turn.citations = normalizedCitations;
+        turn.targetKind = String(event.targetKind || 'search').trim();
+        turn.systemMode = String(event.systemMode || getSearchSystemMode()).trim();
+      }
+      turn.hasMore = typeof event.hasMore === 'boolean'
+        ? event.hasMore
+        : normalized.length >= SUGGESTION_COUNT;
+      turn.loading = false;
+      turn.loadingMore = false;
+      turn.error = '';
+      renderSuggestionThread();
+      return;
+    }
+    if(type === 'answer_delta'){
+      const delta = String(event.delta || '');
+      if(!delta) return;
+      turn.loading = false;
+      turn.streamingAnswer = true;
+      turn.answer = String(turn.answer || '') + delta;
+      turn.fullAnswer = turn.answer;
+      renderSuggestionThread();
+      return;
+    }
+    if(type === 'answer_replace'){
+      turn.loading = false;
+      turn.streamingAnswer = true;
+      turn.answer = String(event.answer || turn.answer || '');
+      turn.fullAnswer = turn.answer;
+      renderSuggestionThread();
+      return;
+    }
+    if(type === 'done'){
+      const normalized = normalizeSuggestionBatch(event.suggestions, turn.query, offset);
+      const normalizedCitations = normalizeCitationBatch(event.citations);
+      if(normalized.length) turn.suggestions = normalized;
+      if(normalizedCitations.length) turn.citations = normalizedCitations;
+      if(typeof event.hasMore === 'boolean') turn.hasMore = event.hasMore;
+      turn.answer = String(event.answer || turn.answer || '').trim();
+      turn.fullAnswer = turn.answer;
+      turn.pendingAnswer = '';
+      turn.streamingAnswer = false;
+      turn.loading = false;
+      turn.loadingMore = false;
+      turn.error = '';
+      renderSuggestionThread();
+      return;
+    }
+    if(type === 'error'){
+      turn.error = String(event.error || 'Could not fetch suggestions from server.');
+      turn.streamingAnswer = false;
+      turn.loading = false;
+      turn.loadingMore = false;
+      renderSuggestionThread();
+    }
+  }
+
+  async function readSuggestionStream(res, turn, append, controller, offset){
+    if(!res.body) return false;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while(true){
+      const { value, done } = await reader.read();
+      if(done) break;
+      if(controller !== suggestionAbortController) return true;
+      buffer += decoder.decode(value, { stream:true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || '';
+      for(const line of lines){
+        const trimmed = line.trim();
+        if(!trimmed) continue;
+        applySuggestionStreamEvent(turn, JSON.parse(trimmed), append, offset);
+      }
+    }
+    buffer += decoder.decode();
+    const trailing = buffer.trim();
+    if(trailing && controller === suggestionAbortController){
+      applySuggestionStreamEvent(turn, JSON.parse(trailing), append, offset);
+    }
+    return true;
+  }
+
   async function fetchSuggestionBatch(turn, append = false){
     if(!turn) return;
 
@@ -7821,6 +7918,7 @@
     }
     renderSuggestionThread();
 
+    let streamedResponse = false;
     try{
       const payload = {
         mode: 'search',
@@ -7832,6 +7930,7 @@
         limit: SUGGESTION_COUNT,
         offset,
         includeAnswer: !append,
+        stream: !append,
         history: append ? [] : buildSuggestionHistory(turn)
       };
 
@@ -7840,7 +7939,7 @@
         credentials:'include',
         headers:{
           'Content-Type':'application/json',
-          'Accept':'application/json'
+          'Accept': append ? 'application/json' : 'application/x-ndjson, application/json'
         },
         body:JSON.stringify(payload),
         signal:controller.signal
@@ -7848,6 +7947,12 @@
 
       if(!res.ok){
         throw new Error(`Suggest API failed: ${res.status}`);
+      }
+
+      const contentType = String(res.headers.get('Content-Type') || '').toLowerCase();
+      if(!append && contentType.includes('application/x-ndjson')){
+        streamedResponse = await readSuggestionStream(res, turn, append, controller, offset);
+        return;
       }
 
       const data = await res.json();
@@ -7885,7 +7990,7 @@
       turn.loading = false;
       turn.loadingMore = false;
       if(sendButton) sendButton.disabled = false;
-      if(!append && turn.pendingAnswer){
+      if(!streamedResponse && !append && turn.pendingAnswer){
         const nextAnswer = turn.pendingAnswer;
         turn.pendingAnswer = '';
         startAnswerStream(turn, nextAnswer);

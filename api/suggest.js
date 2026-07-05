@@ -471,6 +471,66 @@ function buildGeminiRequestBody({ query, targetKind, citations, history, systemM
   };
 }
 
+function buildGeminiAnswerRequestBody({ query, targetKind, citations, history, systemMode }) {
+  const context = citations.map((item) => ({
+    id: item.id,
+    title: item.title,
+    fileName: item.fileName,
+    language: item.language,
+    proofState: item.proofState,
+    kind: item.kind,
+    normalizedFormat: item.normalizedFormat,
+    requestedFormat: item.requestedFormat,
+    completedFormat: item.completedFormat,
+    attachments: Array.isArray(item.attachmentNames) ? item.attachmentNames : [],
+    quote: item.quote,
+    sourceExcerpt: truncateText(item.sourceCode || item.quote, 1100)
+  }));
+  const conversation = normalizeHistory(history);
+  const prompt = [
+    'You are the iVucx saved-problem search assistant.',
+    'Search target: unified saved problem/theorem search.',
+    `Current display mode: ${normalizeSystemMode(systemMode)}.`,
+    'Use only the provided saved rows as sources.',
+    'Do not force the conversation into only problem or only theorem search.',
+    'Keep the source kind distinction visible when useful.',
+    `User query: ${query}`,
+    '',
+    conversation.length
+      ? `Recent chat history: ${JSON.stringify(conversation)}`
+      : 'Recent chat history: []',
+    '',
+    'Answer in Japanese unless the user query is clearly in another language.',
+    'When addressing the person asking, use a natural second person for that language, such as anata in Japanese or you in English. Do not refer to them as "the user" in the answer.',
+    'Format the answer like a Google AI web-search overview: begin with a short direct synthesis, then compact titled sections, source-backed bullets, and a comparison table when multiple saved rows are relevant.',
+    'Use Markdown headings, bullet lists, and Markdown tables when they improve readability.',
+    'For mathematical expressions, use LaTeX delimiters such as \\( ... \\) for inline math and $$ ... $$ for display math.',
+    'The answer must be at least about 900 Japanese characters or about 30 short lines whenever at least one relevant saved row exists.',
+    'Include more than a summary: cover what was found, why it matches, source kind, language/file, proof state, important quoted content, and limits of what the saved row can support.',
+    'Use inline citations by wrapping the exact saved row title in double square brackets, for example [[A Constructive Proof of Negative Integer Multiplication Without Axioms]].',
+    'Every factual claim about a saved problem/theorem must cite the title citation for its saved row.',
+    'Do not put source ids such as [P1], [P2], or other internal source labels in the answer text.',
+    'If no saved row supports an answer, say that the saved database does not contain enough information.',
+    'Do not include follow-up suggestions, next questions, related searches, or suggested replies.',
+    'Return the answer text only. Do not wrap the answer in JSON or code fences.',
+    '',
+    `Saved rows: ${JSON.stringify(context)}`
+  ].join('\n');
+
+  return {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: prompt }]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 4096
+    }
+  };
+}
+
 function parseGeminiText(payload) {
   const candidates = Array.isArray(payload && payload.candidates) ? payload.candidates : [];
   for (const candidate of candidates) {
@@ -481,6 +541,50 @@ function parseGeminiText(payload) {
     if (text) return text;
   }
   return '';
+}
+
+function parseGeminiStreamText(payload) {
+  return parseGeminiText(payload);
+}
+
+async function readGeminiSseStream(response, onText) {
+  if (!response.body) {
+    const payload = await response.json().catch(() => null);
+    const text = parseGeminiText(payload);
+    if (text) await onText(text);
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data:')) continue;
+      const data = trimmed.slice(5).trim();
+      if (!data || data === '[DONE]') continue;
+      const payload = JSON.parse(data);
+      const text = parseGeminiStreamText(payload);
+      if (text) await onText(text);
+    }
+  }
+
+  buffer += decoder.decode();
+  const trailing = buffer.trim();
+  if (trailing.startsWith('data:')) {
+    const data = trailing.slice(5).trim();
+    if (data && data !== '[DONE]') {
+      const payload = JSON.parse(data);
+      const text = parseGeminiStreamText(payload);
+      if (text) await onText(text);
+    }
+  }
 }
 
 function readLooseJsonStringField(raw, fieldName) {
@@ -693,6 +797,40 @@ async function askVertexGemini({ query, targetKind, citations, history, systemMo
   return { answer: text, suggestions: [], usedCitationIds: [] };
 }
 
+async function streamVertexGemini({ query, targetKind, citations, history, systemMode, config, onText }) {
+  if (!config.project) {
+    throw new Error('Vertex AI project is not configured. Set GOOGLE_CLOUD_PROJECT in Vercel.');
+  }
+  const accessToken = await getVertexAccessToken(config);
+  const project = encodeURIComponent(config.project);
+  const location = encodeURIComponent(config.location);
+  const model = encodeURIComponent(config.model);
+  const url = `https://${config.location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:streamGenerateContent?alt=sse`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(buildGeminiAnswerRequestBody({ query, targetKind, citations, history, systemMode }))
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message = payload && payload.error && payload.error.message
+      ? payload.error.message
+      : `Vertex AI Gemini stream failed: ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.code = payload && payload.error && payload.error.code
+      ? payload.error.code
+      : response.status;
+    throw error;
+  }
+
+  await readGeminiSseStream(response, onText);
+}
+
 async function askGeminiProxy({ query, targetKind, citations, history, systemMode, config }) {
   const response = await fetch(config.url, {
     method: 'POST',
@@ -776,6 +914,36 @@ async function askGemini({ query, targetKind, citations, history, systemMode }) 
   return { answer: text, suggestions: [], usedCitationIds: [] };
 }
 
+async function streamGemini({ query, targetKind, citations, history, systemMode, onText }) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new Error('Gemini API is not configured. Set GEMINI_API_KEY in Vercel.');
+  }
+
+  const model = getGeminiModel();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(buildGeminiAnswerRequestBody({ query, targetKind, citations, history, systemMode }))
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message = payload && payload.error && payload.error.message
+      ? payload.error.message
+      : `Gemini API stream failed: ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.code = payload && payload.error && payload.error.code
+      ? payload.error.code
+      : response.status;
+    throw error;
+  }
+
+  await readGeminiSseStream(response, onText);
+}
+
 async function askConfiguredGemini({ query, targetKind, citations, history, systemMode }) {
   const proxyConfig = getGeminiProxyConfig();
   if (proxyConfig.enabled) {
@@ -796,6 +964,69 @@ async function askConfiguredGemini({ query, targetKind, citations, history, syst
   return {
     generated: await askGemini({ query, targetKind, citations, history, systemMode }),
     model: getGeminiModel()
+  };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getAnswerDeltaSize(text, cursor) {
+  const remaining = Math.max(0, String(text || '').length - cursor);
+  if (remaining <= 54) return remaining;
+  let size = cursor < 140 ? 16 : 34;
+  while (
+    cursor + size < text.length
+    && size < 54
+    && !/[、。.!?\n]/.test(text.charAt(cursor + size - 1))
+  ) {
+    size += 1;
+  }
+  return Math.max(12, Math.min(size, 54));
+}
+
+async function emitTextInReadableChunks(text, onText) {
+  const source = String(text || '');
+  let cursor = 0;
+  while (cursor < source.length) {
+    const size = getAnswerDeltaSize(source, cursor);
+    const delta = source.slice(cursor, cursor + size);
+    cursor += size;
+    if (delta) await onText(delta);
+    if (cursor < source.length) await sleep(18);
+  }
+}
+
+async function streamConfiguredGemini({ query, targetKind, citations, history, systemMode, onText }) {
+  const proxyConfig = getGeminiProxyConfig();
+  if (proxyConfig.enabled) {
+    const generated = normalizeGeneratedResult(
+      await askGeminiProxy({ query, targetKind, citations, history, systemMode, config: proxyConfig })
+    );
+    const answer = safeString(generated.answer);
+    if (answer) await emitTextInReadableChunks(answer, onText);
+    return {
+      generated,
+      model: `vertex-proxy:${proxyConfig.model}`,
+      realtime: false
+    };
+  }
+
+  const vertexConfig = getVertexConfig();
+  if (vertexConfig.enabled) {
+    await streamVertexGemini({ query, targetKind, citations, history, systemMode, config: vertexConfig, onText });
+    return {
+      generated: { answer: '', suggestions: [], usedCitationIds: [] },
+      model: `vertex:${vertexConfig.location}/${vertexConfig.model}`,
+      realtime: true
+    };
+  }
+
+  await streamGemini({ query, targetKind, citations, history, systemMode, onText });
+  return {
+    generated: { answer: '', suggestions: [], usedCitationIds: [] },
+    model: getGeminiModel(),
+    realtime: true
   };
 }
 
@@ -1056,6 +1287,129 @@ function normalizeGeneratedResult(generated) {
   return result;
 }
 
+function writeStreamJson(res, event) {
+  res.write(`${JSON.stringify(event)}\n`);
+}
+
+function wantsNdjsonStream(req, body) {
+  if (!body || body.stream !== true) return false;
+  const accept = String(req.headers.accept || '').toLowerCase();
+  return accept.includes('application/x-ndjson') || accept.includes('*/*');
+}
+
+async function handleSuggestionStream(req, res, body) {
+  const query = safeString(body.query);
+  const mode = safeString(body.mode, 'search');
+  const systemMode = normalizeSystemMode(body.systemMode);
+  const limit = clamp(Number(body.limit) || 6, 1, 10);
+  const offset = clamp(Number(body.offset) || 0, 0, 5000);
+  const history = normalizeHistory(body.history);
+  const includeAnswer = body.includeAnswer !== false;
+  const targetKind = 'search';
+  const pageSize = Math.max(limit, MAX_CONTEXT_DOCS);
+  const searchResult = await searchSavedProblems({ query, limit: pageSize, offset });
+  const context = searchResult.citations.slice(0, MAX_CONTEXT_DOCS);
+
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+  writeStreamJson(res, {
+    type: 'meta',
+    mode,
+    systemMode,
+    targetKind,
+    query,
+    offset,
+    citations: context.map((item) => ({ ...item, used: false })),
+    suggestions: [],
+    hasMore: offset + searchResult.citations.length < searchResult.total
+  });
+
+  if (!includeAnswer) {
+    writeStreamJson(res, {
+      type: 'done',
+      answer: '',
+      model: '',
+      geminiUsed: false,
+      realtime: false,
+      usedCitationIds: []
+    });
+    res.end();
+    return;
+  }
+
+  let accumulated = '';
+  let generated = { answer: '', suggestions: [], usedCitationIds: [] };
+  let model = getGeminiModel();
+  let geminiUsed = false;
+  let realtime = false;
+
+  try {
+    const result = await streamConfiguredGemini({
+      query,
+      targetKind,
+      citations: context,
+      history,
+      systemMode,
+      onText: async (chunk) => {
+        const delta = String(chunk || '');
+        if (!delta) return;
+        accumulated += delta;
+        writeStreamJson(res, { type: 'answer_delta', delta });
+      }
+    });
+    generated = normalizeGeneratedResult(result.generated);
+    model = result.model;
+    geminiUsed = true;
+    realtime = !!result.realtime;
+  } catch (geminiError) {
+    generated = buildChatFallbackAnswer(query, context, geminiError);
+    model = '';
+    const fallback = safeString(generated.answer);
+    if (fallback) {
+      await emitTextInReadableChunks(fallback, async (delta) => {
+        accumulated += delta;
+        writeStreamJson(res, { type: 'answer_delta', delta });
+      });
+    }
+  }
+
+  const usedCitationIds = Array.isArray(generated.usedCitationIds)
+    ? generated.usedCitationIds.map((item) => safeString(item)).filter(Boolean)
+    : [];
+  const usedSet = new Set(usedCitationIds);
+  const citations = context.map((item) => ({
+    ...item,
+    used: usedSet.has(item.id)
+  }));
+  const generatedAnswer = safeString(generated.answer);
+  const baseAnswer = generatedAnswer || accumulated;
+  const answer = ensureDetailedAnswer(
+    replaceSourceIdMarkersWithTitleCitations(baseAnswer, citations),
+    citations
+  );
+  if (answer && answer !== accumulated) {
+    writeStreamJson(res, {
+      type: 'answer_replace',
+      answer
+    });
+  }
+  writeStreamJson(res, {
+    type: 'done',
+    answer,
+    model,
+    geminiUsed,
+    realtime,
+    usedCitationIds,
+    citations,
+    suggestions: []
+  });
+  res.end();
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -1064,6 +1418,11 @@ export default async function handler(req, res) {
 
   try {
     const body = req.body || {};
+    if (wantsNdjsonStream(req, body)) {
+      await handleSuggestionStream(req, res, body);
+      return;
+    }
+
     const query = safeString(body.query);
     const mode = safeString(body.mode, 'search');
     const systemMode = normalizeSystemMode(body.systemMode);
