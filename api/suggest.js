@@ -210,6 +210,10 @@ function formatTitleCitation(item) {
   return `[[${getCitationTitle(item).replace(/\]\]/g, '] ]')}]]`;
 }
 
+function markdownCell(value) {
+  return safeString(value, '-').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+}
+
 function replaceSourceIdMarkersWithTitleCitations(answer, citations) {
   const rows = Array.isArray(citations) ? citations : [];
   if (!rows.length) return safeString(answer);
@@ -434,8 +438,9 @@ function buildGeminiPrompt({ query, targetKind, citations, history, systemMode }
     'Use only the provided saved rows as sources.',
     'Answer in Japanese unless the user query is clearly in another language.',
     'When addressing the person asking, use a natural second person for that language, such as あなた in Japanese or you in English. Do not refer to them as "the user" in the answer.',
-    'Write the answer as natural ChatGPT-style prose, but make it substantive rather than terse.',
-    'Use Markdown-style headings and bullet lists when they improve readability.',
+    'Format the answer like a Google AI web-search overview: begin with a short direct synthesis, then use compact titled sections, source-backed bullets, and a small comparison table when multiple saved rows are relevant.',
+    'Use Markdown headings, bullet lists, and Markdown tables when they improve readability.',
+    'For mathematical expressions, use LaTeX delimiters such as \\( ... \\) for inline math and $$ ... $$ for display math.',
     'The answer must be at least about 900 Japanese characters or about 30 short lines whenever at least one relevant saved row exists.',
     'Include more than a summary: cover what was found, why it matches, source kind, language/file, proof state, important quoted content, and limits of what the saved row can support.',
     'Use inline citations by wrapping the exact saved row title in double square brackets, for example [[A Constructive Proof of Negative Integer Multiplication Without Axioms]].',
@@ -879,7 +884,17 @@ function buildChatFallbackAnswer(query, citations, geminiError) {
     };
   }
 
-  const lines = citations.slice(0, 4).map((item) => {
+  const topRows = citations.slice(0, 4);
+  const table = [
+    '| Title | Kind | File / language | State | Source |',
+    '|---|---|---|---|---|',
+    ...topRows.map((item) => {
+      const fileLanguage = [item.fileName, item.language].filter(Boolean).join(' / ') || '-';
+      const stateFormat = [item.proofState, item.normalizedFormat].filter(Boolean).join(' / ') || '-';
+      return `| ${markdownCell(getCitationTitle(item))} | ${markdownCell(item.kind || 'saved item')} | ${markdownCell(fileLanguage)} | ${markdownCell(stateFormat)} | ${formatTitleCitation(item)} |`;
+    })
+  ].join('\n');
+  const lines = topRows.map((item) => {
     const kind = item.kind && item.kind !== 'unknown' ? `${item.kind}` : 'saved item';
     const file = item.fileName ? `（${item.fileName}）` : '';
     const citation = formatTitleCitation(item);
@@ -887,7 +902,18 @@ function buildChatFallbackAnswer(query, citations, geminiError) {
   });
 
   return {
-    answer: `${reason}、保存済みデータをもとに回答します。\n\n${lines.join('\n\n')}`,
+    answer: [
+      `${reason}、保存済みデータをもとに AI Overview 形式で整理します。`,
+      '',
+      '## 概要',
+      `あなたの検索に近い保存済み項目として、${topRows.length}件を優先的に確認しました。最初に一致した項目は ${formatTitleCitation(topRows[0])} です。`,
+      '',
+      '## 比較',
+      table,
+      '',
+      '## 主な根拠',
+      lines.join('\n\n')
+    ].join('\n'),
     suggestions: [],
     usedCitationIds: citations.map((item) => item.id)
   };

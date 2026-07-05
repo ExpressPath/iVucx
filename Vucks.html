@@ -2581,12 +2581,24 @@
     }
 
     .chat-assistant-head{
+      display:flex;
+      align-items:center;
+      gap:8px;
       font-size:12px;
       letter-spacing:.07em;
       text-transform:uppercase;
       color:var(--search-chat-muted);
-      margin-bottom:8px;
+      margin-bottom:10px;
       font-weight:700;
+    }
+
+    .chat-assistant-head::before{
+      content:'';
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:linear-gradient(135deg,#4285f4,#8b5cf6);
+      box-shadow:0 0 16px rgba(66,133,244,.42);
     }
 
     body.mode-q .chat-assistant-head{
@@ -2599,6 +2611,23 @@
       font-size:16px;
       line-height:1.72;
       overflow-wrap:anywhere;
+    }
+
+    .chat-answer.is-streaming::after{
+      content:'';
+      display:inline-block;
+      width:7px;
+      height:1.1em;
+      margin-left:3px;
+      border-radius:999px;
+      background:currentColor;
+      vertical-align:-.16em;
+      animation:answer-caret .9s steps(1,end) infinite;
+    }
+
+    @keyframes answer-caret{
+      0%,48%{ opacity:.78; }
+      49%,100%{ opacity:0; }
     }
 
     .chat-answer p{
@@ -2633,6 +2662,136 @@
     .chat-answer li{
       margin:5px 0;
       padding-left:2px;
+    }
+
+    .chat-answer strong{
+      font-weight:800;
+    }
+
+    .chat-answer code{
+      padding:1px 5px;
+      border-radius:6px;
+      background:rgba(15,23,42,0.07);
+      color:inherit;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:.92em;
+    }
+
+    body.mode-q .chat-answer code{
+      background:rgba(255,255,255,0.1);
+    }
+
+    .chat-answer-code{
+      margin:10px 0 14px;
+      padding:14px;
+      border:1px solid var(--search-chat-citation-border);
+      border-radius:12px;
+      background:rgba(15,23,42,0.045);
+      color:inherit;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:13px;
+      line-height:1.6;
+      overflow:auto;
+      white-space:pre;
+    }
+
+    body.mode-q .chat-answer-code{
+      background:rgba(255,255,255,0.055);
+      border-color:rgba(255,255,255,0.12);
+    }
+
+    .chat-answer-table-wrap{
+      max-width:100%;
+      margin:12px 0 16px;
+      overflow:auto;
+      border:1px solid var(--search-chat-citation-border);
+      border-radius:12px;
+      background:var(--search-chat-citation-bg);
+    }
+
+    .chat-answer-table{
+      width:100%;
+      border-collapse:collapse;
+      min-width:520px;
+      font-size:14px;
+      line-height:1.55;
+    }
+
+    .chat-answer-table th,
+    .chat-answer-table td{
+      padding:10px 12px;
+      border-bottom:1px solid var(--search-chat-citation-border);
+      border-right:1px solid var(--search-chat-citation-border);
+      text-align:left;
+      vertical-align:top;
+      word-break:normal;
+      overflow-wrap:normal;
+    }
+
+    .chat-answer-table th:first-child,
+    .chat-answer-table td:first-child{
+      min-width:260px;
+      overflow-wrap:anywhere;
+    }
+
+    .chat-answer-table th:nth-child(2),
+    .chat-answer-table td:nth-child(2){
+      min-width:76px;
+      white-space:nowrap;
+    }
+
+    .chat-answer-table th:nth-child(3),
+    .chat-answer-table td:nth-child(3),
+    .chat-answer-table th:nth-child(4),
+    .chat-answer-table td:nth-child(4){
+      min-width:128px;
+    }
+
+    .chat-answer-table th:last-child,
+    .chat-answer-table td:last-child{
+      min-width:280px;
+      overflow-wrap:anywhere;
+    }
+
+    .chat-answer-table th:last-child,
+    .chat-answer-table td:last-child{
+      border-right:0;
+    }
+
+    .chat-answer-table tbody tr:last-child td{
+      border-bottom:0;
+    }
+
+    .chat-answer-table th{
+      background:rgba(66,133,244,0.08);
+      font-weight:800;
+      color:inherit;
+    }
+
+    body.mode-q .chat-answer-table-wrap,
+    body.mode-q .chat-answer-table th,
+    body.mode-q .chat-answer-table td{
+      border-color:rgba(255,255,255,0.12);
+    }
+
+    body.mode-q .chat-answer-table th{
+      background:rgba(87,132,209,0.16);
+    }
+
+    .chat-math-block{
+      margin:12px 0 16px;
+      padding:12px 14px;
+      border:1px solid var(--search-chat-citation-border);
+      border-radius:12px;
+      background:rgba(66,133,244,0.045);
+      overflow:auto;
+      font-size:15px;
+      line-height:1.6;
+    }
+
+    body.mode-q .chat-math-block{
+      border-color:rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.045);
     }
 
     .citation-inline-link{
@@ -3952,6 +4111,18 @@
   </div>
 </div>
 
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(', '\\)'], ['$', '$']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    },
+    options: {
+      skipHtmlTags: ['script','noscript','style','textarea','pre','code']
+    }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="theorem-draft-store.js"></script>
 <script>
@@ -5516,8 +5687,13 @@
   let hasSuggestionResults = false;
   let suggestionTurnSeq = 0;
   let suggestionTurns = [];
+  const answerStreamTimers = new Map();
+  let mathTypesetTimer = null;
   let activeCitationPreview = null;
   const SUGGESTION_COUNT = 10;
+  const ANSWER_STREAM_INTERVAL_MS = 26;
+  const ANSWER_STREAM_MIN_CHARS = 12;
+  const ANSWER_STREAM_MAX_CHARS = 46;
   const LOGIN_CHECK_TIMEOUT_MS = 3500;
   const POPUP_LOADING_TEXT = 'Checking account state...';
   const AUTH_VIEW_LOGIN = 'login';
@@ -6617,6 +6793,7 @@
       suggestionAbortController.abort();
       suggestionAbortController = null;
     }
+    stopAllAnswerStreams();
     if(sendButton){
       sendButton.disabled = false;
     }
@@ -6630,6 +6807,24 @@
     closeCitationPreview();
     closeProblemPreviewPage();
     setSuggestionPaneOpen(false);
+  }
+
+  function stopAnswerStream(turn){
+    if(!turn) return;
+    const timer = answerStreamTimers.get(turn.id);
+    if(timer){
+      window.clearTimeout(timer);
+      answerStreamTimers.delete(turn.id);
+    }
+    turn.streamingAnswer = false;
+  }
+
+  function stopAllAnswerStreams(){
+    answerStreamTimers.forEach(timer=>window.clearTimeout(timer));
+    answerStreamTimers.clear();
+    suggestionTurns.forEach(turn=>{
+      if(turn) turn.streamingAnswer = false;
+    });
   }
 
   function scrollSuggestionPanelToBottom(){
@@ -6849,13 +7044,36 @@
 
   function appendInlineAnswerContent(targetEl, text, turn){
     if(!targetEl) return;
-    const value = String(text || '');
-    const pattern = /\[\[([^\]]+)\]\]|[\[［](P\d+)[\]］]/gi;
+    let value = String(text || '');
+    if(turn && turn.streamingAnswer){
+      const openTitle = value.lastIndexOf('[[');
+      const closeTitle = value.lastIndexOf(']]');
+      if(openTitle > closeTitle){
+        value = value.slice(0, openTitle);
+      }
+    }
+    const pattern = /\[\[([^\]]+)\]\]|[\[［](P\d+)[\]］]|(`[^`]+`)|(\*\*[^*]+\*\*)/gi;
     let lastIndex = 0;
     let match;
     while((match = pattern.exec(value))){
       if(match.index > lastIndex){
         targetEl.appendChild(document.createTextNode(value.slice(lastIndex, match.index)));
+      }
+      const inlineCode = match[3] || '';
+      const boldText = match[4] || '';
+      if(inlineCode){
+        const code = document.createElement('code');
+        code.textContent = inlineCode.slice(1, -1);
+        targetEl.appendChild(code);
+        lastIndex = pattern.lastIndex;
+        continue;
+      }
+      if(boldText){
+        const strong = document.createElement('strong');
+        appendInlineAnswerContent(strong, boldText.slice(2, -2), turn);
+        targetEl.appendChild(strong);
+        lastIndex = pattern.lastIndex;
+        continue;
       }
       const rawTitle = match[1] || '';
       const rawId = match[2] || '';
@@ -6880,6 +7098,84 @@
     }
   }
 
+  function isMarkdownTableRow(line){
+    const trimmed = String(line || '').trim();
+    return trimmed.includes('|') && trimmed.split('|').filter(Boolean).length >= 2;
+  }
+
+  function isMarkdownTableSeparator(line){
+    return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(String(line || ''));
+  }
+
+  function isMarkdownTableStart(lines, index){
+    return index + 1 < lines.length
+      && isMarkdownTableRow(lines[index])
+      && isMarkdownTableSeparator(lines[index + 1]);
+  }
+
+  function parseMarkdownTableCells(line){
+    return String(line || '')
+      .trim()
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map(cell=>cell.trim());
+  }
+
+  function appendTableCell(rowEl, tagName, text, turn){
+    const cell = document.createElement(tagName);
+    appendInlineAnswerContent(cell, text, turn);
+    rowEl.appendChild(cell);
+  }
+
+  function renderMarkdownTable(answerEl, lines, startIndex, turn){
+    const headers = parseMarkdownTableCells(lines[startIndex]);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'chat-answer-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'chat-answer-table';
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    headers.forEach(header=>appendTableCell(headRow, 'th', header, turn));
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    let index = startIndex + 2;
+    while(index < lines.length && isMarkdownTableRow(lines[index]) && !isMarkdownTableSeparator(lines[index])){
+      const cells = parseMarkdownTableCells(lines[index]);
+      const row = document.createElement('tr');
+      for(let cellIndex = 0; cellIndex < headers.length; cellIndex += 1){
+        appendTableCell(row, 'td', cells[cellIndex] || '', turn);
+      }
+      tbody.appendChild(row);
+      index += 1;
+    }
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+    answerEl.appendChild(wrapper);
+    return index;
+  }
+
+  function isSpecialAnswerLine(lines, index){
+    const trimmed = String(lines[index] || '').trim();
+    return !trimmed
+      || trimmed.startsWith('```')
+      || trimmed.startsWith('$$')
+      || /^(#{1,4})\s+/.test(trimmed)
+      || /^[-*•]\s+/.test(trimmed)
+      || /^\d+[.)]\s+/.test(trimmed)
+      || isMarkdownTableStart(lines, index);
+  }
+
+  function scheduleMathTypeset(rootEl, streaming){
+    if(streaming || !rootEl || !window.MathJax || typeof window.MathJax.typesetPromise !== 'function') return;
+    if(mathTypesetTimer) window.clearTimeout(mathTypesetTimer);
+    mathTypesetTimer = window.setTimeout(()=>{
+      window.MathJax.typesetPromise([rootEl]).catch(()=>{});
+    }, 80);
+  }
+
   function flushAnswerList(answerEl, listState){
     if(!answerEl || !listState || !listState.el) return;
     answerEl.appendChild(listState.el);
@@ -6893,12 +7189,56 @@
     const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
     const listState = { type:'', el:null };
 
-    lines.forEach(rawLine=>{
-      const line = String(rawLine || '');
+    let lineIndex = 0;
+    while(lineIndex < lines.length){
+      const line = String(lines[lineIndex] || '');
       const trimmed = line.trim();
       if(!trimmed){
         flushAnswerList(answerEl, listState);
-        return;
+        lineIndex += 1;
+        continue;
+      }
+
+      if(trimmed.startsWith('```')){
+        flushAnswerList(answerEl, listState);
+        const codeLines = [];
+        lineIndex += 1;
+        while(lineIndex < lines.length && !String(lines[lineIndex] || '').trim().startsWith('```')){
+          codeLines.push(lines[lineIndex]);
+          lineIndex += 1;
+        }
+        if(lineIndex < lines.length) lineIndex += 1;
+        const code = document.createElement('pre');
+        code.className = 'chat-answer-code';
+        code.textContent = codeLines.join('\n');
+        answerEl.appendChild(code);
+        continue;
+      }
+
+      if(trimmed.startsWith('$$')){
+        flushAnswerList(answerEl, listState);
+        const mathLines = [line];
+        const sameLineClosed = trimmed.length > 2 && trimmed.endsWith('$$');
+        lineIndex += 1;
+        while(!sameLineClosed && lineIndex < lines.length){
+          mathLines.push(lines[lineIndex]);
+          if(String(lines[lineIndex] || '').trim().endsWith('$$')){
+            lineIndex += 1;
+            break;
+          }
+          lineIndex += 1;
+        }
+        const math = document.createElement('div');
+        math.className = 'chat-math-block';
+        math.textContent = mathLines.join('\n');
+        answerEl.appendChild(math);
+        continue;
+      }
+
+      if(isMarkdownTableStart(lines, lineIndex)){
+        flushAnswerList(answerEl, listState);
+        lineIndex = renderMarkdownTable(answerEl, lines, lineIndex, turn);
+        continue;
       }
 
       const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
@@ -6908,7 +7248,8 @@
         heading.className = 'chat-answer-heading';
         appendInlineAnswerContent(heading, headingMatch[2], turn);
         answerEl.appendChild(heading);
-        return;
+        lineIndex += 1;
+        continue;
       }
 
       const bulletMatch = trimmed.match(/^[-*•]\s+(.+)$/);
@@ -6923,19 +7264,27 @@
         const li = document.createElement('li');
         appendInlineAnswerContent(li, bulletMatch ? bulletMatch[1] : orderedMatch[1], turn);
         listState.el.appendChild(li);
-        return;
+        lineIndex += 1;
+        continue;
       }
 
       flushAnswerList(answerEl, listState);
+      const paragraphLines = [trimmed];
+      lineIndex += 1;
+      while(lineIndex < lines.length && !isSpecialAnswerLine(lines, lineIndex)){
+        paragraphLines.push(String(lines[lineIndex] || '').trim());
+        lineIndex += 1;
+      }
       const paragraph = document.createElement('p');
-      appendInlineAnswerContent(paragraph, trimmed, turn);
+      appendInlineAnswerContent(paragraph, paragraphLines.join(' '), turn);
       answerEl.appendChild(paragraph);
-    });
+    }
 
     flushAnswerList(answerEl, listState);
     if(!answerEl.childNodes.length){
       answerEl.textContent = '';
     }
+    scheduleMathTypeset(answerEl, turn && turn.streamingAnswer);
   }
 
   function renderCitationPreview(citation){
@@ -7231,6 +7580,52 @@
     problemPreviewPage.setAttribute('aria-hidden', 'true');
   }
 
+  function getAnswerStreamChunkSize(text, cursor){
+    const remaining = Math.max(0, String(text || '').length - cursor);
+    if(remaining <= ANSWER_STREAM_MAX_CHARS) return remaining;
+    let size = cursor < 120 ? ANSWER_STREAM_MIN_CHARS : 24;
+    while(
+      cursor + size < text.length
+      && size < ANSWER_STREAM_MAX_CHARS
+      && !/[、。.!?\n]/.test(text.charAt(cursor + size - 1))
+    ){
+      size += 1;
+    }
+    return Math.max(ANSWER_STREAM_MIN_CHARS, Math.min(size, ANSWER_STREAM_MAX_CHARS));
+  }
+
+  function startAnswerStream(turn, fullAnswer){
+    if(!turn) return;
+    stopAnswerStream(turn);
+    const text = String(fullAnswer || '').trim();
+    turn.fullAnswer = text;
+    turn.answer = '';
+    turn.streamingAnswer = !!text;
+    if(!text){
+      renderSuggestionThread();
+      return;
+    }
+
+    let cursor = 0;
+    const step = ()=>{
+      if(!turn.streamingAnswer) return;
+      cursor = Math.min(text.length, cursor + getAnswerStreamChunkSize(text, cursor));
+      turn.answer = text.slice(0, cursor);
+      if(cursor >= text.length){
+        turn.answer = text;
+        turn.streamingAnswer = false;
+        answerStreamTimers.delete(turn.id);
+        renderSuggestionThread();
+        return;
+      }
+      renderSuggestionThread();
+      const timer = window.setTimeout(step, ANSWER_STREAM_INTERVAL_MS);
+      answerStreamTimers.set(turn.id, timer);
+    };
+
+    step();
+  }
+
   function renderSuggestionThread(){
     if(!suggestionBody) return;
 
@@ -7262,23 +7657,28 @@
 
       const head = document.createElement('div');
       head.className = 'chat-assistant-head';
-      head.textContent = 'Search';
+      head.textContent = 'AI Overview';
       assistantCard.appendChild(head);
 
       if(turn.loading && turn.suggestions.length === 0){
         const loading = document.createElement('div');
         loading.className = 'suggestion-loading';
-        loading.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span><span>Collecting suggestions...</span>';
+        loading.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span><span>Building AI overview...</span>';
         assistantCard.appendChild(loading);
       }else{
         if(turn.answer){
           const answer = document.createElement('div');
-          answer.className = 'chat-answer';
+          answer.className = 'chat-answer' + (turn.streamingAnswer ? ' is-streaming' : '');
           renderAnswerWithCitationLinks(answer, turn.answer, turn);
           assistantCard.appendChild(answer);
         }
 
         if(Array.isArray(turn.citations) && turn.citations.length > 0){
+          const sourceTitle = document.createElement('div');
+          sourceTitle.className = 'related-search-title';
+          sourceTitle.textContent = 'Sources';
+          assistantCard.appendChild(sourceTitle);
+
           const citationList = document.createElement('div');
           citationList.className = 'citation-list';
 
@@ -7367,7 +7767,7 @@
         Array.isArray(turn.suggestions) ? turn.suggestions.length : 0,
         Array.isArray(turn.citations) ? turn.citations.length : 0
       );
-      const canShowMore = turn.hasMore && renderedResultCount > 0 && !turn.error;
+      const canShowMore = turn.hasMore && renderedResultCount > 0 && !turn.error && !turn.streamingAnswer;
       if(canShowMore){
         const moreWrap = document.createElement('div');
         moreWrap.className = 'show-more-wrap';
@@ -7397,6 +7797,9 @@
     if(suggestionAbortController){
       suggestionAbortController.abort();
       suggestionAbortController = null;
+    }
+    if(!append){
+      stopAnswerStream(turn);
     }
 
     const controller = new AbortController();
@@ -7457,7 +7860,10 @@
         turn.citations = turn.citations.concat(normalizedCitations);
       }else{
         turn.suggestions = normalized;
-        turn.answer = String(data && data.answer || '').trim();
+        turn.pendingAnswer = String(data && data.answer || '').trim();
+        turn.answer = '';
+        turn.fullAnswer = turn.pendingAnswer;
+        turn.streamingAnswer = false;
         turn.citations = normalizedCitations;
         turn.targetKind = String(data && data.targetKind || 'search').trim();
         turn.systemMode = String(data && data.systemMode || getSearchSystemMode()).trim();
@@ -7479,7 +7885,13 @@
       turn.loading = false;
       turn.loadingMore = false;
       if(sendButton) sendButton.disabled = false;
-      renderSuggestionThread();
+      if(!append && turn.pendingAnswer){
+        const nextAnswer = turn.pendingAnswer;
+        turn.pendingAnswer = '';
+        startAnswerStream(turn, nextAnswer);
+      }else{
+        renderSuggestionThread();
+      }
     }
   }
 
@@ -7507,6 +7919,9 @@
       systemMode:getSearchSystemMode(),
       loading:true,
       loadingMore:false,
+      streamingAnswer:false,
+      fullAnswer:'',
+      pendingAnswer:'',
       hasMore:true,
       error:''
     };
@@ -7539,7 +7954,7 @@
       if(!Number.isFinite(turnId)) return;
 
       const turn = suggestionTurns.find(entry=>entry.id === turnId);
-      if(!turn || turn.loading || turn.loadingMore || !turn.hasMore) return;
+      if(!turn || turn.loading || turn.loadingMore || turn.streamingAnswer || !turn.hasMore) return;
 
       fetchSuggestionBatch(turn, true);
     });
