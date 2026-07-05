@@ -2674,6 +2674,227 @@
       opacity:.72;
     }
 
+    .keep-library-button{
+      position:fixed;
+      left:18px;
+      top:22px;
+      z-index:45;
+      width:44px;
+      height:44px;
+      display:grid;
+      place-items:center;
+      border:1px solid var(--search-chat-card-border);
+      border-radius:15px;
+      background:color-mix(in srgb, var(--bg-white) 86%, transparent);
+      color:var(--search-chat-card-text);
+      box-shadow:0 18px 46px rgba(15,23,42,0.12);
+      backdrop-filter:blur(18px) saturate(1.25);
+      cursor:pointer;
+      transition:transform .2s ease,border-color .2s ease,background-color .2s ease,opacity .2s ease;
+    }
+
+    .keep-library-button:hover,
+    .keep-library-button:focus-visible{
+      border-color:var(--search-chat-item-hover-border);
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+      transform:translateY(-1px);
+    }
+
+    .keep-library-button svg{
+      width:19px;
+      height:19px;
+      fill:none;
+      stroke:currentColor;
+      stroke-width:2;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+
+    body.mode-q .keep-library-button{
+      border-color:rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.05);
+      color:#edf2ff;
+      box-shadow:0 18px 50px rgba(0,0,0,0.32);
+    }
+
+    .keep-library-sidebar{
+      position:fixed;
+      left:10px;
+      top:78px;
+      bottom:calc(92px + env(safe-area-inset-bottom));
+      z-index:46;
+      width:min(340px, calc(100vw - 22px));
+      border:1px solid var(--search-chat-card-border);
+      border-radius:18px;
+      background:color-mix(in srgb, var(--bg-white) 88%, transparent);
+      color:var(--search-chat-card-text);
+      box-shadow:0 22px 60px rgba(15,23,42,0.16);
+      backdrop-filter:blur(20px) saturate(1.25);
+      transform:translateX(-108%);
+      opacity:0;
+      pointer-events:none;
+      transition:transform .26s cubic-bezier(.22,1,.36,1),opacity .22s ease;
+      overflow:hidden;
+    }
+
+    body.keep-library-open .keep-library-sidebar{
+      transform:translateX(0);
+      opacity:1;
+      pointer-events:auto;
+    }
+
+    body.mode-q .keep-library-sidebar{
+      border-color:rgba(255,255,255,0.13);
+      background:rgba(10,14,22,0.92);
+      color:#edf2ff;
+      box-shadow:0 22px 60px rgba(0,0,0,0.36);
+    }
+
+    .keep-library-inner{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      padding:14px;
+    }
+
+    .keep-library-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:10px;
+    }
+
+    .keep-library-title{
+      font-size:12px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      font-weight:820;
+      color:var(--search-chat-muted);
+    }
+
+    .keep-library-close{
+      width:30px;
+      height:30px;
+      border:1px solid var(--search-chat-item-border);
+      border-radius:10px;
+      background:var(--search-chat-item-bg);
+      color:var(--search-chat-citation-text);
+      font-size:18px;
+      line-height:1;
+      cursor:pointer;
+    }
+
+    .keep-library-status{
+      min-height:18px;
+      color:var(--search-chat-subtle);
+      font-size:12px;
+      line-height:1.4;
+      margin-bottom:10px;
+    }
+
+    .keep-library-status.is-error{
+      color:var(--search-chat-error);
+    }
+
+    .keep-library-list{
+      flex:1;
+      min-height:0;
+      overflow:auto;
+      scrollbar-width:none;
+      -ms-overflow-style:none;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .keep-library-list::-webkit-scrollbar{
+      display:none;
+    }
+
+    .keep-library-item{
+      width:100%;
+      border:1px solid var(--search-chat-item-border);
+      border-radius:12px;
+      padding:10px;
+      background:var(--search-chat-item-bg);
+      color:var(--search-chat-citation-text);
+      text-align:left;
+      cursor:pointer;
+      transition:border-color .18s ease,background-color .18s ease,transform .18s ease;
+    }
+
+    .keep-library-item:hover,
+    .keep-library-item:focus-visible{
+      border-color:var(--search-chat-item-hover-border);
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+      transform:translateY(-1px);
+    }
+
+    .keep-library-item.is-active{
+      border-color:rgba(66,133,244,0.55);
+      background:color-mix(in srgb, var(--search-chat-item-hover-bg) 82%, #4285f4 18%);
+    }
+
+    .keep-library-item-title{
+      font-size:13px;
+      line-height:1.35;
+      font-weight:780;
+      overflow-wrap:anywhere;
+    }
+
+    .keep-library-item-meta{
+      margin-top:5px;
+      color:var(--search-chat-subtle);
+      font-size:11px;
+      line-height:1.35;
+    }
+
+    .keep-context-menu{
+      position:fixed;
+      z-index:70;
+      min-width:154px;
+      padding:6px;
+      border:1px solid var(--search-chat-card-border);
+      border-radius:12px;
+      background:color-mix(in srgb, var(--bg-white) 94%, transparent);
+      color:var(--search-chat-card-text);
+      box-shadow:0 18px 48px rgba(15,23,42,0.18);
+      backdrop-filter:blur(18px) saturate(1.2);
+    }
+
+    body.mode-q .keep-context-menu{
+      border-color:rgba(255,255,255,0.14);
+      background:rgba(15,20,29,0.96);
+      color:#edf2ff;
+    }
+
+    .keep-context-action{
+      width:100%;
+      border:0;
+      border-radius:9px;
+      background:transparent;
+      color:inherit;
+      text-align:left;
+      font:inherit;
+      font-size:13px;
+      font-weight:680;
+      padding:9px 10px;
+      cursor:pointer;
+    }
+
+    .keep-context-action:hover,
+    .keep-context-action:focus-visible{
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+    }
+
+    .keep-context-action.danger{
+      color:#dc2626;
+    }
+
     .chat-turn-assistant{
       display:flex;
       justify-content:flex-start;
@@ -4354,6 +4575,28 @@
   </div>
 </div>
 
+<button class="keep-library-button" id="keepLibraryButton" type="button" aria-label="Open saved chats" title="Saved chats">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+  </svg>
+</button>
+
+<aside class="keep-library-sidebar" id="keepLibrarySidebar" aria-label="Saved chats" hidden>
+  <div class="keep-library-inner">
+    <div class="keep-library-head">
+      <div class="keep-library-title">Saved chats</div>
+      <button class="keep-library-close" id="keepLibraryClose" type="button" aria-label="Close saved chats">&times;</button>
+    </div>
+    <div class="keep-library-status" id="keepLibraryStatus">Loading saved chats...</div>
+    <div class="keep-library-list" id="keepLibraryList" aria-live="polite"></div>
+  </div>
+</aside>
+
+<div class="keep-context-menu" id="keepContextMenu" hidden>
+  <button class="keep-context-action" type="button" data-action="rename">Change name</button>
+  <button class="keep-context-action danger" type="button" data-action="delete">Delete</button>
+</div>
+
 <div class="upload-file-list" id="uploadFileList" aria-live="polite"></div>
 
 <div class="editor-close-menu" id="editorCloseMenu" hidden>
@@ -4618,6 +4861,12 @@
   const chatKeepButton = document.getElementById('chatKeepButton');
   const searchKeepStatus = document.getElementById('searchKeepStatus');
   const searchSidebarTurnList = document.getElementById('searchSidebarTurnList');
+  const keepLibraryButton = document.getElementById('keepLibraryButton');
+  const keepLibrarySidebar = document.getElementById('keepLibrarySidebar');
+  const keepLibraryClose = document.getElementById('keepLibraryClose');
+  const keepLibraryStatus = document.getElementById('keepLibraryStatus');
+  const keepLibraryList = document.getElementById('keepLibraryList');
+  const keepContextMenu = document.getElementById('keepContextMenu');
   const citationPreviewDrawer = document.getElementById('citationPreviewDrawer');
   const citationPreviewClose = document.getElementById('citationPreviewClose');
   const citationPreviewGo = document.getElementById('citationPreviewGo');
@@ -6146,6 +6395,10 @@
   let searchKeepBusy = false;
   let searchKeepSavedId = '';
   let searchKeepStatusTimer = 0;
+  let keepLibraryOpen = false;
+  let keepLibraryBusy = false;
+  let keepLibraryChats = [];
+  let keepContextTargetId = '';
   const answerStreamTimers = new Map();
   let mathTypesetTimer = null;
   let activeCitationPreview = null;
@@ -7622,8 +7875,298 @@
     return entry;
   }
 
+  function readLocalKeptChats(){
+    try{
+      const parsed = JSON.parse(localStorage.getItem(SEARCH_KEEP_LOCAL_KEY) || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    }catch(error){
+      return [];
+    }
+  }
+
+  function writeLocalKeptChats(chats){
+    const next = Array.isArray(chats) ? chats.slice(0, 40) : [];
+    localStorage.setItem(SEARCH_KEEP_LOCAL_KEY, JSON.stringify(next));
+  }
+
+  function removeLocalKeptChat(keepId){
+    const id = String(keepId || '');
+    const next = readLocalKeptChats().filter(item=>String(item && item.id || '') !== id);
+    writeLocalKeptChats(next);
+  }
+
+  function renameLocalKeptChat(keepId, title){
+    const id = String(keepId || '');
+    const nextTitle = truncateSidebarText(title || 'Search chat', 180);
+    const next = readLocalKeptChats().map(item=>{
+      if(String(item && item.id || '') !== id) return item;
+      return {
+        ...item,
+        title:nextTitle,
+        updatedAt:new Date().toISOString()
+      };
+    });
+    writeLocalKeptChats(next);
+  }
+
+  function normalizeKeepLibraryChat(raw){
+    const item = raw && typeof raw === 'object' ? raw : {};
+    const id = String(item.keepId || item.id || '').trim();
+    const conversation = item.conversation && typeof item.conversation === 'object'
+      ? item.conversation
+      : { turns:Array.isArray(item.turns) ? item.turns : [] };
+    const turns = Array.isArray(conversation.turns) ? conversation.turns : [];
+    return {
+      id,
+      keepId:id,
+      title:truncateSidebarText(item.title || (turns[0] && turns[0].query) || 'Search chat', 180),
+      systemMode:String(item.systemMode || conversation.systemMode || ''),
+      savedAt:String(item.savedAt || item.createdAt || item.updatedAt || ''),
+      updatedAt:String(item.updatedAt || item.savedAt || item.createdAt || ''),
+      turnCount:Number(item.turnCount) || turns.length,
+      citationCount:Number(item.citationCount) || turns.reduce((sum, turn)=>{
+        return sum + (Array.isArray(turn && turn.citations) ? turn.citations.length : 0);
+      }, 0),
+      storage:!!item.storage,
+      local:id.startsWith('local-') || !!item.local,
+      conversation
+    };
+  }
+
+  function getKeepLibraryChat(keepId){
+    const id = String(keepId || '');
+    return keepLibraryChats.find(item=>String(item.keepId || item.id) === id) || null;
+  }
+
+  function setKeepLibraryStatus(message, state = ''){
+    if(!keepLibraryStatus) return;
+    keepLibraryStatus.textContent = message || '';
+    keepLibraryStatus.classList.toggle('is-error', state === 'error');
+  }
+
+  function setKeepLibraryOpen(isOpen){
+    keepLibraryOpen = !!isOpen;
+    bodyEl.classList.toggle('keep-library-open', keepLibraryOpen);
+    if(keepLibrarySidebar) keepLibrarySidebar.hidden = !keepLibraryOpen;
+    if(!keepLibraryOpen) hideKeepContextMenu();
+  }
+
+  function renderKeepLibrary(){
+    if(!keepLibraryList) return;
+    keepLibraryList.innerHTML = '';
+    if(!keepLibraryChats.length){
+      const empty = document.createElement('button');
+      empty.type = 'button';
+      empty.disabled = true;
+      empty.className = 'keep-library-item';
+      const title = document.createElement('div');
+      title.className = 'keep-library-item-title';
+      title.textContent = keepLibraryBusy ? 'Loading...' : 'No saved chats';
+      empty.appendChild(title);
+      keepLibraryList.appendChild(empty);
+      return;
+    }
+
+    keepLibraryChats.forEach(chat=>{
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'keep-library-item';
+      if(String(chat.keepId) === String(searchKeepSavedId)) item.classList.add('is-active');
+      item.dataset.keepId = chat.keepId;
+      item.setAttribute('aria-label', 'Open saved chat: ' + chat.title);
+
+      const title = document.createElement('div');
+      title.className = 'keep-library-item-title';
+      title.textContent = chat.title;
+
+      const meta = document.createElement('div');
+      meta.className = 'keep-library-item-meta';
+      const parts = [];
+      parts.push(`${chat.turnCount || 0} turns`);
+      if(chat.citationCount) parts.push(`${chat.citationCount} sources`);
+      parts.push(chat.local ? 'local' : (chat.storage ? 'storage' : 'supabase'));
+      meta.textContent = parts.join(' / ');
+
+      item.append(title, meta);
+      keepLibraryList.appendChild(item);
+    });
+  }
+
+  async function requestKeepAction(payload){
+    const res = await fetch('/api/suggest', {
+      method:'POST',
+      credentials:'include',
+      headers:{
+        'Content-Type':'application/json',
+        'Accept':'application/json'
+      },
+      body:JSON.stringify({
+        action:'keep',
+        ...payload
+      })
+    });
+    const data = await res.json().catch(()=>null);
+    if(!res.ok){
+      const reason = data && (data.reason || data.error) ? data.reason || data.error : `keep_failed_${res.status}`;
+      throw new Error(reason);
+    }
+    return data || {};
+  }
+
+  async function loadKeepLibrary(){
+    if(keepLibraryBusy) return;
+    keepLibraryBusy = true;
+    setKeepLibraryStatus('Loading saved chats...');
+    renderKeepLibrary();
+    const localChats = readLocalKeptChats().map(item=>normalizeKeepLibraryChat({ ...item, local:true }));
+    try{
+      const data = await requestKeepAction({ keepAction:'list' });
+      const remoteChats = Array.isArray(data.keeps) ? data.keeps.map(normalizeKeepLibraryChat) : [];
+      const seen = new Set();
+      keepLibraryChats = [...remoteChats, ...localChats].filter(chat=>{
+        if(!chat.keepId || seen.has(chat.keepId)) return false;
+        seen.add(chat.keepId);
+        return true;
+      });
+      setKeepLibraryStatus(keepLibraryChats.length ? `${keepLibraryChats.length} saved chats` : 'No saved chats yet.');
+    }catch(error){
+      keepLibraryChats = localChats;
+      if(error && error.message === 'not_logged_in'){
+        setKeepLibraryStatus(localChats.length ? 'Local saved chats. Sign in for Supabase Keep.' : 'Sign in to load saved chats.', 'error');
+      }else{
+        setKeepLibraryStatus(localChats.length ? 'Showing local saved chats.' : 'Could not load saved chats.', localChats.length ? '' : 'error');
+      }
+    }finally{
+      keepLibraryBusy = false;
+      renderKeepLibrary();
+    }
+  }
+
+  function loadKeptChat(chat){
+    const keep = chat || null;
+    if(!keep || !keep.conversation || !Array.isArray(keep.conversation.turns)) return;
+    stopAllAnswerStreams();
+    if(suggestionAbortController){
+      suggestionAbortController.abort();
+      suggestionAbortController = null;
+    }
+    editingSuggestionTurnId = 0;
+    editingSuggestionDraft = '';
+    const turns = keep.conversation.turns
+      .filter(turn=>turn && (turn.query || turn.answer))
+      .map(turn=>({
+        id:++suggestionTurnSeq,
+        query:String(turn.query || ''),
+        files:[],
+        key:buildSuggestionTurnKey(turn.query, []),
+        suggestions:[],
+        answer:String(turn.answer || ''),
+        citations:normalizeCitationBatch(turn.citations),
+        targetKind:String(turn.targetKind || 'search'),
+        systemMode:String(turn.systemMode || keep.systemMode || getSearchSystemMode()),
+        loading:false,
+        loadingMore:false,
+        streamingAnswer:false,
+        fullAnswer:String(turn.answer || ''),
+        pendingAnswer:'',
+        hasMore:false,
+        error:''
+      }));
+    if(!turns.length) return;
+    state = 0;
+    suggestionTurns = turns;
+    searchKeepSavedId = keep.keepId;
+    input.value = '';
+    lastInputValue = '';
+    if(chatKeepButton) chatKeepButton.classList.add('is-saved');
+    setSearchKeepStatus('Loaded from Keep.');
+    setSuggestionPaneOpen(true);
+    renderSuggestionThread();
+    setKeepLibraryOpen(false);
+  }
+
+  function hideKeepContextMenu(){
+    keepContextTargetId = '';
+    if(keepContextMenu) keepContextMenu.hidden = true;
+  }
+
+  function showKeepContextMenu(keepId, x, y){
+    if(!keepContextMenu) return;
+    keepContextTargetId = String(keepId || '');
+    keepContextMenu.hidden = false;
+    const rect = keepContextMenu.getBoundingClientRect();
+    const left = Math.min(Math.max(8, x), window.innerWidth - rect.width - 8);
+    const top = Math.min(Math.max(8, y), window.innerHeight - rect.height - 8);
+    keepContextMenu.style.left = `${left}px`;
+    keepContextMenu.style.top = `${top}px`;
+  }
+
+  async function deleteKeptChat(keepId){
+    const chat = getKeepLibraryChat(keepId);
+    if(!chat) return;
+    if(chat.local){
+      removeLocalKeptChat(chat.keepId);
+    }else{
+      await requestKeepAction({ keepAction:'delete', keepId:chat.keepId });
+    }
+    if(String(searchKeepSavedId) === String(chat.keepId)){
+      searchKeepSavedId = '';
+      if(chatKeepButton) chatKeepButton.classList.remove('is-saved');
+      setSearchKeepStatus('Removed from Keep.');
+    }
+    await loadKeepLibrary();
+  }
+
+  async function renameKeptChat(keepId){
+    const chat = getKeepLibraryChat(keepId);
+    if(!chat) return;
+    const nextTitle = window.prompt('Change name', chat.title);
+    if(nextTitle === null) return;
+    const title = truncateSidebarText(nextTitle, 180);
+    if(!title) return;
+    if(chat.local){
+      renameLocalKeptChat(chat.keepId, title);
+    }else{
+      await requestKeepAction({ keepAction:'rename', keepId:chat.keepId, title });
+    }
+    await loadKeepLibrary();
+  }
+
+  async function unkeepCurrentSearchChat(){
+    if(!searchKeepSavedId) return;
+    const keepId = searchKeepSavedId;
+    setSearchKeepStatus('Removing...');
+    if(String(keepId).startsWith('local-')){
+      removeLocalKeptChat(keepId);
+    }else{
+      await requestKeepAction({ keepAction:'unkeep', keepId });
+    }
+    searchKeepSavedId = '';
+    if(chatKeepButton) chatKeepButton.classList.remove('is-saved');
+    setSearchKeepStatus('Removed from Keep.');
+    if(keepLibraryOpen) await loadKeepLibrary();
+  }
+
   async function keepCurrentSearchChat(){
     if(searchKeepBusy) return;
+    if(searchKeepSavedId){
+      searchKeepBusy = true;
+      if(chatKeepButton){
+        chatKeepButton.disabled = true;
+        chatKeepButton.classList.add('is-pressed');
+        window.setTimeout(()=>chatKeepButton.classList.remove('is-pressed'), 170);
+      }
+      try{
+        await unkeepCurrentSearchChat();
+      }catch(error){
+        setSearchKeepStatus('Could not remove this chat.', 'error');
+      }finally{
+        searchKeepBusy = false;
+        if(chatKeepButton) chatKeepButton.disabled = false;
+      }
+      return;
+    }
+
     const payload = buildSearchKeepPayload();
     if(!payload.turns.length){
       setSearchKeepStatus('Nothing to keep yet.', 'error');
@@ -7660,6 +8203,7 @@
           chatKeepButton.classList.add('is-saved');
         }
         setSearchKeepStatus('Saved to Keep.');
+        if(keepLibraryOpen) await loadKeepLibrary();
         return;
       }
 
@@ -7670,6 +8214,7 @@
           chatKeepButton.classList.add('is-saved');
         }
         setSearchKeepStatus('Saved locally. Supabase setup needed.');
+        if(keepLibraryOpen) await loadKeepLibrary();
         return;
       }
 
@@ -7693,6 +8238,7 @@
           chatKeepButton.classList.add('is-saved');
         }
         setSearchKeepStatus('Saved locally. Supabase setup needed.');
+        if(keepLibraryOpen) await loadKeepLibrary();
         return;
       }
       const message = error && error.message === 'not_logged_in'
@@ -8447,7 +8993,7 @@
       assistantCard.appendChild(head);
 
       const hasAnswerText = String(turn.answer || '').trim().length > 0;
-      const shouldShowTypingDots = (turn.loading && turn.suggestions.length === 0) || (turn.streamingAnswer && !hasAnswerText);
+      const shouldShowTypingDots = (turn.loading && (!Array.isArray(turn.suggestions) || turn.suggestions.length === 0)) || (turn.streamingAnswer && !hasAnswerText);
       if(shouldShowTypingDots){
         const loading = document.createElement('div');
         loading.className = 'suggestion-loading';
@@ -8859,6 +9405,11 @@
   async function requestSuggestions(query, fileNames){
     if(!query) return;
     if(isSuggestionBusy()) return;
+    if(searchKeepSavedId){
+      searchKeepSavedId = '';
+      if(chatKeepButton) chatKeepButton.classList.remove('is-saved');
+      renderKeepLibrary();
+    }
     const turnKey = buildSuggestionTurnKey(query, fileNames);
     const alreadyShown = suggestionTurns.some(turn=>{
       if(typeof turn.key === 'string') return turn.key === turnKey;
@@ -9001,6 +9552,71 @@
     chatKeepButton.addEventListener('click', keepCurrentSearchChat);
   }
 
+  if(keepLibraryButton){
+    keepLibraryButton.addEventListener('click', ()=>{
+      const nextOpen = !keepLibraryOpen;
+      setKeepLibraryOpen(nextOpen);
+      if(nextOpen) loadKeepLibrary();
+    });
+  }
+
+  if(keepLibraryClose){
+    keepLibraryClose.addEventListener('click', ()=>{
+      setKeepLibraryOpen(false);
+    });
+  }
+
+  if(keepLibraryList){
+    keepLibraryList.addEventListener('click', event=>{
+      const target = event.target && typeof event.target.closest === 'function' ? event.target : null;
+      if(!target) return;
+      const item = target.closest('.keep-library-item[data-keep-id]');
+      if(!item) return;
+      const chat = getKeepLibraryChat(item.dataset.keepId);
+      if(chat) loadKeptChat(chat);
+    });
+
+    keepLibraryList.addEventListener('contextmenu', event=>{
+      const target = event.target && typeof event.target.closest === 'function' ? event.target : null;
+      if(!target) return;
+      const item = target.closest('.keep-library-item[data-keep-id]');
+      if(!item) return;
+      event.preventDefault();
+      showKeepContextMenu(item.dataset.keepId, event.clientX, event.clientY);
+    });
+  }
+
+  if(keepContextMenu){
+    keepContextMenu.addEventListener('click', async event=>{
+      const target = event.target && typeof event.target.closest === 'function' ? event.target : null;
+      if(!target) return;
+      const actionButton = target.closest('.keep-context-action');
+      if(!actionButton || !keepContextTargetId) return;
+      const action = String(actionButton.dataset.action || '');
+      const keepId = keepContextTargetId;
+      hideKeepContextMenu();
+      try{
+        setKeepLibraryStatus(action === 'delete' ? 'Deleting...' : 'Renaming...');
+        if(action === 'delete'){
+          await deleteKeptChat(keepId);
+          setKeepLibraryStatus('Deleted.');
+        }else if(action === 'rename'){
+          await renameKeptChat(keepId);
+          setKeepLibraryStatus('Name changed.');
+        }
+      }catch(error){
+        setKeepLibraryStatus(action === 'delete' ? 'Could not delete chat.' : 'Could not rename chat.', 'error');
+      }
+    });
+  }
+
+  document.addEventListener('click', event=>{
+    if(!keepContextMenu || keepContextMenu.hidden) return;
+    const target = event.target && typeof event.target.closest === 'function' ? event.target : null;
+    if(target && target.closest('#keepContextMenu')) return;
+    hideKeepContextMenu();
+  });
+
   if(searchSidebarTurnList){
     searchSidebarTurnList.addEventListener('click', event=>{
       const target = event.target && typeof event.target.closest === 'function' ? event.target : null;
@@ -9052,6 +9668,14 @@
 
   document.addEventListener('keydown', e=>{
     if(e.key !== 'Escape') return;
+    if(keepContextMenu && !keepContextMenu.hidden){
+      hideKeepContextMenu();
+      return;
+    }
+    if(keepLibraryOpen){
+      setKeepLibraryOpen(false);
+      return;
+    }
     if(problemPreviewPage && !problemPreviewPage.hidden){
       closeProblemPreviewPage();
       return;
