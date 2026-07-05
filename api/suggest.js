@@ -493,7 +493,11 @@ function parseAnswerJson(text) {
     .trim();
   try {
     const parsed = JSON.parse(stripped);
-    return isPlainObject(parsed) ? parsed : null;
+    if (isPlainObject(parsed)) return parsed;
+    if (typeof parsed === 'string' && parsed.trim() && parsed.trim() !== raw) {
+      return parseAnswerJson(parsed);
+    }
+    return null;
   } catch (error) {
     return null;
   }
