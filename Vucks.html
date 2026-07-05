@@ -6794,6 +6794,16 @@
     return turn.citations.find(citation=>String(citation.id || '').trim().toLowerCase() === id) || null;
   }
 
+  function normalizeCitationTitle(value){
+    return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  function findCitationByTitle(turn, title){
+    const normalized = normalizeCitationTitle(title);
+    if(!turn || !normalized || !Array.isArray(turn.citations)) return null;
+    return turn.citations.find(citation=>normalizeCitationTitle(citation.title) === normalized) || null;
+  }
+
   function appendCitationMetaPills(containerEl, citation){
     if(!containerEl) return;
     containerEl.innerHTML = '';
@@ -6840,22 +6850,25 @@
   function appendInlineAnswerContent(targetEl, text, turn){
     if(!targetEl) return;
     const value = String(text || '');
-    const pattern = /[\[［](P\d+)[\]］]/gi;
+    const pattern = /\[\[([^\]]+)\]\]|[\[［](P\d+)[\]］]/gi;
     let lastIndex = 0;
     let match;
     while((match = pattern.exec(value))){
       if(match.index > lastIndex){
         targetEl.appendChild(document.createTextNode(value.slice(lastIndex, match.index)));
       }
-      const citationId = match[1].toUpperCase();
-      const citation = findCitationById(turn, citationId);
+      const rawTitle = match[1] || '';
+      const rawId = match[2] || '';
+      const citation = rawTitle
+        ? findCitationByTitle(turn, rawTitle)
+        : findCitationById(turn, rawId.toUpperCase());
       if(citation){
         const link = document.createElement('button');
         link.type = 'button';
         link.className = 'citation-inline-link';
         link.dataset.turnId = String(turn.id);
-        link.dataset.citationId = citationId;
-        link.textContent = `[${citationId}]`;
+        link.dataset.citationId = citation.id;
+        link.textContent = citation.title || rawTitle || 'Source';
         targetEl.appendChild(link);
       }else{
         targetEl.appendChild(document.createTextNode(match[0]));
@@ -7281,13 +7294,9 @@
             const title = document.createElement('div');
             title.className = 'citation-title';
 
-            const id = document.createElement('span');
-            id.className = 'citation-id';
-            id.textContent = `[${citation.id}]`;
-
             const titleText = document.createElement('span');
             titleText.textContent = citation.title;
-            title.append(id, titleText);
+            title.appendChild(titleText);
             item.appendChild(title);
 
             if(citation.quote){

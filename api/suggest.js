@@ -202,6 +202,24 @@ function getAttachmentLabel(item, fallback = '') {
   return safeString(item.relativePath || item.fileName || item.title || item.name || item.path, fallback);
 }
 
+function getCitationTitle(item) {
+  return safeString(item && item.title, 'Untitled');
+}
+
+function formatTitleCitation(item) {
+  return `[[${getCitationTitle(item).replace(/\]\]/g, '] ]')}]]`;
+}
+
+function replaceSourceIdMarkersWithTitleCitations(answer, citations) {
+  const rows = Array.isArray(citations) ? citations : [];
+  if (!rows.length) return safeString(answer);
+  const byId = new Map(rows.map((item) => [safeString(item.id).toUpperCase(), item]));
+  return safeString(answer).replace(/[\[［](P\d+)[\]］]/gi, (match, rawId) => {
+    const item = byId.get(safeString(rawId).toUpperCase());
+    return item ? formatTitleCitation(item) : match;
+  });
+}
+
 async function createAttachmentPreviewUrl(client, bucket, storagePath) {
   if (!client || !bucket || !storagePath) return '';
   try {
@@ -415,12 +433,14 @@ function buildGeminiPrompt({ query, targetKind, citations, history, systemMode }
     '',
     'Use only the provided saved rows as sources.',
     'Answer in Japanese unless the user query is clearly in another language.',
+    'When addressing the person asking, use a natural second person for that language, such as あなた in Japanese or you in English. Do not refer to them as "the user" in the answer.',
     'Write the answer as natural ChatGPT-style prose, but make it substantive rather than terse.',
     'Use Markdown-style headings and bullet lists when they improve readability.',
     'The answer must be at least about 900 Japanese characters or about 30 short lines whenever at least one relevant saved row exists.',
     'Include more than a summary: cover what was found, why it matches, source kind, language/file, proof state, important quoted content, and limits of what the saved row can support.',
-    'Use inline citation markers like [P1] directly inside sentences, similar to Google AI Mode source links.',
-    'Every factual claim about a saved problem/theorem must cite source ids like [P1].',
+    'Use inline citations by wrapping the exact saved row title in double square brackets, for example [[A Constructive Proof of Negative Integer Multiplication Without Axioms]].',
+    'Every factual claim about a saved problem/theorem must cite the title citation for its saved row.',
+    'Do not put source ids such as [P1], [P2], or other internal source labels in the answer text. Those ids are only for the JSON usedCitationIds field.',
     'If no saved row supports an answer, say that the saved database does not contain enough information.',
     'Do not include follow-up suggestions, next questions, related searches, or suggested replies.',
     'Return JSON only with this shape:',
@@ -755,11 +775,11 @@ function legacyBuildFallbackAnswer(query, targetKind, citations, geminiError) {
 
   const lines = citations.slice(0, 4).map((item) => {
     const file = item.fileName ? ` (${item.fileName})` : '';
-    return `${item.title}${file}: ${item.quote} [${item.id}]`;
+    return `${getCitationTitle(item)}${file}: ${item.quote} ${formatTitleCitation(item)}`;
   });
   return {
     answer: `${reason}、保存済みデータから一致度の高い引用を返します。\n${lines.join('\n')}`,
-    suggestions: citations.map((item) => `${item.title} [${item.id}]`),
+    suggestions: citations.map((item) => getCitationTitle(item)),
     usedCitationIds: citations.map((item) => item.id)
   };
 }
@@ -790,11 +810,11 @@ function buildFallbackAnswer(query, targetKind, citations, geminiError) {
 
   const lines = citations.slice(0, 4).map((item) => {
     const file = item.fileName ? ` (${item.fileName})` : '';
-    return `${item.title}${file}: ${item.quote} [${item.id}]`;
+    return `${getCitationTitle(item)}${file}: ${item.quote} ${formatTitleCitation(item)}`;
   });
   return {
     answer: `${reason}、保存済みデータから一致度の高い引用を返します。\n${lines.join('\n')}`,
-    suggestions: citations.map((item) => `${item.title} [${item.id}]`),
+    suggestions: citations.map((item) => getCitationTitle(item)),
     usedCitationIds: citations.map((item) => item.id)
   };
 }
@@ -826,11 +846,11 @@ function buildUnifiedFallbackAnswer(query, citations, geminiError) {
   const lines = citations.slice(0, 4).map((item) => {
     const file = item.fileName ? ` (${item.fileName})` : '';
     const kind = item.kind && item.kind !== 'unknown' ? ` ${item.kind}` : '';
-    return `${item.title}${file}${kind}: ${item.quote} [${item.id}]`;
+    return `${getCitationTitle(item)}${file}${kind}: ${item.quote} ${formatTitleCitation(item)}`;
   });
   return {
     answer: `${reason}、保存済みデータから一致度の高い引用を返します。\n${lines.join('\n')}`,
-    suggestions: citations.map((item) => `${item.title} [${item.id}]`),
+    suggestions: citations.map((item) => getCitationTitle(item)),
     usedCitationIds: citations.map((item) => item.id)
   };
 }
@@ -862,7 +882,8 @@ function buildChatFallbackAnswer(query, citations, geminiError) {
   const lines = citations.slice(0, 4).map((item) => {
     const kind = item.kind && item.kind !== 'unknown' ? `${item.kind}` : 'saved item';
     const file = item.fileName ? `（${item.fileName}）` : '';
-    return `${item.title}${file} は ${kind} として保存されています [${item.id}]。${item.quote ? `内容は「${item.quote}」です [${item.id}]。` : ''}`;
+    const citation = formatTitleCitation(item);
+    return `${getCitationTitle(item)}${file} は ${kind} として保存されています ${citation}。${item.quote ? `内容は「${item.quote}」です ${citation}。` : ''}`;
   });
 
   return {
@@ -889,13 +910,14 @@ function buildCitationDetailLines(citations) {
 
   rows.slice(0, 8).forEach((item, index) => {
     const kind = item.kind && item.kind !== 'unknown' ? item.kind : 'unknown kind';
+    const citation = formatTitleCitation(item);
     const file = item.fileName ? `、ファイルは ${item.fileName}` : '';
     const language = item.language ? `、言語は ${item.language}` : '';
     const proofState = item.proofState ? `、proof state は ${item.proofState}` : '';
     const format = item.normalizedFormat ? `、保存形式は ${item.normalizedFormat}` : '';
-    lines.push(`- ${index + 1}. ${item.title || 'Untitled'} は ${kind} として保存されています${language}${file}${proofState}${format} [${item.id}]。`);
+    lines.push(`- ${index + 1}. ${getCitationTitle(item)} は ${kind} として保存されています${language}${file}${proofState}${format} ${citation}。`);
     if (item.quote) {
-      lines.push(`  - 引用部分: ${truncateText(item.quote, 260)} [${item.id}]。`);
+      lines.push(`  - 引用部分: ${truncateText(item.quote, 260)} ${citation}。`);
     }
     const attachmentNames = Array.isArray(item.attachmentNames)
       ? item.attachmentNames
@@ -903,7 +925,7 @@ function buildCitationDetailLines(citations) {
         ? item.attachments.map((attachment) => getAttachmentLabel(attachment)).filter(Boolean)
         : [];
     if (attachmentNames.length) {
-      lines.push(`  - 添付またはアップロードとして ${attachmentNames.join(', ')} が関連付けられています [${item.id}]。`);
+      lines.push(`  - 添付またはアップロードとして ${attachmentNames.join(', ')} が関連付けられています ${citation}。`);
     }
   });
 
@@ -937,7 +959,7 @@ function ensureDetailedAnswer(answer, citations) {
     || countAnswerLines(`${combined}\n${padding.join('\n')}`) < MIN_ANSWER_LINES
   ) {
     const item = citations[padding.length % citations.length];
-    padding.push(`- 追加確認点: ${item.title || 'Untitled'} の根拠は保存済み引用 ${item.id} に限定されています。本文・ファイル名・保存形式を合わせて確認してください [${item.id}]。`);
+    padding.push(`- 追加確認点: ${getCitationTitle(item)} の根拠は保存済み引用 ${formatTitleCitation(item)} に限定されています。本文・ファイル名・保存形式を合わせて確認してください。`);
     if (padding.length > 32) break;
   }
   return `${combined}\n\n## 追加の確認点\n${padding.join('\n')}`;
@@ -995,7 +1017,7 @@ export default async function handler(req, res) {
       used: usedSet.has(item.id)
     }));
     const answer = includeAnswer
-      ? ensureDetailedAnswer(generated.answer, citations)
+      ? ensureDetailedAnswer(replaceSourceIdMarkersWithTitleCitations(generated.answer, citations), citations)
       : generated.answer;
 
     res.status(200).json({
