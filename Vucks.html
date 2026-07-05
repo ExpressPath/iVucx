@@ -2690,7 +2690,16 @@
       box-shadow:0 18px 46px rgba(15,23,42,0.12);
       backdrop-filter:blur(18px) saturate(1.25);
       cursor:pointer;
+      opacity:0;
+      pointer-events:none;
+      transform:translateY(-3px);
       transition:transform .2s ease,border-color .2s ease,background-color .2s ease,opacity .2s ease;
+    }
+
+    body:not(.scrolled):not(.suggestions-open):not(.login-check) .keep-library-button{
+      opacity:1;
+      pointer-events:auto;
+      transform:translateY(0);
     }
 
     .keep-library-button:hover,
@@ -2742,6 +2751,14 @@
       transform:translateX(0);
       opacity:1;
       pointer-events:auto;
+    }
+
+    body.scrolled .keep-library-sidebar,
+    body.suggestions-open .keep-library-sidebar,
+    body.login-check .keep-library-sidebar{
+      transform:translateX(-108%);
+      opacity:0;
+      pointer-events:none;
     }
 
     body.mode-q .keep-library-sidebar{
@@ -2893,6 +2910,211 @@
 
     .keep-context-action.danger{
       color:#dc2626;
+    }
+
+    .flash-read-button{
+      position:fixed;
+      top:20px;
+      right:22px;
+      z-index:47;
+      min-height:42px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:9px;
+      padding:0 16px;
+      border:1px solid var(--search-chat-card-border);
+      border-radius:14px;
+      background:color-mix(in srgb, var(--bg-white) 88%, transparent);
+      color:var(--search-chat-card-text);
+      box-shadow:0 18px 46px rgba(15,23,42,0.12);
+      backdrop-filter:blur(18px) saturate(1.25);
+      font:inherit;
+      font-size:13px;
+      font-weight:780;
+      cursor:pointer;
+      opacity:0;
+      transform:translateY(-8px);
+      pointer-events:none;
+      transition:opacity .2s ease,transform .22s cubic-bezier(.22,1,.36,1),border-color .2s ease,background-color .2s ease;
+    }
+
+    body.suggestions-open .flash-read-button{
+      opacity:1;
+      transform:translateY(0);
+      pointer-events:auto;
+    }
+
+    body.suggestions-open .flash-read-button:disabled{
+      opacity:.46;
+      cursor:not-allowed;
+    }
+
+    .flash-read-button:hover,
+    .flash-read-button:focus-visible{
+      border-color:var(--search-chat-item-hover-border);
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+    }
+
+    .flash-read-button svg{
+      width:17px;
+      height:17px;
+      fill:none;
+      stroke:currentColor;
+      stroke-width:2;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+
+    body.mode-q .flash-read-button{
+      border-color:rgba(255,255,255,0.13);
+      background:rgba(255,255,255,0.05);
+      color:#edf2ff;
+      box-shadow:0 18px 50px rgba(0,0,0,0.32);
+    }
+
+    .flash-reader-sidebar{
+      position:fixed;
+      top:0;
+      right:0;
+      bottom:0;
+      z-index:72;
+      width:min(760px, 78vw);
+      min-width:min(520px, 94vw);
+      border-left:1px solid var(--search-chat-card-border);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--bg-white) 92%, transparent), color-mix(in srgb, var(--bg-white) 82%, transparent)),
+        color-mix(in srgb, var(--bg-white) 88%, transparent);
+      color:var(--search-chat-card-text);
+      box-shadow:-28px 0 70px rgba(15,23,42,0.2);
+      backdrop-filter:blur(24px) saturate(1.28);
+      transform:translateX(104%);
+      opacity:0;
+      pointer-events:none;
+      transition:transform .34s cubic-bezier(.22,1,.36,1),opacity .24s ease;
+      overflow:hidden;
+    }
+
+    body.flash-reader-open .flash-reader-sidebar{
+      transform:translateX(0);
+      opacity:1;
+      pointer-events:auto;
+    }
+
+    body.mode-q .flash-reader-sidebar{
+      border-left-color:rgba(255,255,255,0.14);
+      background:
+        linear-gradient(180deg, rgba(18,24,36,0.96), rgba(8,12,20,0.94)),
+        #080c14;
+      color:#edf2ff;
+      box-shadow:-28px 0 70px rgba(0,0,0,0.42);
+    }
+
+    .flash-reader-inner{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      padding:22px;
+    }
+
+    .flash-reader-head{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:14px;
+      margin-bottom:18px;
+    }
+
+    .flash-reader-kicker{
+      color:var(--search-chat-muted);
+      font-size:12px;
+      font-weight:820;
+      letter-spacing:.08em;
+      line-height:1.3;
+      text-transform:uppercase;
+    }
+
+    .flash-reader-title{
+      margin-top:4px;
+      font-size:18px;
+      font-weight:820;
+      line-height:1.2;
+    }
+
+    .flash-reader-close{
+      width:34px;
+      height:34px;
+      border:1px solid var(--search-chat-item-border);
+      border-radius:11px;
+      background:var(--search-chat-item-bg);
+      color:var(--search-chat-citation-text);
+      font-size:20px;
+      line-height:1;
+      cursor:pointer;
+    }
+
+    .flash-reader-stage{
+      flex:1;
+      min-height:0;
+      display:grid;
+      place-items:center;
+      border:1px solid var(--search-chat-item-border);
+      border-radius:18px;
+      background:var(--search-prompt-input-bg);
+      color:var(--search-chat-card-text);
+      padding:28px;
+      cursor:pointer;
+      user-select:none;
+      text-align:center;
+    }
+
+    body.mode-q .flash-reader-stage{
+      border-color:rgba(255,255,255,0.12);
+      background:#0f141d;
+      color:#f4f7ff;
+    }
+
+    .flash-reader-word{
+      max-width:100%;
+      font-size:clamp(52px, 8vw, 108px);
+      line-height:1.05;
+      font-weight:820;
+      overflow-wrap:anywhere;
+    }
+
+    .flash-reader-word.is-placeholder{
+      color:var(--search-chat-muted);
+      font-size:clamp(26px, 4vw, 44px);
+      font-weight:760;
+    }
+
+    .flash-reader-foot{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      margin-top:16px;
+      color:var(--search-chat-subtle);
+      font-size:12px;
+      line-height:1.4;
+    }
+
+    .flash-reader-speed{
+      font-weight:780;
+      color:var(--search-chat-citation-id);
+    }
+
+    @media (max-width:720px){
+      .flash-reader-sidebar{
+        width:100vw;
+        min-width:0;
+      }
+
+      .flash-read-button{
+        right:14px;
+        top:14px;
+      }
     }
 
     .chat-turn-assistant{
@@ -4597,6 +4819,32 @@
   <button class="keep-context-action danger" type="button" data-action="delete">Delete</button>
 </div>
 
+<button class="flash-read-button" id="flashReadButton" type="button" aria-label="Open flash reading">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M13 2L4 14h7l-1 8 10-13h-7z"></path>
+  </svg>
+  <span>フラッシュ読解</span>
+</button>
+
+<aside class="flash-reader-sidebar" id="flashReaderSidebar" aria-label="Flash reading" aria-hidden="true" hidden>
+  <div class="flash-reader-inner">
+    <header class="flash-reader-head">
+      <div>
+        <div class="flash-reader-kicker">Flash reading</div>
+        <div class="flash-reader-title">AI output</div>
+      </div>
+      <button class="flash-reader-close" id="flashReaderClose" type="button" aria-label="Close flash reading">&times;</button>
+    </header>
+    <button class="flash-reader-stage" id="flashReaderStage" type="button" aria-label="Start or pause flash reading">
+      <div class="flash-reader-word is-placeholder" id="flashReaderWord">Space or tap</div>
+    </button>
+    <footer class="flash-reader-foot">
+      <div id="flashReaderProgress">0 / 0</div>
+      <div class="flash-reader-speed" id="flashReaderSpeed">Standard · 2.7 WPS</div>
+    </footer>
+  </div>
+</aside>
+
 <div class="upload-file-list" id="uploadFileList" aria-live="polite"></div>
 
 <div class="editor-close-menu" id="editorCloseMenu" hidden>
@@ -4867,6 +5115,13 @@
   const keepLibraryStatus = document.getElementById('keepLibraryStatus');
   const keepLibraryList = document.getElementById('keepLibraryList');
   const keepContextMenu = document.getElementById('keepContextMenu');
+  const flashReadButton = document.getElementById('flashReadButton');
+  const flashReaderSidebar = document.getElementById('flashReaderSidebar');
+  const flashReaderClose = document.getElementById('flashReaderClose');
+  const flashReaderStage = document.getElementById('flashReaderStage');
+  const flashReaderWord = document.getElementById('flashReaderWord');
+  const flashReaderProgress = document.getElementById('flashReaderProgress');
+  const flashReaderSpeed = document.getElementById('flashReaderSpeed');
   const citationPreviewDrawer = document.getElementById('citationPreviewDrawer');
   const citationPreviewClose = document.getElementById('citationPreviewClose');
   const citationPreviewGo = document.getElementById('citationPreviewGo');
@@ -6399,6 +6654,12 @@
   let keepLibraryBusy = false;
   let keepLibraryChats = [];
   let keepContextTargetId = '';
+  let flashReaderOpen = false;
+  let flashReaderPlaying = false;
+  let flashReaderTokens = [];
+  let flashReaderIndex = 0;
+  let flashReaderTimer = 0;
+  let flashReaderSpeedIndex = 0;
   const answerStreamTimers = new Map();
   let mathTypesetTimer = null;
   let activeCitationPreview = null;
@@ -6406,6 +6667,12 @@
   const ANSWER_STREAM_INTERVAL_MS = 26;
   const ANSWER_STREAM_MIN_CHARS = 12;
   const ANSWER_STREAM_MAX_CHARS = 46;
+  const FLASH_READER_SPEEDS = [
+    { label:'Standard', wps:2.7 },
+    { label:'Focus', wps:3.5 },
+    { label:'Fast', wps:4.4 },
+    { label:'Sprint', wps:5.4 }
+  ];
   const LOGIN_CHECK_TIMEOUT_MS = 3500;
   const POPUP_LOADING_TEXT = 'Checking account state...';
   const AUTH_VIEW_LOGIN = 'login';
@@ -7485,6 +7752,19 @@
     fixedWrapper.style.justifyContent = 'center';
   }
 
+  function syncTopKeepButtonVisibility(){
+    if(!keepLibraryButton) return;
+    const visible = state === 0
+      && !hasSuggestionResults
+      && !bodyEl.classList.contains('scrolled')
+      && !bodyEl.classList.contains('login-check')
+      && !selectionMode;
+    keepLibraryButton.hidden = !visible;
+    if(!visible && keepLibraryOpen){
+      setKeepLibraryOpen(false);
+    }
+  }
+
   function setSuggestionPaneOpen(isOpen){
     hasSuggestionResults = isOpen;
     bodyEl.classList.toggle('suggestions-open', isOpen);
@@ -7494,10 +7774,13 @@
       setSearchSidebarOpen(false);
       setSearchKeepStatus('');
       searchKeepSavedId = '';
+      setFlashReaderOpen(false);
     }else{
       renderSearchSidebarTurns();
     }
     syncSearchDocking();
+    syncTopKeepButtonVisibility();
+    syncFlashReadButton();
   }
 
   function isSuggestionTurnBusy(turn){
@@ -8145,6 +8428,198 @@
     if(chatKeepButton) chatKeepButton.classList.remove('is-saved');
     setSearchKeepStatus('Removed from Keep.');
     if(keepLibraryOpen) await loadKeepLibrary();
+  }
+
+  function stripFlashReaderMarkdown(value){
+    return String(value || '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[\[([^\]]+)\]\]/g, '$1')
+      .replace(/\[[^\]]+\]\([^)]+\)/g, ' ')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/^\s*[-*+]\s+/gm, '')
+      .replace(/^\s*\d+[.)]\s+/gm, '')
+      .replace(/\|/g, ' ')
+      .replace(/[*_~>#]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function getFlashReaderSourceText(){
+    return suggestionTurns
+      .filter(turn=>turn && (turn.answer || turn.fullAnswer))
+      .map(turn=>stripFlashReaderMarkdown(turn.fullAnswer || turn.answer))
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  function tokenizeFlashReaderText(text){
+    const source = String(text || '').trim();
+    if(!source) return [];
+    if(typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'){
+      try{
+        const segmenter = new Intl.Segmenter(navigator.language || 'ja', { granularity:'word' });
+        const segmented = [];
+        for(const part of segmenter.segment(source)){
+          const word = String(part.segment || '').trim();
+          if(!word) continue;
+          if(part.isWordLike || /[\p{L}\p{N}]/u.test(word)){
+            segmented.push(word);
+          }
+        }
+        if(segmented.length) return segmented;
+      }catch(error){
+        // Fall back to regex tokenization below.
+      }
+    }
+    return source.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)?|[^\s]/gu) || [];
+  }
+
+  function refreshFlashReaderTokens(){
+    flashReaderTokens = tokenizeFlashReaderText(getFlashReaderSourceText());
+    if(flashReaderIndex >= flashReaderTokens.length){
+      flashReaderIndex = Math.max(0, flashReaderTokens.length - 1);
+    }
+    renderFlashReader();
+    return flashReaderTokens.length;
+  }
+
+  function getFlashReaderSpeed(){
+    return FLASH_READER_SPEEDS[flashReaderSpeedIndex] || FLASH_READER_SPEEDS[0];
+  }
+
+  function getFlashReaderInterval(word){
+    const speed = getFlashReaderSpeed();
+    const effectiveLength = Math.max(1, Array.from(String(word || '')).length);
+    const lengthWeight = Math.min(1.68, Math.max(0.86, 0.78 + (effectiveLength / 12)));
+    return Math.round((1000 / speed.wps) * lengthWeight);
+  }
+
+  function renderFlashReader(){
+    if(flashReaderSpeed){
+      const speed = getFlashReaderSpeed();
+      flashReaderSpeed.textContent = `${speed.label} · ${speed.wps.toFixed(1)} WPS`;
+    }
+    if(flashReaderProgress){
+      flashReaderProgress.textContent = flashReaderTokens.length
+        ? `${Math.min(flashReaderIndex + 1, flashReaderTokens.length)} / ${flashReaderTokens.length}`
+        : '0 / 0';
+    }
+    if(!flashReaderWord) return;
+    const current = flashReaderTokens[flashReaderIndex] || '';
+    if(current){
+      flashReaderWord.textContent = current;
+      flashReaderWord.classList.remove('is-placeholder');
+    }else{
+      flashReaderWord.textContent = 'Space or tap';
+      flashReaderWord.classList.add('is-placeholder');
+    }
+  }
+
+  function stopFlashReader(){
+    if(flashReaderTimer){
+      window.clearTimeout(flashReaderTimer);
+      flashReaderTimer = 0;
+    }
+    flashReaderPlaying = false;
+  }
+
+  function scheduleFlashReaderStep(){
+    if(!flashReaderPlaying || !flashReaderTokens.length) return;
+    const currentWord = flashReaderTokens[flashReaderIndex] || '';
+    const delay = getFlashReaderInterval(currentWord);
+    flashReaderTimer = window.setTimeout(()=>{
+      flashReaderTimer = 0;
+      if(!flashReaderPlaying) return;
+      if(flashReaderIndex >= flashReaderTokens.length - 1){
+        flashReaderIndex = flashReaderTokens.length - 1;
+        stopFlashReader();
+        renderFlashReader();
+        return;
+      }
+      flashReaderIndex += 1;
+      renderFlashReader();
+      scheduleFlashReaderStep();
+    }, delay);
+  }
+
+  function startFlashReader(){
+    if(!refreshFlashReaderTokens()){
+      stopFlashReader();
+      if(flashReaderWord){
+        flashReaderWord.textContent = 'No AI output yet';
+        flashReaderWord.classList.add('is-placeholder');
+      }
+      return;
+    }
+    if(flashReaderIndex >= flashReaderTokens.length - 1){
+      flashReaderIndex = 0;
+    }
+    stopFlashReader();
+    flashReaderPlaying = true;
+    renderFlashReader();
+    scheduleFlashReaderStep();
+  }
+
+  function toggleFlashReaderPlayback(){
+    if(flashReaderPlaying){
+      stopFlashReader();
+      renderFlashReader();
+      return;
+    }
+    startFlashReader();
+  }
+
+  function rewindFlashReader(){
+    if(!flashReaderTokens.length) refreshFlashReaderTokens();
+    const activeSpeed = getFlashReaderSpeed();
+    const rewindWords = Math.max(1, Math.round(activeSpeed.wps * 3));
+    flashReaderIndex = Math.max(0, flashReaderIndex - rewindWords);
+    if(flashReaderSpeedIndex > 0){
+      flashReaderSpeedIndex = 0;
+    }
+    renderFlashReader();
+    if(flashReaderPlaying){
+      if(flashReaderTimer) window.clearTimeout(flashReaderTimer);
+      flashReaderTimer = 0;
+      scheduleFlashReaderStep();
+    }
+  }
+
+  function cycleFlashReaderSpeed(){
+    flashReaderSpeedIndex = flashReaderSpeedIndex >= FLASH_READER_SPEEDS.length - 1
+      ? 0
+      : flashReaderSpeedIndex + 1;
+    renderFlashReader();
+    if(flashReaderPlaying){
+      if(flashReaderTimer) window.clearTimeout(flashReaderTimer);
+      flashReaderTimer = 0;
+      scheduleFlashReaderStep();
+    }
+  }
+
+  function setFlashReaderOpen(isOpen){
+    flashReaderOpen = !!isOpen;
+    bodyEl.classList.toggle('flash-reader-open', flashReaderOpen);
+    if(flashReaderSidebar){
+      flashReaderSidebar.hidden = !flashReaderOpen;
+      flashReaderSidebar.setAttribute('aria-hidden', flashReaderOpen ? 'false' : 'true');
+    }
+    if(flashReaderOpen){
+      refreshFlashReaderTokens();
+      requestAnimationFrame(()=>{
+        if(flashReaderStage) flashReaderStage.focus();
+      });
+    }else{
+      stopFlashReader();
+    }
+  }
+
+  function syncFlashReadButton(){
+    if(!flashReadButton) return;
+    const hasOutput = suggestionTurns.some(turn=>turn && String(turn.answer || turn.fullAnswer || '').trim());
+    flashReadButton.disabled = !hasOutput;
+    flashReadButton.setAttribute('aria-disabled', hasOutput ? 'false' : 'true');
   }
 
   async function keepCurrentSearchChat(){
@@ -9130,6 +9605,7 @@
     setSuggestionPaneOpen(true);
     renderSearchSidebarTurns();
     syncSuggestionControls();
+    syncFlashReadButton();
     scrollSuggestionPanelToBottom();
   }
 
@@ -9552,6 +10028,25 @@
     chatKeepButton.addEventListener('click', keepCurrentSearchChat);
   }
 
+  if(flashReadButton){
+    flashReadButton.addEventListener('click', ()=>{
+      if(flashReadButton.disabled) return;
+      setFlashReaderOpen(true);
+    });
+  }
+
+  if(flashReaderClose){
+    flashReaderClose.addEventListener('click', ()=>{
+      setFlashReaderOpen(false);
+    });
+  }
+
+  if(flashReaderStage){
+    flashReaderStage.addEventListener('click', ()=>{
+      toggleFlashReaderPlayback();
+    });
+  }
+
   if(keepLibraryButton){
     keepLibraryButton.addEventListener('click', ()=>{
       const nextOpen = !keepLibraryOpen;
@@ -9616,6 +10111,27 @@
     if(target && target.closest('#keepContextMenu')) return;
     hideKeepContextMenu();
   });
+
+  document.addEventListener('keydown', event=>{
+    if(!flashReaderOpen) return;
+    const key = event.key;
+    if(key !== ' ' && key !== 'Spacebar' && key !== 'Escape' && key !== 'ArrowLeft' && key !== 'ArrowRight') return;
+    event.preventDefault();
+    event.stopPropagation();
+    if(key === 'Escape'){
+      setFlashReaderOpen(false);
+      return;
+    }
+    if(key === 'ArrowLeft'){
+      rewindFlashReader();
+      return;
+    }
+    if(key === 'ArrowRight'){
+      cycleFlashReaderSpeed();
+      return;
+    }
+    toggleFlashReaderPlayback();
+  }, true);
 
   if(searchSidebarTurnList){
     searchSidebarTurnList.addEventListener('click', event=>{
@@ -10845,6 +11361,7 @@
 
     state = next;
     syncCompactGrayLayoutState();
+    syncTopKeepButtonVisibility();
 
     if(next !== 0){
       clearSuggestionPane();
@@ -10861,6 +11378,8 @@
     if(next === 1 && previousState !== 1 && !container.classList.contains('expanded')){
       requestAnimationFrame(()=>schedulePoseProblemShimmer());
     }
+
+    syncTopKeepButtonVisibility();
 
     const shouldSkipPersist = skipNextModeStatePersist;
     skipNextModeStatePersist = false;
@@ -10924,7 +11443,7 @@
     if(!target || typeof target.closest !== 'function') return false;
     const directionalSkip = isExpandedEditorActive();
 
-    if(target.closest('.login-popup-card, .blue-mode-panel, .suggestion-panel')){
+    if(target.closest('.login-popup-card, .blue-mode-panel, .suggestion-panel, .flash-reader-sidebar')){
       return true;
     }
 
@@ -11146,6 +11665,8 @@
     await restoreTheoremDraftTitle();
     persistModeState();
     hydrateCookieConsentFromServer();
+    syncTopKeepButtonVisibility();
+    syncFlashReadButton();
     if(stripeSetupReturnShouldOpenBlue && state !== 2){
       applyState(2);
     }else{
