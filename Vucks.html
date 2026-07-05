@@ -3090,13 +3090,23 @@
     .flash-reader-word{
       width:100%;
       max-width:100%;
-      display:grid;
-      grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr);
-      align-items:baseline;
+      min-height:1.08em;
+      display:block;
+      position:relative;
       font-size:clamp(42px, 6.4vw, 82px);
       line-height:1.05;
       font-weight:820;
       white-space:nowrap;
+      overflow:visible;
+      font-family:"Inter","SF Pro Text","Segoe UI",system-ui,sans-serif;
+    }
+
+    .flash-reader-word-line{
+      position:relative;
+      display:inline-flex;
+      align-items:baseline;
+      white-space:nowrap;
+      will-change:transform;
     }
 
     .flash-reader-word-before{
@@ -3127,6 +3137,7 @@
       color:var(--search-chat-muted);
       font-size:clamp(22px, 3.2vw, 36px);
       font-weight:760;
+      font-family:inherit;
     }
 
     .flash-reader-foot{
@@ -6713,6 +6724,7 @@
     { label:'Fast', wps:6.4 },
     { label:'Sprint', wps:7.8 }
   ];
+  const FLASH_READER_PHI = 1.61803398875;
   const LOGIN_CHECK_TIMEOUT_MS = 3500;
   const POPUP_LOADING_TEXT = 'Checking account state...';
   const AUTH_VIEW_LOGIN = 'login';
@@ -8516,12 +8528,112 @@
             segmented.push(word);
           }
         }
-        if(segmented.length) return segmented;
+        if(segmented.length) return buildFlashReaderMeaningChunks(segmented, source);
       }catch(error){
         // Fall back to regex tokenization below.
       }
     }
-    return source.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)?|[^\s]/gu) || [];
+    return buildFlashReaderMeaningChunks(source.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)?|[^\s]/gu) || [], source);
+  }
+
+  function containsCjkText(text){
+    return /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}\p{Script=Hangul}]/u.test(String(text || ''));
+  }
+
+  function isJapaneseFunctionToken(token){
+    return /^(は|が|を|に|へ|で|と|の|も|や|か|から|まで|より|だけ|ほど|など|には|では|とは|ても|でも|なら|ので|ため|として|して|について|によって|です|ます|した|する|される|れる|られる|ない|ある|いる|なる|でき|できる|できます|できた|できない|だ|である|ました|ません|でしょう|ください)$/.test(String(token || ''));
+  }
+
+  function isFlashReaderPunctuation(token){
+    return /^[、。，．,.!?！？:：;；)]$/.test(String(token || ''));
+  }
+
+  function isOpeningPunctuation(token){
+    return /^[([{（「『]$/.test(String(token || ''));
+  }
+
+  function hasHanText(text){
+    return /[\p{Script=Han}]/u.test(String(text || ''));
+  }
+
+  function normalizeFlashReaderCjkTokens(tokens){
+    const normalized = [];
+    for(let i = 0; i < tokens.length; i += 1){
+      const token = String(tokens[i] || '').trim();
+      const next = String(tokens[i + 1] || '').trim();
+      if(token === 'や' && /^す[いくさ]/u.test(next) && normalized.length){
+        normalized[normalized.length - 1] += token + next;
+        i += 1;
+        continue;
+      }
+      normalized.push(token);
+    }
+    return normalized;
+  }
+
+  function hasJapaneseFunctionEnding(text){
+    return /(は|が|を|に|へ|で|と|の|も|や|か|から|まで|より|だけ|ほど|など|には|では|とは|ても|でも|なら|ので|ため|として|して|について|によって|です|ます|した|する|される|れる|られる|ない|ある|いる|なる|でき|できる|できます|できた|できない|だ|である|ました|ません|でしょう|ください)$/u.test(String(text || ''));
+  }
+
+  function shouldMergeCjkContentTokens(current, token){
+    if(!current || !token) return false;
+    if(hasJapaneseFunctionEnding(current) || isJapaneseFunctionToken(token)) return false;
+    if(!hasHanText(current) || !hasHanText(token)) return false;
+    const combinedLength = Array.from(current + token).length;
+    return combinedLength <= 6;
+  }
+
+  function buildFlashReaderMeaningChunks(tokens, sourceText){
+    const source = String(sourceText || '');
+    const sourceHasCjk = containsCjkText(source);
+    const normalizedTokens = sourceHasCjk ? normalizeFlashReaderCjkTokens(tokens) : tokens;
+    const chunks = [];
+    let current = '';
+
+    const pushCurrent = ()=>{
+      const value = current.trim();
+      if(value) chunks.push(value);
+      current = '';
+    };
+
+    normalizedTokens.forEach(rawToken=>{
+      const token = String(rawToken || '').trim();
+      if(!token) return;
+
+      if(isOpeningPunctuation(token)){
+        pushCurrent();
+        current = token;
+        return;
+      }
+
+      if(isFlashReaderPunctuation(token)){
+        current += token;
+        pushCurrent();
+        return;
+      }
+
+      if(!sourceHasCjk){
+        chunks.push(token);
+        return;
+      }
+
+      if(!current){
+        current = token;
+        return;
+      }
+
+      if(isJapaneseFunctionToken(token) || shouldMergeCjkContentTokens(current, token)){
+        current += token;
+        if(/[。！？!?]$/.test(token)) pushCurrent();
+        return;
+      }
+
+      pushCurrent();
+      current = token;
+    });
+
+    pushCurrent();
+    return chunks.length ? chunks : normalizedTokens;
   }
 
   function refreshFlashReaderTokens(resetToStart = false){
@@ -8556,12 +8668,40 @@
     return Math.min(4, length - 1);
   }
 
+  function getFlashReaderFontStack(text){
+    const value = String(text || '');
+    if(/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(value)){
+      return '"Hiragino Sans","Yu Gothic","Yu Gothic UI","Meiryo","Noto Sans JP",system-ui,sans-serif';
+    }
+    if(/[\p{Script=Hangul}]/u.test(value)){
+      return '"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif';
+    }
+    if(/[\p{Script=Han}]/u.test(value)){
+      return '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif';
+    }
+    return '"Inter","SF Pro Text","Segoe UI",system-ui,sans-serif';
+  }
+
+  function alignFlashReaderOrpLine(lineEl, pivotEl){
+    if(!lineEl || !pivotEl || !flashReaderStage) return;
+    lineEl.style.transform = 'translateX(0px)';
+    const stageRect = flashReaderStage.getBoundingClientRect();
+    const pivotRect = pivotEl.getBoundingClientRect();
+    const targetX = stageRect.left + (stageRect.width / (1 + FLASH_READER_PHI));
+    const pivotX = pivotRect.left + (pivotRect.width / 2);
+    lineEl.style.transform = `translateX(${Math.round(targetX - pivotX)}px)`;
+  }
+
   function renderFlashReaderOrpWord(word){
     if(!flashReaderWord) return;
     const chars = Array.from(String(word || ''));
     const pivotIndex = getFlashReaderOrpIndex(word);
     flashReaderWord.replaceChildren();
     flashReaderWord.classList.remove('is-placeholder');
+    flashReaderWord.style.fontFamily = getFlashReaderFontStack(word);
+
+    const line = document.createElement('span');
+    line.className = 'flash-reader-word-line';
 
     const before = document.createElement('span');
     before.className = 'flash-reader-word-before';
@@ -8575,7 +8715,9 @@
     after.className = 'flash-reader-word-after';
     after.textContent = chars.slice(pivotIndex + 1).join('');
 
-    flashReaderWord.append(before, pivot, after);
+    line.append(before, pivot, after);
+    flashReaderWord.appendChild(line);
+    alignFlashReaderOrpLine(line, pivot);
   }
 
   function renderFlashReader(){
@@ -8697,6 +8839,10 @@
       stopFlashReader();
     }
   }
+
+  window.addEventListener('resize', ()=>{
+    if(flashReaderOpen) renderFlashReader();
+  });
 
   function syncFlashReadButton(){
     if(!flashReadButton) return;
