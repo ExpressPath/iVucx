@@ -2498,13 +2498,17 @@
       padding:8px 8px calc(176px + env(safe-area-inset-bottom));
       opacity:0;
       transform:translateY(14px);
-      transition:opacity .36s ease,transform .36s cubic-bezier(.22,1,.36,1);
+      transition:opacity .36s ease,transform .36s cubic-bezier(.22,1,.36,1),padding-left .26s cubic-bezier(.22,1,.36,1);
     }
 
     body.suggestions-open .suggestion-pane{
       opacity:1;
       transform:translateY(0);
       pointer-events:auto;
+    }
+
+    body.suggestions-open.search-sidebar-open .suggestion-pane{
+      padding-left:312px;
     }
 
     .suggestion-panel{
@@ -2904,6 +2908,283 @@
 
     body.mode-q .citation-meta{
       color:#9bb0d4;
+    }
+
+    .citation-sources-reveal{
+      overflow:hidden;
+      transform-origin:top;
+      animation:sources-reveal .34s cubic-bezier(.22,1,.36,1) both;
+    }
+
+    @keyframes sources-reveal{
+      from{
+        opacity:0;
+        max-height:0;
+        transform:translateY(-8px) scaleY(.98);
+      }
+      to{
+        opacity:1;
+        max-height:5000px;
+        transform:translateY(0) scaleY(1);
+      }
+    }
+
+    .search-sidebar-hotzone{
+      position:fixed;
+      top:0;
+      left:0;
+      bottom:0;
+      width:22px;
+      z-index:33;
+      pointer-events:none;
+    }
+
+    body.suggestions-open .search-sidebar-hotzone{
+      pointer-events:auto;
+    }
+
+    .search-chat-sidebar{
+      position:fixed;
+      left:10px;
+      top:18px;
+      bottom:calc(176px + env(safe-area-inset-bottom));
+      z-index:34;
+      width:58px;
+      min-height:220px;
+      border:1px solid var(--search-chat-card-border);
+      border-radius:18px;
+      background:color-mix(in srgb, var(--bg-white) 82%, transparent);
+      color:var(--search-chat-card-text);
+      box-shadow:0 18px 50px rgba(15,23,42,0.12);
+      backdrop-filter:blur(18px) saturate(1.25);
+      overflow:hidden;
+      opacity:0;
+      transform:translateX(-10px);
+      pointer-events:none;
+      transition:width .26s cubic-bezier(.22,1,.36,1),opacity .22s ease,transform .26s cubic-bezier(.22,1,.36,1),border-color .2s ease,background-color .2s ease;
+    }
+
+    body.suggestions-open .search-chat-sidebar{
+      opacity:1;
+      transform:translateX(0);
+      pointer-events:auto;
+    }
+
+    body.search-sidebar-open .search-chat-sidebar{
+      width:min(292px, calc(100vw - 28px));
+      border-color:color-mix(in srgb, var(--search-chat-card-border) 68%, #4285f4 32%);
+      box-shadow:0 24px 70px rgba(15,23,42,0.18);
+    }
+
+    body.mode-q .search-chat-sidebar{
+      border-color:rgba(255,255,255,0.13);
+      background:rgba(8,10,16,0.86);
+      color:#edf2ff;
+      box-shadow:0 24px 70px rgba(0,0,0,0.32);
+    }
+
+    body.mode-q.search-sidebar-open .search-chat-sidebar{
+      border-color:rgba(143,185,255,0.34);
+    }
+
+    .search-sidebar-inner{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      padding:10px 8px;
+      box-sizing:border-box;
+    }
+
+    .chat-keep-button{
+      width:40px;
+      height:40px;
+      min-height:40px;
+      border:1px solid var(--search-chat-item-border);
+      border-radius:14px;
+      display:flex;
+      align-items:center;
+      justify-content:flex-start;
+      gap:10px;
+      padding:0 10px;
+      background:var(--search-chat-item-bg);
+      color:var(--search-chat-card-text);
+      cursor:pointer;
+      overflow:hidden;
+      transition:width .26s cubic-bezier(.22,1,.36,1),background-color .18s ease,border-color .18s ease,transform .16s ease,color .18s ease;
+    }
+
+    body.search-sidebar-open .chat-keep-button{
+      width:100%;
+    }
+
+    .chat-keep-button:hover,
+    .chat-keep-button:focus-visible{
+      border-color:var(--search-chat-item-hover-border);
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+    }
+
+    .chat-keep-button.is-pressed{
+      transform:scale(.94);
+    }
+
+    .chat-keep-button.is-saving{
+      color:#0b57d0;
+      border-color:rgba(66,133,244,.34);
+    }
+
+    .chat-keep-button.is-saved{
+      color:#0b57d0;
+      background:rgba(66,133,244,.1);
+      border-color:rgba(66,133,244,.34);
+    }
+
+    body.mode-q .chat-keep-button{
+      border-color:rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.055);
+      color:#eef4ff;
+    }
+
+    body.mode-q .chat-keep-button:hover,
+    body.mode-q .chat-keep-button:focus-visible{
+      border-color:rgba(143,185,255,0.4);
+      background:rgba(87,132,209,0.16);
+    }
+
+    body.mode-q .chat-keep-button.is-saving,
+    body.mode-q .chat-keep-button.is-saved{
+      color:#9fc3ff;
+      background:rgba(87,132,209,0.18);
+      border-color:rgba(143,185,255,0.4);
+    }
+
+    .chat-keep-button svg{
+      width:18px;
+      min-width:18px;
+      height:18px;
+      stroke:currentColor;
+      stroke-width:2;
+      fill:none;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+
+    .chat-keep-label{
+      white-space:nowrap;
+      opacity:0;
+      transform:translateX(-6px);
+      font-size:14px;
+      font-weight:720;
+      letter-spacing:0;
+      transition:opacity .18s ease,transform .18s ease;
+    }
+
+    body.search-sidebar-open .chat-keep-label{
+      opacity:1;
+      transform:translateX(0);
+    }
+
+    .search-sidebar-expanded{
+      min-width:230px;
+      opacity:0;
+      transform:translateX(-8px);
+      pointer-events:none;
+      transition:opacity .2s ease,transform .24s cubic-bezier(.22,1,.36,1);
+    }
+
+    body.search-sidebar-open .search-sidebar-expanded{
+      opacity:1;
+      transform:translateX(0);
+      pointer-events:auto;
+    }
+
+    .search-sidebar-title{
+      margin:2px 0 6px;
+      color:var(--search-chat-muted);
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:.05em;
+      text-transform:uppercase;
+    }
+
+    body.mode-q .search-sidebar-title{
+      color:#9bb0d4;
+    }
+
+    .search-keep-status{
+      min-height:18px;
+      margin-bottom:10px;
+      color:var(--search-chat-subtle);
+      font-size:12px;
+      line-height:1.35;
+    }
+
+    .search-keep-status.is-error{
+      color:var(--search-chat-error);
+    }
+
+    body.mode-q .search-keep-status{
+      color:#9bb0d4;
+    }
+
+    body.mode-q .search-keep-status.is-error{
+      color:#ffb6b6;
+    }
+
+    .search-sidebar-turn-list{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      overflow:auto;
+      max-height:calc(100vh - 300px);
+      padding-right:2px;
+    }
+
+    .search-sidebar-turn{
+      border:1px solid var(--search-chat-item-border);
+      border-radius:12px;
+      padding:9px 10px;
+      background:var(--search-chat-item-bg);
+      color:var(--search-chat-citation-text);
+    }
+
+    body.mode-q .search-sidebar-turn{
+      border-color:rgba(255,255,255,0.1);
+      background:rgba(255,255,255,0.04);
+      color:#edf2ff;
+    }
+
+    .search-sidebar-turn-title{
+      font-size:13px;
+      font-weight:760;
+      line-height:1.35;
+      overflow:hidden;
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+    }
+
+    .search-sidebar-turn-meta{
+      margin-top:5px;
+      color:var(--search-chat-subtle);
+      font-size:11px;
+      line-height:1.35;
+    }
+
+    body.mode-q .search-sidebar-turn-meta{
+      color:#9bb0d4;
+    }
+
+    @media (max-width: 760px){
+      .search-chat-sidebar,
+      .search-sidebar-hotzone{
+        display:none;
+      }
+
+      body.suggestions-open.search-sidebar-open .suggestion-pane{
+        padding-left:8px;
+      }
     }
 
     .suggestion-loading{
@@ -3972,6 +4253,23 @@
   </div>
 </section>
 
+<div class="search-sidebar-hotzone" id="searchSidebarHotzone" aria-hidden="true" hidden></div>
+<aside class="search-chat-sidebar" id="searchChatSidebar" aria-label="Search chat sidebar" hidden>
+  <div class="search-sidebar-inner">
+    <button class="chat-keep-button" id="chatKeepButton" type="button" aria-label="Keep current search chat" title="Keep">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+      </svg>
+      <span class="chat-keep-label">Keep</span>
+    </button>
+    <div class="search-sidebar-expanded">
+      <div class="search-sidebar-title">Search chats</div>
+      <div class="search-keep-status" id="searchKeepStatus">Keep this conversation in your account.</div>
+      <div class="search-sidebar-turn-list" id="searchSidebarTurnList" aria-live="polite"></div>
+    </div>
+  </div>
+</aside>
+
 <aside class="citation-preview-drawer" id="citationPreviewDrawer" aria-hidden="true" hidden>
   <div class="citation-preview-head">
     <div class="citation-preview-kicker">Source preview</div>
@@ -4166,6 +4464,11 @@
   const suggestionPane = document.getElementById('suggestionPane');
   const suggestionBody = document.getElementById('suggestionBody');
   const suggestionPanel = suggestionPane ? suggestionPane.querySelector('.suggestion-panel') : null;
+  const searchSidebarHotzone = document.getElementById('searchSidebarHotzone');
+  const searchChatSidebar = document.getElementById('searchChatSidebar');
+  const chatKeepButton = document.getElementById('chatKeepButton');
+  const searchKeepStatus = document.getElementById('searchKeepStatus');
+  const searchSidebarTurnList = document.getElementById('searchSidebarTurnList');
   const citationPreviewDrawer = document.getElementById('citationPreviewDrawer');
   const citationPreviewClose = document.getElementById('citationPreviewClose');
   const citationPreviewGo = document.getElementById('citationPreviewGo');
@@ -5687,6 +5990,10 @@
   let hasSuggestionResults = false;
   let suggestionTurnSeq = 0;
   let suggestionTurns = [];
+  let searchSidebarCloseTimer = 0;
+  let searchKeepBusy = false;
+  let searchKeepSavedId = '';
+  let searchKeepStatusTimer = 0;
   const answerStreamTimers = new Map();
   let mathTypesetTimer = null;
   let activeCitationPreview = null;
@@ -6776,6 +7083,15 @@
   function setSuggestionPaneOpen(isOpen){
     hasSuggestionResults = isOpen;
     bodyEl.classList.toggle('suggestions-open', isOpen);
+    if(searchChatSidebar) searchChatSidebar.hidden = !isOpen;
+    if(searchSidebarHotzone) searchSidebarHotzone.hidden = !isOpen;
+    if(!isOpen){
+      setSearchSidebarOpen(false);
+      setSearchKeepStatus('');
+      searchKeepSavedId = '';
+    }else{
+      renderSearchSidebarTurns();
+    }
     syncSearchDocking();
   }
 
@@ -6981,6 +7297,169 @@
       }
     });
     return history.slice(-6);
+  }
+
+  function truncateSidebarText(value, limit = 80){
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if(text.length <= limit) return text;
+    return text.slice(0, Math.max(0, limit - 1)).trimEnd() + '...';
+  }
+
+  function setSearchSidebarOpen(isOpen){
+    if(searchSidebarCloseTimer){
+      window.clearTimeout(searchSidebarCloseTimer);
+      searchSidebarCloseTimer = 0;
+    }
+    bodyEl.classList.toggle('search-sidebar-open', !!isOpen && hasSuggestionResults);
+  }
+
+  function scheduleSearchSidebarClose(){
+    if(searchSidebarCloseTimer) window.clearTimeout(searchSidebarCloseTimer);
+    searchSidebarCloseTimer = window.setTimeout(()=>{
+      setSearchSidebarOpen(false);
+    }, 240);
+  }
+
+  function setSearchKeepStatus(message, state = ''){
+    if(!searchKeepStatus) return;
+    if(searchKeepStatusTimer){
+      window.clearTimeout(searchKeepStatusTimer);
+      searchKeepStatusTimer = 0;
+    }
+    searchKeepStatus.textContent = message || 'Keep this conversation in your account.';
+    searchKeepStatus.classList.toggle('is-error', state === 'error');
+    if(message && state !== 'error'){
+      searchKeepStatusTimer = window.setTimeout(()=>{
+        if(searchKeepStatus){
+          searchKeepStatus.textContent = 'Keep this conversation in your account.';
+          searchKeepStatus.classList.remove('is-error');
+        }
+      }, 4200);
+    }
+  }
+
+  function renderSearchSidebarTurns(){
+    if(!searchSidebarTurnList) return;
+    searchSidebarTurnList.innerHTML = '';
+    const turns = suggestionTurns.filter(turn=>turn && turn.query);
+    if(turns.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'search-sidebar-turn';
+      const title = document.createElement('div');
+      title.className = 'search-sidebar-turn-title';
+      title.textContent = 'No active chat';
+      empty.appendChild(title);
+      searchSidebarTurnList.appendChild(empty);
+      return;
+    }
+
+    turns.slice(-8).reverse().forEach(turn=>{
+      const item = document.createElement('div');
+      item.className = 'search-sidebar-turn';
+
+      const title = document.createElement('div');
+      title.className = 'search-sidebar-turn-title';
+      title.textContent = truncateSidebarText(turn.query, 96);
+
+      const meta = document.createElement('div');
+      meta.className = 'search-sidebar-turn-meta';
+      const citationCount = Array.isArray(turn.citations) ? turn.citations.length : 0;
+      const status = turn.streamingAnswer ? 'writing' : turn.loading ? 'searching' : 'ready';
+      meta.textContent = `${status} / ${citationCount} sources`;
+
+      item.append(title, meta);
+      searchSidebarTurnList.appendChild(item);
+    });
+  }
+
+  function buildSearchKeepPayload(){
+    const turns = suggestionTurns
+      .filter(turn=>turn && (turn.query || turn.answer))
+      .map(turn=>({
+        id: turn.id,
+        query: String(turn.query || ''),
+        answer: String(turn.answer || turn.fullAnswer || ''),
+        targetKind: String(turn.targetKind || 'search'),
+        systemMode: String(turn.systemMode || getSearchSystemMode()),
+        citations: Array.isArray(turn.citations) ? turn.citations.map(citation=>({
+          id: citation.id,
+          problemId: citation.problemId,
+          title: citation.title,
+          kind: citation.kind,
+          fileName: citation.fileName,
+          language: citation.language,
+          proofState: citation.proofState,
+          normalizedFormat: citation.normalizedFormat,
+          quote: citation.quote
+        })) : []
+      }));
+    const first = turns.find(turn=>turn.query);
+    return {
+      title: first ? truncateSidebarText(first.query, 160) : 'Search chat',
+      systemMode: getSearchSystemMode(),
+      turns
+    };
+  }
+
+  async function keepCurrentSearchChat(){
+    if(searchKeepBusy) return;
+    const payload = buildSearchKeepPayload();
+    if(!payload.turns.length){
+      setSearchKeepStatus('Nothing to keep yet.', 'error');
+      return;
+    }
+
+    searchKeepBusy = true;
+    if(chatKeepButton){
+      chatKeepButton.disabled = true;
+      chatKeepButton.classList.add('is-pressed', 'is-saving');
+      chatKeepButton.classList.remove('is-saved');
+      window.setTimeout(()=>chatKeepButton.classList.remove('is-pressed'), 170);
+    }
+    setSearchSidebarOpen(true);
+    setSearchKeepStatus('Saving...');
+
+    try{
+      const res = await fetch('/api/search-chat-keep', {
+        method:'POST',
+        credentials:'include',
+        headers:{
+          'Content-Type':'application/json',
+          'Accept':'application/json'
+        },
+        body:JSON.stringify(payload)
+      });
+      const data = await res.json().catch(()=>null);
+      if(!res.ok || !data || !data.saved){
+        const reason = data && (data.reason || data.error) ? data.reason || data.error : `save_failed_${res.status}`;
+        if(reason === 'not_logged_in' && typeof showAuthPopup === 'function'){
+          loginPopupDismissed = false;
+          showAuthPopup();
+        }
+        throw new Error(reason);
+      }
+      searchKeepSavedId = String(data.keepId || '');
+      if(chatKeepButton){
+        chatKeepButton.classList.add('is-saved');
+      }
+      setSearchKeepStatus('Saved to Keep.');
+    }catch(error){
+      if(chatKeepButton){
+        chatKeepButton.classList.remove('is-saved');
+      }
+      const message = error && error.message === 'schema_missing'
+        ? 'Supabase table is missing.'
+        : error && error.message === 'not_logged_in'
+        ? 'Sign in before keeping.'
+        : 'Could not save this chat.';
+      setSearchKeepStatus(message, 'error');
+    }finally{
+      searchKeepBusy = false;
+      if(chatKeepButton){
+        chatKeepButton.disabled = false;
+        chatKeepButton.classList.remove('is-saving');
+      }
+    }
   }
 
   function findCitationById(turn, citationId){
@@ -7673,11 +8152,14 @@
           assistantCard.appendChild(answer);
         }
 
-        if(Array.isArray(turn.citations) && turn.citations.length > 0){
+        if(!turn.loading && !turn.streamingAnswer && Array.isArray(turn.citations) && turn.citations.length > 0){
+          const sourcesWrap = document.createElement('div');
+          sourcesWrap.className = 'citation-sources-reveal';
+
           const sourceTitle = document.createElement('div');
           sourceTitle.className = 'related-search-title';
           sourceTitle.textContent = 'Sources';
-          assistantCard.appendChild(sourceTitle);
+          sourcesWrap.appendChild(sourceTitle);
 
           const citationList = document.createElement('div');
           citationList.className = 'citation-list';
@@ -7722,7 +8204,8 @@
             citationList.appendChild(item);
           });
 
-          assistantCard.appendChild(citationList);
+          sourcesWrap.appendChild(citationList);
+          assistantCard.appendChild(sourcesWrap);
         }
 
         if(Array.isArray(turn.suggestions) && turn.suggestions.length > 0){
@@ -7788,6 +8271,7 @@
 
     suggestionBody.appendChild(thread);
     setSuggestionPaneOpen(true);
+    renderSearchSidebarTurns();
     scrollSuggestionPanelToBottom();
   }
 
@@ -8077,6 +8561,24 @@
       const citation = findCitationById(turn, citationId);
       if(citation) openCitationPreview(citation);
     });
+  }
+
+  if(searchSidebarHotzone){
+    searchSidebarHotzone.addEventListener('mouseenter', ()=>{
+      if(hasSuggestionResults) setSearchSidebarOpen(true);
+    });
+    searchSidebarHotzone.addEventListener('mouseleave', scheduleSearchSidebarClose);
+  }
+
+  if(searchChatSidebar){
+    searchChatSidebar.addEventListener('mouseenter', ()=>{
+      if(hasSuggestionResults) setSearchSidebarOpen(true);
+    });
+    searchChatSidebar.addEventListener('mouseleave', scheduleSearchSidebarClose);
+  }
+
+  if(chatKeepButton){
+    chatKeepButton.addEventListener('click', keepCurrentSearchChat);
   }
 
   if(citationPreviewClose){

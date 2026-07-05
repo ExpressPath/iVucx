@@ -13,6 +13,7 @@ import cookieConsent from './api/cookie-consent.js';
 import googleApi from './api/google.js';
 import jscoqProxy from './api/jscoq-proxy.js';
 import suggest from './api/suggest.js';
+import searchChatKeep from './api/search-chat-keep.js';
 import {
   canUseLocalExecutionFallback,
   isExecutionConfigured as isRemoteExecutionConfigured,
@@ -133,6 +134,7 @@ app.all('/api/google-status', wrap(googleRoute('status')));
 app.all('/api/proof-ai', wrap(sendProofAiResponse));
 app.all('/api/stripe-setup', wrap(sendStripeSetupResponse));
 app.all('/api/suggest', wrap(suggest));
+app.all('/api/search-chat-keep', wrap(searchChatKeep));
 
 app.use(express.static(__dirname, { dotfiles: 'ignore', extensions: ['html'] }));
 
