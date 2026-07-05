@@ -1036,6 +1036,26 @@ function ensureDetailedAnswer(answer, citations) {
   return `${combined}\n\n## 追加の確認点\n${padding.join('\n')}`;
 }
 
+function normalizeGeneratedResult(generated) {
+  const result = isPlainObject(generated)
+    ? { ...generated }
+    : { answer: '', suggestions: [], usedCitationIds: [] };
+  let guard = 0;
+  while (guard < 3) {
+    const nested = parseAnswerJson(result.answer);
+    if (!nested || !safeString(nested.answer)) break;
+    result.answer = safeString(nested.answer, result.answer);
+    if (Array.isArray(nested.usedCitationIds) && nested.usedCitationIds.length) {
+      result.usedCitationIds = nested.usedCitationIds;
+    }
+    if (Array.isArray(nested.suggestions) && nested.suggestions.length) {
+      result.suggestions = nested.suggestions;
+    }
+    guard += 1;
+  }
+  return result;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -1077,6 +1097,7 @@ export default async function handler(req, res) {
       };
       model = '';
     }
+    generated = normalizeGeneratedResult(generated);
 
     const suggestions = [];
     const usedCitationIds = Array.isArray(generated.usedCitationIds)
