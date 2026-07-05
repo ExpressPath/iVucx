@@ -2955,6 +2955,13 @@
       cursor:not-allowed;
     }
 
+    body.flash-reader-open .flash-read-button,
+    body.flash-reader-open .flash-read-button:disabled{
+      display:none;
+      opacity:0;
+      pointer-events:none;
+    }
+
     .flash-read-button:hover,
     .flash-read-button:focus-visible{
       border-color:var(--search-chat-item-hover-border);
@@ -3081,14 +3088,42 @@
     }
 
     .flash-reader-word{
+      width:100%;
       max-width:100%;
+      display:grid;
+      grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr);
+      align-items:baseline;
       font-size:clamp(42px, 6.4vw, 82px);
       line-height:1.05;
       font-weight:820;
-      overflow-wrap:anywhere;
+      white-space:nowrap;
+    }
+
+    .flash-reader-word-before{
+      min-width:0;
+      text-align:right;
+      white-space:nowrap;
+    }
+
+    .flash-reader-word-pivot{
+      color:#2563eb;
+      text-align:center;
+      text-shadow:0 0 18px rgba(37,99,235,0.18);
+    }
+
+    body.mode-q .flash-reader-word-pivot{
+      color:#8fb9ff;
+      text-shadow:0 0 20px rgba(143,185,255,0.24);
+    }
+
+    .flash-reader-word-after{
+      min-width:0;
+      text-align:left;
+      white-space:nowrap;
     }
 
     .flash-reader-word.is-placeholder{
+      display:block;
       color:var(--search-chat-muted);
       font-size:clamp(22px, 3.2vw, 36px);
       font-weight:760;
@@ -6673,10 +6708,10 @@
   const ANSWER_STREAM_MIN_CHARS = 12;
   const ANSWER_STREAM_MAX_CHARS = 46;
   const FLASH_READER_SPEEDS = [
-    { label:'Standard', wps:2.7 },
-    { label:'Focus', wps:3.5 },
-    { label:'Fast', wps:4.4 },
-    { label:'Sprint', wps:5.4 }
+    { label:'Standard', wps:3.8 },
+    { label:'Focus', wps:5.0 },
+    { label:'Fast', wps:6.4 },
+    { label:'Sprint', wps:7.8 }
   ];
   const LOGIN_CHECK_TIMEOUT_MS = 3500;
   const POPUP_LOADING_TEXT = 'Checking account state...';
@@ -8511,6 +8546,38 @@
     return Math.round((1000 / speed.wps) * lengthWeight);
   }
 
+  function getFlashReaderOrpIndex(word){
+    const chars = Array.from(String(word || ''));
+    const length = chars.length;
+    if(length <= 1) return 0;
+    if(length <= 5) return 1;
+    if(length <= 9) return 2;
+    if(length <= 13) return 3;
+    return Math.min(4, length - 1);
+  }
+
+  function renderFlashReaderOrpWord(word){
+    if(!flashReaderWord) return;
+    const chars = Array.from(String(word || ''));
+    const pivotIndex = getFlashReaderOrpIndex(word);
+    flashReaderWord.replaceChildren();
+    flashReaderWord.classList.remove('is-placeholder');
+
+    const before = document.createElement('span');
+    before.className = 'flash-reader-word-before';
+    before.textContent = chars.slice(0, pivotIndex).join('');
+
+    const pivot = document.createElement('span');
+    pivot.className = 'flash-reader-word-pivot';
+    pivot.textContent = chars[pivotIndex] || '';
+
+    const after = document.createElement('span');
+    after.className = 'flash-reader-word-after';
+    after.textContent = chars.slice(pivotIndex + 1).join('');
+
+    flashReaderWord.append(before, pivot, after);
+  }
+
   function renderFlashReader(){
     if(flashReaderSpeed){
       const speed = getFlashReaderSpeed();
@@ -8524,9 +8591,9 @@
     if(!flashReaderWord) return;
     const current = flashReaderTokens[flashReaderIndex] || '';
     if(current){
-      flashReaderWord.textContent = current;
-      flashReaderWord.classList.remove('is-placeholder');
+      renderFlashReaderOrpWord(current);
     }else{
+      flashReaderWord.replaceChildren();
       flashReaderWord.textContent = 'Space or tap';
       flashReaderWord.classList.add('is-placeholder');
     }
