@@ -8445,12 +8445,21 @@
       .trim();
   }
 
+  function getLatestFinalFlashReaderTurn(){
+    for(let index = suggestionTurns.length - 1; index >= 0; index -= 1){
+      const turn = suggestionTurns[index];
+      if(!turn || turn.loading || turn.loadingMore || turn.streamingAnswer) continue;
+      const finalText = String(turn.fullAnswer || turn.answer || '').trim();
+      if(finalText) return turn;
+    }
+    return null;
+  }
+
   function getFlashReaderSourceText(){
-    return suggestionTurns
-      .filter(turn=>turn && (turn.answer || turn.fullAnswer))
-      .map(turn=>stripFlashReaderMarkdown(turn.fullAnswer || turn.answer))
-      .filter(Boolean)
-      .join(' ');
+    const latestFinalTurn = getLatestFinalFlashReaderTurn();
+    return latestFinalTurn
+      ? stripFlashReaderMarkdown(latestFinalTurn.fullAnswer || latestFinalTurn.answer)
+      : '';
   }
 
   function tokenizeFlashReaderText(text){
@@ -8475,9 +8484,11 @@
     return source.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)?|[^\s]/gu) || [];
   }
 
-  function refreshFlashReaderTokens(){
+  function refreshFlashReaderTokens(resetToStart = false){
     flashReaderTokens = tokenizeFlashReaderText(getFlashReaderSourceText());
-    if(flashReaderIndex >= flashReaderTokens.length){
+    if(resetToStart){
+      flashReaderIndex = 0;
+    }else if(flashReaderIndex >= flashReaderTokens.length){
       flashReaderIndex = Math.max(0, flashReaderTokens.length - 1);
     }
     renderFlashReader();
@@ -8606,7 +8617,7 @@
       flashReaderSidebar.setAttribute('aria-hidden', flashReaderOpen ? 'false' : 'true');
     }
     if(flashReaderOpen){
-      refreshFlashReaderTokens();
+      refreshFlashReaderTokens(true);
       requestAnimationFrame(()=>{
         if(flashReaderStage) flashReaderStage.focus();
       });
@@ -8617,7 +8628,7 @@
 
   function syncFlashReadButton(){
     if(!flashReadButton) return;
-    const hasOutput = suggestionTurns.some(turn=>turn && String(turn.answer || turn.fullAnswer || '').trim());
+    const hasOutput = !!getLatestFinalFlashReaderTurn();
     flashReadButton.disabled = !hasOutput;
     flashReadButton.setAttribute('aria-disabled', hasOutput ? 'false' : 'true');
   }
