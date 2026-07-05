@@ -2669,6 +2669,50 @@
       color:#fff;
     }
 
+    .chat-selection-quote{
+      position:fixed;
+      z-index:78;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-height:34px;
+      padding:0 12px;
+      border:1px solid var(--search-chat-card-border);
+      border-radius:999px;
+      background:color-mix(in srgb, var(--bg-white) 92%, CanvasText 8%);
+      color:var(--search-chat-card-text);
+      box-shadow:0 14px 36px rgba(15,23,42,0.18);
+      backdrop-filter:blur(18px) saturate(1.18);
+      font:inherit;
+      font-size:12px;
+      font-weight:780;
+      cursor:pointer;
+      opacity:0;
+      transform:translate(-50%, 6px) scale(.96);
+      pointer-events:none;
+      transition:opacity .16s ease,transform .18s cubic-bezier(.22,1,.36,1),border-color .18s ease,background-color .18s ease;
+    }
+
+    .chat-selection-quote.is-visible{
+      opacity:1;
+      transform:translate(-50%, 0) scale(1);
+      pointer-events:auto;
+    }
+
+    .chat-selection-quote:hover,
+    .chat-selection-quote:focus-visible{
+      border-color:var(--search-chat-item-hover-border);
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+    }
+
+    body.mode-q .chat-selection-quote{
+      border-color:rgba(255,255,255,0.14);
+      background:rgba(15,20,29,0.96);
+      color:#edf2ff;
+      box-shadow:0 14px 38px rgba(0,0,0,0.34);
+    }
+
     .search-input[readonly]{
       cursor:progress;
       opacity:.72;
@@ -3522,6 +3566,56 @@
       animation:sources-reveal .34s cubic-bezier(.22,1,.36,1) both;
     }
 
+    .chat-answer-more{
+      margin:12px 0;
+      border:1px solid var(--search-chat-citation-border);
+      border-radius:14px;
+      background:var(--search-chat-citation-bg);
+      overflow:hidden;
+    }
+
+    .chat-answer-more summary{
+      min-height:42px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:0 12px;
+      color:var(--search-chat-citation-id);
+      font-size:13px;
+      font-weight:780;
+      cursor:pointer;
+      list-style:none;
+    }
+
+    .chat-answer-more summary::-webkit-details-marker{
+      display:none;
+    }
+
+    .chat-answer-more summary::after{
+      content:'Show more';
+      color:var(--search-chat-muted);
+      font-size:11px;
+      font-weight:760;
+      letter-spacing:.02em;
+    }
+
+    .chat-answer-more[open] summary::after{
+      content:'Show less';
+    }
+
+    .chat-answer-more-body{
+      padding:0 12px 12px;
+      color:var(--search-chat-citation-text);
+      font-size:13px;
+      line-height:1.55;
+    }
+
+    body.mode-q .chat-answer-more{
+      border-color:rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.04);
+    }
+
     @keyframes sources-reveal{
       from{
         opacity:0;
@@ -4133,7 +4227,8 @@
     }
 
     .citation-preview-text,
-    .citation-preview-code{
+    .citation-preview-code,
+    .citation-preview-structure{
       margin:0;
       border:1px solid var(--search-chat-citation-border);
       border-radius:14px;
@@ -4146,6 +4241,54 @@
       overflow-wrap:anywhere;
     }
 
+    .citation-preview-structure{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      padding:10px;
+      white-space:normal;
+    }
+
+    .citation-preview-structure-row{
+      display:flex;
+      align-items:flex-start;
+      gap:9px;
+      min-height:28px;
+      padding:8px 9px;
+      border-radius:10px;
+      background:color-mix(in srgb, var(--search-chat-item-hover-bg) 52%, transparent);
+    }
+
+    .citation-preview-structure-icon{
+      flex:0 0 auto;
+      width:20px;
+      color:var(--search-chat-citation-id);
+      text-align:center;
+      font-size:13px;
+      line-height:1.45;
+    }
+
+    .citation-preview-structure-main{
+      min-width:0;
+      flex:1;
+    }
+
+    .citation-preview-structure-title{
+      color:var(--search-chat-citation-text);
+      font-size:13px;
+      font-weight:760;
+      line-height:1.35;
+      overflow-wrap:anywhere;
+    }
+
+    .citation-preview-structure-meta{
+      margin-top:2px;
+      color:var(--search-chat-muted);
+      font-size:11px;
+      line-height:1.35;
+      overflow-wrap:anywhere;
+    }
+
     .citation-preview-code{
       max-height:320px;
       overflow:auto;
@@ -4154,7 +4297,8 @@
     }
 
     body.mode-q .citation-preview-text,
-    body.mode-q .citation-preview-code{
+    body.mode-q .citation-preview-code,
+    body.mode-q .citation-preview-structure{
       border-color:rgba(255,255,255,0.12);
       background:rgba(255,255,255,0.04);
       color:#edf2ff;
@@ -4941,6 +5085,7 @@
     <div id="suggestionBody" class="suggestion-thread"></div>
   </div>
 </section>
+<button class="chat-selection-quote" id="chatSelectionQuote" type="button" aria-label="Add selected text to chat">Add to chat</button>
 
 <div class="search-sidebar-hotzone" id="searchSidebarHotzone" aria-hidden="true" hidden></div>
 <aside class="search-chat-sidebar" id="searchChatSidebar" aria-label="Search chat sidebar" hidden>
@@ -4970,12 +5115,16 @@
     <h2 class="citation-preview-title" id="citationPreviewTitle"></h2>
     <div class="citation-preview-meta" id="citationPreviewMeta"></div>
     <section class="citation-preview-section">
-      <h3 class="citation-preview-section-title">Quote</h3>
-      <div class="citation-preview-text" id="citationPreviewQuote"></div>
+      <h3 class="citation-preview-section-title">Summary</h3>
+      <div class="citation-preview-text" id="citationPreviewSummary"></div>
     </section>
     <section class="citation-preview-section">
-      <h3 class="citation-preview-section-title">Source</h3>
-      <pre class="citation-preview-code" id="citationPreviewSource"></pre>
+      <h3 class="citation-preview-section-title">Attachments</h3>
+      <div class="citation-preview-structure" id="citationPreviewAttachments"></div>
+    </section>
+    <section class="citation-preview-section">
+      <h3 class="citation-preview-section-title">Proof files</h3>
+      <div class="citation-preview-structure" id="citationPreviewProof"></div>
     </section>
   </div>
   <div class="citation-preview-foot">
@@ -5178,8 +5327,10 @@
   const citationPreviewGo = document.getElementById('citationPreviewGo');
   const citationPreviewTitle = document.getElementById('citationPreviewTitle');
   const citationPreviewMeta = document.getElementById('citationPreviewMeta');
-  const citationPreviewQuote = document.getElementById('citationPreviewQuote');
-  const citationPreviewSource = document.getElementById('citationPreviewSource');
+  const citationPreviewSummary = document.getElementById('citationPreviewSummary');
+  const citationPreviewAttachments = document.getElementById('citationPreviewAttachments');
+  const citationPreviewProof = document.getElementById('citationPreviewProof');
+  const chatSelectionQuote = document.getElementById('chatSelectionQuote');
   const problemPreviewPage = document.getElementById('problemPreviewPage');
   const problemPreviewBack = document.getElementById('problemPreviewBack');
   const problemPreviewCard = document.getElementById('problemPreviewCard');
@@ -6697,6 +6848,8 @@
   let suggestionTurns = [];
   let editingSuggestionTurnId = 0;
   let editingSuggestionDraft = '';
+  let selectedAssistantQuoteText = '';
+  let selectedAssistantQuoteTurnId = 0;
   let searchSidebarCloseTimer = 0;
   let searchKeepBusy = false;
   let searchKeepSavedId = '';
@@ -8024,6 +8177,7 @@
         language: String(citation.language || '').trim(),
         kind: String(citation.kind || '').trim(),
         normalizedFormat: String(citation.normalizedFormat || '').trim(),
+        normalizedTermPreview: String(citation.normalizedTermPreview || citation.normalizedTerm || '').trim(),
         requestedFormat: String(citation.requestedFormat || '').trim(),
         completedFormat: String(citation.completedFormat || '').trim(),
         used: !!citation.used,
@@ -9017,6 +9171,155 @@
     return lines.join('\n') || 'No additional details.';
   }
 
+  function summarizeCitationText(citation){
+    if(!citation) return 'No summary is available for this source.';
+    const pieces = [
+      citation.quote,
+      citation.normalizedTermPreview,
+      citation.sourceCode
+    ].map(value=>String(value || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const base = pieces.find(Boolean) || '';
+    if(!base){
+      const kind = citation.kind ? `${citation.kind} source` : 'saved source';
+      return `This ${kind} is saved in the database, but no readable summary text was included with the citation.`;
+    }
+    const summary = base.length > 680 ? base.slice(0, 679).trimEnd() + '...' : base;
+    const prefix = citation.kind && citation.kind !== 'unknown'
+      ? `${citation.kind}として保存された項目です。`
+      : '保存済みデータベース内の項目です。';
+    return `${prefix}${summary}`;
+  }
+
+  function formatByteSize(size){
+    const value = Number(size) || 0;
+    if(value <= 0) return '';
+    const units = ['B','KB','MB','GB'];
+    let next = value;
+    let unitIndex = 0;
+    while(next >= 1024 && unitIndex < units.length - 1){
+      next /= 1024;
+      unitIndex += 1;
+    }
+    const digits = next >= 10 || unitIndex === 0 ? 0 : 1;
+    return `${next.toFixed(digits)} ${units[unitIndex]}`;
+  }
+
+  function appendCitationStructureRow(containerEl, icon, title, meta){
+    if(!containerEl) return;
+    const row = document.createElement('div');
+    row.className = 'citation-preview-structure-row';
+
+    const iconEl = document.createElement('div');
+    iconEl.className = 'citation-preview-structure-icon';
+    iconEl.textContent = icon || '•';
+
+    const main = document.createElement('div');
+    main.className = 'citation-preview-structure-main';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'citation-preview-structure-title';
+    titleEl.textContent = title || 'Untitled';
+    main.appendChild(titleEl);
+
+    if(meta){
+      const metaEl = document.createElement('div');
+      metaEl.className = 'citation-preview-structure-meta';
+      metaEl.textContent = meta;
+      main.appendChild(metaEl);
+    }
+
+    row.append(iconEl, main);
+    containerEl.appendChild(row);
+  }
+
+  function renderCitationAttachmentStructure(containerEl, citation){
+    if(!containerEl) return;
+    containerEl.innerHTML = '';
+    const attachments = citation && Array.isArray(citation.attachments) ? citation.attachments : [];
+    if(!attachments.length){
+      appendCitationStructureRow(containerEl, '—', 'No uploaded attachments saved', 'This source can still be opened from the saved proof/source snapshot.');
+      return;
+    }
+    attachments.forEach((attachment, index)=>{
+      const label = getCitationAttachmentLabel(attachment) || `attachment-${index + 1}`;
+      const kind = inferAttachmentKind(attachment);
+      const meta = [
+        kind,
+        attachment.ext ? `.${attachment.ext}` : '',
+        formatByteSize(attachment.size),
+        attachment.relativePath && attachment.relativePath !== label ? attachment.relativePath : ''
+      ].filter(Boolean).join(' / ');
+      appendCitationStructureRow(containerEl, '•', label, meta);
+    });
+  }
+
+  function extractProofDeclarations(sourceText){
+    const text = String(sourceText || '');
+    if(!text.trim()) return [];
+    const lines = text.split(/\r?\n/);
+    const declarations = [];
+    const pattern = /^\s*(theorem|lemma|def|definition|proposition|corollary|example|fixpoint|inductive|Theorem|Lemma|Definition|Proposition|Corollary|Example|Fixpoint|Inductive)\s+([A-Za-z0-9_'.-]+)?/;
+    for(let index = 0; index < lines.length && declarations.length < 8; index += 1){
+      const match = lines[index].match(pattern);
+      if(match){
+        declarations.push({
+          line:index + 1,
+          type:match[1],
+          name:match[2] || ''
+        });
+      }
+    }
+    return declarations;
+  }
+
+  function renderCitationProofStructure(containerEl, citation){
+    if(!containerEl) return;
+    containerEl.innerHTML = '';
+    const sourceText = getCitationSourceText(citation);
+    const lineCount = sourceText ? sourceText.split(/\r?\n/).length : 0;
+    const meta = [
+      citation && citation.language ? citation.language : '',
+      lineCount ? `${lineCount} lines` : '',
+      citation && citation.proofState ? `proof ${citation.proofState}` : '',
+      citation && citation.normalizedFormat ? citation.normalizedFormat : ''
+    ].filter(Boolean).join(' / ');
+    appendCitationStructureRow(
+      containerEl,
+      '{}',
+      citation && citation.fileName ? citation.fileName : 'Saved proof/source file',
+      meta || 'No proof file metadata was saved.'
+    );
+
+    const declarations = extractProofDeclarations(sourceText);
+    if(declarations.length){
+      declarations.forEach(item=>{
+        appendCitationStructureRow(
+          containerEl,
+          'ƒ',
+          [item.type, item.name].filter(Boolean).join(' '),
+          `line ${item.line}`
+        );
+      });
+      return;
+    }
+
+    if(citation && citation.normalizedTermPreview){
+      appendCitationStructureRow(containerEl, '∑', 'Normalized term preview', truncateSidebarText(citation.normalizedTermPreview, 220));
+      return;
+    }
+
+    if(!sourceText){
+      appendCitationStructureRow(containerEl, '—', 'No saved proof source preview', 'Open Go to page for the read-only preview shell.');
+    }
+  }
+
+  function isCollapsibleAnswerHeading(text){
+    const value = String(text || '').replace(/\s+/g, '');
+    return value.includes('保存データから読めること')
+      || value.includes('読み取り上の注意')
+      || value.includes('読み上げ上の注意');
+  }
+
   function appendInlineAnswerContent(targetEl, text, turn){
     if(!targetEl) return;
     let value = String(text || '');
@@ -9219,6 +9522,30 @@
       const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
       if(headingMatch){
         flushAnswerList(answerEl, listState);
+        if(isCollapsibleAnswerHeading(headingMatch[2])){
+          const details = document.createElement('details');
+          details.className = 'chat-answer-more';
+          const summary = document.createElement('summary');
+          summary.textContent = headingMatch[2];
+          details.appendChild(summary);
+
+          const body = document.createElement('div');
+          body.className = 'chat-answer-more-body';
+          lineIndex += 1;
+          const detailLines = [];
+          while(lineIndex < lines.length){
+            const nextLine = String(lines[lineIndex] || '');
+            if(/^\s*#{1,4}\s+/.test(nextLine)){
+              break;
+            }
+            detailLines.push(nextLine);
+            lineIndex += 1;
+          }
+          renderAnswerWithCitationLinks(body, detailLines.join('\n'), turn);
+          details.appendChild(body);
+          answerEl.appendChild(details);
+          continue;
+        }
         const heading = document.createElement('div');
         heading.className = 'chat-answer-heading';
         appendInlineAnswerContent(heading, headingMatch[2], turn);
@@ -9266,12 +9593,11 @@
     if(!citation) return;
     if(citationPreviewTitle) citationPreviewTitle.textContent = citation.title || 'Untitled';
     appendCitationMetaPills(citationPreviewMeta, citation);
-    if(citationPreviewQuote){
-      citationPreviewQuote.textContent = citation.quote || 'No quote preview available.';
+    if(citationPreviewSummary){
+      citationPreviewSummary.textContent = summarizeCitationText(citation);
     }
-    if(citationPreviewSource){
-      citationPreviewSource.textContent = getCitationSourceText(citation) || 'No saved source preview available.';
-    }
+    renderCitationAttachmentStructure(citationPreviewAttachments, citation);
+    renderCitationProofStructure(citationPreviewProof, citation);
   }
 
   function getAttachmentMime(attachment){
@@ -9606,6 +9932,7 @@
   function renderSuggestionThread(){
     if(!suggestionBody) return;
 
+    hideChatSelectionQuote();
     suggestionBody.innerHTML = '';
 
     if(suggestionTurns.length === 0){
@@ -10150,7 +10477,93 @@
     await fetchSuggestionBatch(turn, false);
   }
 
+  function hideChatSelectionQuote(){
+    selectedAssistantQuoteText = '';
+    selectedAssistantQuoteTurnId = 0;
+    if(chatSelectionQuote){
+      chatSelectionQuote.classList.remove('is-visible');
+      chatSelectionQuote.style.left = '';
+      chatSelectionQuote.style.top = '';
+    }
+  }
+
+  function getSelectionTextInAssistantAnswer(){
+    const selection = window.getSelection ? window.getSelection() : null;
+    if(!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+    const text = String(selection.toString() || '').replace(/\s+/g, ' ').trim();
+    if(text.length < 2) return null;
+    const range = selection.getRangeAt(0);
+    const anchor = range.commonAncestorContainer && range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+      ? range.commonAncestorContainer
+      : range.commonAncestorContainer && range.commonAncestorContainer.parentElement;
+    const answerEl = anchor && typeof anchor.closest === 'function'
+      ? anchor.closest('.chat-answer')
+      : null;
+    if(!answerEl || !suggestionBody || !suggestionBody.contains(answerEl)) return null;
+    const turnEl = answerEl.closest('.chat-turn-assistant[data-turn-id]');
+    const rect = range.getBoundingClientRect();
+    if(!turnEl || !rect || (!rect.width && !rect.height)) return null;
+    return {
+      text:text.slice(0, 1200),
+      turnId:Number(turnEl.dataset.turnId) || 0,
+      rect
+    };
+  }
+
+  function updateChatSelectionQuote(){
+    if(!chatSelectionQuote || isSuggestionBusy()){
+      hideChatSelectionQuote();
+      return;
+    }
+    const info = getSelectionTextInAssistantAnswer();
+    if(!info){
+      hideChatSelectionQuote();
+      return;
+    }
+    selectedAssistantQuoteText = info.text;
+    selectedAssistantQuoteTurnId = info.turnId;
+    const left = Math.min(
+      Math.max(info.rect.left + info.rect.width / 2, 74),
+      Math.max(74, window.innerWidth - 74)
+    );
+    const top = Math.max(18, info.rect.top - 44);
+    chatSelectionQuote.style.left = `${left}px`;
+    chatSelectionQuote.style.top = `${top}px`;
+    chatSelectionQuote.classList.add('is-visible');
+  }
+
+  function addSelectedQuoteToChat(){
+    const quote = String(selectedAssistantQuoteText || '').trim();
+    if(!quote || !input || isSuggestionBusy()) return;
+    const turn = suggestionTurns.find(entry=>entry && entry.id === selectedAssistantQuoteTurnId);
+    const sourceTitle = turn && turn.query ? truncateSidebarText(turn.query, 90) : 'AI response';
+    const quoted = quote
+      .split(/\r?\n/)
+      .map(line=>`> ${line.trim()}`)
+      .join('\n');
+    const insertion = `From ${sourceTitle}:\n${quoted}\n\n`;
+    const current = String(input.value || '');
+    input.value = current ? `${current.trimEnd()}\n\n${insertion}` : insertion;
+    lastInputValue = input.value;
+    input.dispatchEvent(new Event('input', { bubbles:true }));
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    hideChatSelectionQuote();
+    const selection = window.getSelection ? window.getSelection() : null;
+    if(selection) selection.removeAllRanges();
+  }
+
   if(suggestionBody){
+    suggestionBody.addEventListener('mouseup', ()=>{
+      window.setTimeout(updateChatSelectionQuote, 0);
+    });
+
+    suggestionBody.addEventListener('keyup', e=>{
+      if(['Shift','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
+        window.setTimeout(updateChatSelectionQuote, 0);
+      }
+    });
+
     suggestionBody.addEventListener('click', e=>{
       const target = e.target && typeof e.target.closest === 'function' ? e.target : null;
       if(!target) return;
@@ -10238,6 +10651,18 @@
       if(citation) openCitationPreview(citation);
     });
   }
+
+  if(chatSelectionQuote){
+    chatSelectionQuote.addEventListener('mousedown', e=>{
+      e.preventDefault();
+    });
+    chatSelectionQuote.addEventListener('click', addSelectedQuoteToChat);
+  }
+
+  document.addEventListener('selectionchange', ()=>{
+    if(!chatSelectionQuote || !chatSelectionQuote.classList.contains('is-visible')) return;
+    window.setTimeout(updateChatSelectionQuote, 0);
+  });
 
   if(searchSidebarHotzone){
     searchSidebarHotzone.addEventListener('mouseenter', ()=>{
