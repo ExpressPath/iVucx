@@ -2550,8 +2550,15 @@
       justify-content:flex-end;
     }
 
-    .chat-user-bubble{
+    .chat-user-stack{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      gap:6px;
       max-width:min(90%, 960px);
+    }
+
+    .chat-user-bubble{
       padding:11px 14px;
       border-radius:18px 18px 4px 18px;
       background:var(--search-chat-user-bg);
@@ -2566,6 +2573,105 @@
       background:#dbe7ff;
       color:#121a2d;
       box-shadow:0 10px 24px rgba(0,0,0,0.3);
+    }
+
+    .chat-user-actions,
+    .chat-edit-actions{
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:8px;
+    }
+
+    .chat-message-action,
+    .chat-edit-btn{
+      border:1px solid var(--search-chat-item-border);
+      border-radius:9px;
+      background:var(--search-chat-item-bg);
+      color:var(--search-chat-citation-text);
+      font:inherit;
+      font-size:12px;
+      font-weight:720;
+      line-height:1;
+      padding:7px 9px;
+      cursor:pointer;
+      transition:border-color .18s ease,background-color .18s ease,opacity .18s ease;
+    }
+
+    .chat-message-action:hover,
+    .chat-message-action:focus-visible,
+    .chat-edit-btn:hover,
+    .chat-edit-btn:focus-visible{
+      border-color:var(--search-chat-item-hover-border);
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+    }
+
+    .chat-message-action:disabled,
+    .chat-edit-btn:disabled{
+      cursor:not-allowed;
+      opacity:.45;
+    }
+
+    body.mode-q .chat-message-action,
+    body.mode-q .chat-edit-btn{
+      border-color:rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.04);
+      color:#edf2ff;
+    }
+
+    body.mode-q .chat-message-action:hover,
+    body.mode-q .chat-message-action:focus-visible,
+    body.mode-q .chat-edit-btn:hover,
+    body.mode-q .chat-edit-btn:focus-visible{
+      border-color:rgba(143,185,255,0.4);
+      background:rgba(87,132,209,0.16);
+    }
+
+    .chat-edit-form{
+      width:min(100%, 760px);
+      padding:10px;
+      border:1px solid var(--search-chat-item-border);
+      border-radius:16px 16px 4px 16px;
+      background:var(--search-prompt-input-bg);
+      color:var(--search-prompt-input-text);
+      box-shadow:var(--search-chat-user-shadow);
+    }
+
+    body.mode-q .chat-edit-form{
+      border-color:rgba(255,255,255,0.14);
+      background:#171d28;
+      color:#eaf1ff;
+    }
+
+    .chat-edit-input{
+      width:100%;
+      min-height:74px;
+      max-height:190px;
+      resize:vertical;
+      border:0;
+      outline:0;
+      background:transparent;
+      color:inherit;
+      font:inherit;
+      font-size:15px;
+      line-height:1.45;
+      padding:2px;
+    }
+
+    .chat-edit-actions{
+      margin-top:8px;
+    }
+
+    .chat-edit-btn.primary{
+      border-color:rgba(66,133,244,0.42);
+      background:linear-gradient(135deg,#2563eb,#7c3aed);
+      color:#fff;
+    }
+
+    .search-input[readonly]{
+      cursor:progress;
+      opacity:.72;
     }
 
     .chat-turn-assistant{
@@ -6034,6 +6140,8 @@
   let hasSuggestionResults = false;
   let suggestionTurnSeq = 0;
   let suggestionTurns = [];
+  let editingSuggestionTurnId = 0;
+  let editingSuggestionDraft = '';
   let searchSidebarCloseTimer = 0;
   let searchKeepBusy = false;
   let searchKeepSavedId = '';
@@ -7139,6 +7247,26 @@
     syncSearchDocking();
   }
 
+  function isSuggestionTurnBusy(turn){
+    return !!(turn && (turn.loading || turn.loadingMore || turn.streamingAnswer));
+  }
+
+  function isSuggestionBusy(){
+    return !!suggestionAbortController || suggestionTurns.some(isSuggestionTurnBusy);
+  }
+
+  function syncSuggestionControls(){
+    const busy = state === 0 && isSuggestionBusy();
+    if(sendButton){
+      sendButton.disabled = busy;
+      sendButton.setAttribute('aria-disabled', busy ? 'true' : 'false');
+    }
+    if(input){
+      input.readOnly = busy;
+      input.setAttribute('aria-busy', busy ? 'true' : 'false');
+    }
+  }
+
   function exitSearchMode(){
     if(!hasSuggestionResults || state !== 0) return;
     clearSuggestionPane();
@@ -7159,6 +7287,8 @@
     }
 
     suggestionTurns = [];
+    editingSuggestionTurnId = 0;
+    editingSuggestionDraft = '';
 
     if(suggestionBody){
       suggestionBody.innerHTML = '';
@@ -7167,6 +7297,7 @@
     closeCitationPreview();
     closeProblemPreviewPage();
     setSuggestionPaneOpen(false);
+    syncSuggestionControls();
   }
 
   function stopAnswerStream(turn){
@@ -7177,6 +7308,7 @@
       answerStreamTimers.delete(turn.id);
     }
     turn.streamingAnswer = false;
+    syncSuggestionControls();
   }
 
   function stopAllAnswerStreams(){
@@ -7185,6 +7317,7 @@
     suggestionTurns.forEach(turn=>{
       if(turn) turn.streamingAnswer = false;
     });
+    syncSuggestionControls();
   }
 
   function scrollSuggestionPanelToBottom(){
@@ -8193,6 +8326,7 @@
     turn.fullAnswer = text;
     turn.answer = '';
     turn.streamingAnswer = !!text;
+    syncSuggestionControls();
     if(!text){
       renderSuggestionThread();
       return;
@@ -8208,6 +8342,7 @@
         turn.streamingAnswer = false;
         answerStreamTimers.delete(turn.id);
         renderSuggestionThread();
+        syncSuggestionControls();
         return;
       }
       renderSuggestionThread();
@@ -8225,6 +8360,7 @@
 
     if(suggestionTurns.length === 0){
       setSuggestionPaneOpen(false);
+      syncSuggestionControls();
       return;
     }
 
@@ -8236,10 +8372,66 @@
       userRow.className = 'chat-turn-user';
       userRow.dataset.turnId = String(turn.id);
 
-      const userBubble = document.createElement('div');
-      userBubble.className = 'chat-user-bubble';
-      userBubble.textContent = turn.query;
-      userRow.appendChild(userBubble);
+      const userStack = document.createElement('div');
+      userStack.className = 'chat-user-stack';
+
+      const busy = isSuggestionBusy();
+      const isEditing = editingSuggestionTurnId === turn.id;
+      if(isEditing){
+        const editForm = document.createElement('div');
+        editForm.className = 'chat-edit-form';
+
+        const editInput = document.createElement('textarea');
+        editInput.className = 'chat-edit-input';
+        editInput.rows = 3;
+        editInput.dataset.turnId = String(turn.id);
+        editInput.value = editingSuggestionDraft || turn.query || '';
+        editInput.disabled = busy;
+        editInput.setAttribute('aria-label', 'Edit message');
+        editForm.appendChild(editInput);
+
+        const editActions = document.createElement('div');
+        editActions.className = 'chat-edit-actions';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'chat-edit-btn';
+        cancelBtn.dataset.action = 'cancel-edit';
+        cancelBtn.dataset.turnId = String(turn.id);
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.disabled = busy;
+
+        const resendBtn = document.createElement('button');
+        resendBtn.type = 'button';
+        resendBtn.className = 'chat-edit-btn primary';
+        resendBtn.dataset.action = 'resend-edit';
+        resendBtn.dataset.turnId = String(turn.id);
+        resendBtn.textContent = 'Resend';
+        resendBtn.disabled = busy || !String(editInput.value || '').trim();
+
+        editActions.append(cancelBtn, resendBtn);
+        editForm.appendChild(editActions);
+        userStack.appendChild(editForm);
+      }else{
+        const userBubble = document.createElement('div');
+        userBubble.className = 'chat-user-bubble';
+        userBubble.textContent = turn.query;
+        userStack.appendChild(userBubble);
+
+        const actions = document.createElement('div');
+        actions.className = 'chat-user-actions';
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'chat-message-action';
+        editBtn.dataset.action = 'edit-message';
+        editBtn.dataset.turnId = String(turn.id);
+        editBtn.textContent = 'Edit';
+        editBtn.disabled = busy || isSuggestionTurnBusy(turn);
+        actions.appendChild(editBtn);
+        userStack.appendChild(actions);
+      }
+
+      userRow.appendChild(userStack);
       thread.appendChild(userRow);
 
       const assistantRow = document.createElement('div');
@@ -8391,6 +8583,7 @@
     suggestionBody.appendChild(thread);
     setSuggestionPaneOpen(true);
     renderSearchSidebarTurns();
+    syncSuggestionControls();
     scrollSuggestionPanelToBottom();
   }
 
@@ -8419,6 +8612,7 @@
       turn.loading = false;
       turn.loadingMore = false;
       turn.error = '';
+      syncSuggestionControls();
       renderSuggestionThread();
       return;
     }
@@ -8429,6 +8623,7 @@
       turn.streamingAnswer = true;
       turn.answer = String(turn.answer || '') + delta;
       turn.fullAnswer = turn.answer;
+      syncSuggestionControls();
       renderSuggestionThread();
       return;
     }
@@ -8437,6 +8632,7 @@
       turn.streamingAnswer = true;
       turn.answer = String(event.answer || turn.answer || '');
       turn.fullAnswer = turn.answer;
+      syncSuggestionControls();
       renderSuggestionThread();
       return;
     }
@@ -8453,6 +8649,7 @@
       turn.loading = false;
       turn.loadingMore = false;
       turn.error = '';
+      syncSuggestionControls();
       renderSuggestionThread();
       return;
     }
@@ -8461,6 +8658,7 @@
       turn.streamingAnswer = false;
       turn.loading = false;
       turn.loadingMore = false;
+      syncSuggestionControls();
       renderSuggestionThread();
     }
   }
@@ -8519,6 +8717,7 @@
       turn.loadingMore = false;
       turn.error = '';
     }
+    syncSuggestionControls();
     renderSuggestionThread();
 
     let streamedResponse = false;
@@ -8592,19 +8791,74 @@
       }
       turn.loading = false;
       turn.loadingMore = false;
-      if(sendButton) sendButton.disabled = false;
       if(!streamedResponse && !append && turn.pendingAnswer){
         const nextAnswer = turn.pendingAnswer;
         turn.pendingAnswer = '';
         startAnswerStream(turn, nextAnswer);
       }else{
+        syncSuggestionControls();
         renderSuggestionThread();
       }
     }
   }
 
+  function beginSuggestionEdit(turnId){
+    if(isSuggestionBusy()) return;
+    const turn = suggestionTurns.find(entry=>entry && entry.id === turnId);
+    if(!turn || isSuggestionTurnBusy(turn)) return;
+    editingSuggestionTurnId = turn.id;
+    editingSuggestionDraft = String(turn.query || '');
+    renderSuggestionThread();
+    requestAnimationFrame(()=>{
+      const editInput = suggestionBody
+        ? suggestionBody.querySelector(`.chat-edit-input[data-turn-id="${turn.id}"]`)
+        : null;
+      if(editInput){
+        editInput.focus();
+        editInput.setSelectionRange(editInput.value.length, editInput.value.length);
+      }
+    });
+  }
+
+  function cancelSuggestionEdit(){
+    editingSuggestionTurnId = 0;
+    editingSuggestionDraft = '';
+    renderSuggestionThread();
+  }
+
+  async function resendEditedSuggestionTurn(turnId){
+    if(isSuggestionBusy()) return;
+    const turnIndex = suggestionTurns.findIndex(entry=>entry && entry.id === turnId);
+    if(turnIndex < 0) return;
+    const turn = suggestionTurns[turnIndex];
+    const query = String(editingSuggestionDraft || turn.query || '').trim();
+    if(!query) return;
+
+    suggestionTurns = suggestionTurns.slice(0, turnIndex + 1);
+    turn.query = query;
+    turn.key = buildSuggestionTurnKey(query, turn.files);
+    turn.suggestions = [];
+    turn.answer = '';
+    turn.citations = [];
+    turn.targetKind = 'search';
+    turn.systemMode = getSearchSystemMode();
+    turn.loading = true;
+    turn.loadingMore = false;
+    turn.streamingAnswer = false;
+    turn.fullAnswer = '';
+    turn.pendingAnswer = '';
+    turn.hasMore = true;
+    turn.error = '';
+    searchKeepSavedId = '';
+    editingSuggestionTurnId = 0;
+    editingSuggestionDraft = '';
+    renderSuggestionThread();
+    await fetchSuggestionBatch(turn, false);
+  }
+
   async function requestSuggestions(query, fileNames){
     if(!query) return;
+    if(isSuggestionBusy()) return;
     const turnKey = buildSuggestionTurnKey(query, fileNames);
     const alreadyShown = suggestionTurns.some(turn=>{
       if(typeof turn.key === 'string') return turn.key === turnKey;
@@ -8635,7 +8889,7 @@
     };
 
     suggestionTurns.push(turn);
-    if(sendButton) sendButton.disabled = true;
+    syncSuggestionControls();
     renderSuggestionThread();
     await fetchSuggestionBatch(turn, false);
   }
@@ -8644,6 +8898,25 @@
     suggestionBody.addEventListener('click', e=>{
       const target = e.target && typeof e.target.closest === 'function' ? e.target : null;
       if(!target) return;
+
+      const chatAction = target.closest('[data-action]');
+      if(chatAction){
+        const action = String(chatAction.dataset.action || '');
+        const turnId = Number(chatAction.dataset.turnId);
+        if(!Number.isFinite(turnId)) return;
+        if(action === 'edit-message'){
+          beginSuggestionEdit(turnId);
+          return;
+        }
+        if(action === 'cancel-edit'){
+          cancelSuggestionEdit();
+          return;
+        }
+        if(action === 'resend-edit'){
+          resendEditedSuggestionTurn(turnId);
+          return;
+        }
+      }
 
       const citationTrigger = target.closest('.citation-inline-link, .citation-item');
       if(citationTrigger){
@@ -8667,7 +8940,35 @@
       fetchSuggestionBatch(turn, true);
     });
 
+    suggestionBody.addEventListener('input', e=>{
+      const target = e.target;
+      if(!target || !target.classList || !target.classList.contains('chat-edit-input')) return;
+      editingSuggestionDraft = target.value;
+      const turnId = Number(target.dataset.turnId);
+      const resendBtn = suggestionBody.querySelector(`.chat-edit-btn.primary[data-turn-id="${turnId}"]`);
+      if(resendBtn){
+        resendBtn.disabled = isSuggestionBusy() || !String(editingSuggestionDraft || '').trim();
+      }
+    });
+
     suggestionBody.addEventListener('keydown', e=>{
+      const editInput = e.target && e.target.classList && e.target.classList.contains('chat-edit-input')
+        ? e.target
+        : null;
+      if(editInput){
+        if(e.key === 'Escape'){
+          e.preventDefault();
+          cancelSuggestionEdit();
+          return;
+        }
+        if(e.key === 'Enter' && e.shiftKey){
+          e.preventDefault();
+          const turnId = Number(editInput.dataset.turnId);
+          if(Number.isFinite(turnId)) resendEditedSuggestionTurn(turnId);
+          return;
+        }
+      }
+
       if(e.key !== 'Enter' && e.key !== ' ') return;
       const target = e.target && typeof e.target.closest === 'function' ? e.target : null;
       if(!target) return;
@@ -9736,6 +10037,11 @@
   form.addEventListener('submit', async e=>{
 
     e.preventDefault();
+
+    if(state === 0 && isSuggestionBusy()){
+      syncSuggestionControls();
+      return;
+    }
 
     const v = input.value.trim();
     const hasFiles = attachedFiles.length > 0;
