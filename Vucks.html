@@ -2945,6 +2945,11 @@
       pointer-events:auto;
     }
 
+    body.flash-reader-open .flash-read-button{
+      opacity:0;
+      pointer-events:none;
+    }
+
     body.suggestions-open .flash-read-button:disabled{
       opacity:.46;
       cursor:not-allowed;
@@ -2976,39 +2981,39 @@
 
     .flash-reader-sidebar{
       position:fixed;
-      top:0;
-      right:0;
-      bottom:0;
+      top:50%;
+      left:50%;
       z-index:72;
-      width:min(760px, 78vw);
-      min-width:min(520px, 94vw);
-      border-left:1px solid var(--search-chat-card-border);
+      width:min(760px, 86vw);
+      height:min(680px, 78vh);
+      border:1px solid var(--search-chat-card-border);
+      border-radius:22px;
       background:
         linear-gradient(180deg, color-mix(in srgb, var(--bg-white) 92%, transparent), color-mix(in srgb, var(--bg-white) 82%, transparent)),
         color-mix(in srgb, var(--bg-white) 88%, transparent);
       color:var(--search-chat-card-text);
-      box-shadow:-28px 0 70px rgba(15,23,42,0.2);
+      box-shadow:0 30px 82px rgba(15,23,42,0.22);
       backdrop-filter:blur(24px) saturate(1.28);
-      transform:translateX(104%);
+      transform:translate(-50%, -46%) scale(.96);
       opacity:0;
       pointer-events:none;
-      transition:transform .34s cubic-bezier(.22,1,.36,1),opacity .24s ease;
+      transition:transform .3s cubic-bezier(.22,1,.36,1),opacity .24s ease;
       overflow:hidden;
     }
 
     body.flash-reader-open .flash-reader-sidebar{
-      transform:translateX(0);
+      transform:translate(-50%, -50%) scale(1);
       opacity:1;
       pointer-events:auto;
     }
 
     body.mode-q .flash-reader-sidebar{
-      border-left-color:rgba(255,255,255,0.14);
+      border-color:rgba(255,255,255,0.14);
       background:
         linear-gradient(180deg, rgba(18,24,36,0.96), rgba(8,12,20,0.94)),
         #080c14;
       color:#edf2ff;
-      box-shadow:-28px 0 70px rgba(0,0,0,0.42);
+      box-shadow:0 30px 82px rgba(0,0,0,0.42);
     }
 
     .flash-reader-inner{
@@ -3077,7 +3082,7 @@
 
     .flash-reader-word{
       max-width:100%;
-      font-size:clamp(52px, 8vw, 108px);
+      font-size:clamp(42px, 6.4vw, 82px);
       line-height:1.05;
       font-weight:820;
       overflow-wrap:anywhere;
@@ -3085,7 +3090,7 @@
 
     .flash-reader-word.is-placeholder{
       color:var(--search-chat-muted);
-      font-size:clamp(26px, 4vw, 44px);
+      font-size:clamp(22px, 3.2vw, 36px);
       font-weight:760;
     }
 
@@ -3107,8 +3112,8 @@
 
     @media (max-width:720px){
       .flash-reader-sidebar{
-        width:100vw;
-        min-width:0;
+        width:calc(100vw - 22px);
+        height:min(650px, calc(100vh - 28px));
       }
 
       .flash-read-button{
