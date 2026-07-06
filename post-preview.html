@@ -984,6 +984,8 @@
       const EDITOR_INIT_KEY = 'ivucxEditorInit';
       const EDITOR_RETURN_KEY = 'ivucxEditorReturn';
       const CIC_SUCCESS_RETURN_URL = 'Vucks.html?cicSaved=1';
+      const CIC_REQUESTED_RETURN_URL = 'Vucks.html?cicRequested=1';
+      const CIC_PENDING_SUBMISSION_KEY = 'ivucxPendingCicSubmissionV1';
 
       let slides = [];
       let slideIndex = 0;
@@ -1124,6 +1126,68 @@
         await showCicSuccessPopup();
         await clearWorkflowBeforeInitialSearch();
         window.location.href = CIC_SUCCESS_RETURN_URL;
+      }
+
+      async function clearWorkflowShellBeforeInitialSearch(){
+        removeLocalValue(MODE_PERSIST_KEY);
+        removeLocalValue(COOKIE_HISTORY_CONSENT_KEY);
+        removeSessionValue(EDITOR_INIT_KEY);
+        removeSessionValue(EDITOR_RETURN_KEY);
+        removeCookieValue(COOKIE_HISTORY_COOKIE);
+        removeCookieValue(`${COOKIE_HISTORY_COOKIE}Consent`);
+      }
+
+      function rememberPendingCicSubmission(record){
+        const payload = JSON.stringify(record || {});
+        try{
+          localStorage.setItem(CIC_PENDING_SUBMISSION_KEY, payload);
+          try{
+            sessionStorage.removeItem(CIC_PENDING_SUBMISSION_KEY);
+          }catch(err){
+            // ignore session cleanup failure
+          }
+          return true;
+        }catch(err){
+          try{
+            sessionStorage.setItem(CIC_PENDING_SUBMISSION_KEY, payload);
+            return true;
+          }catch(sessionErr){
+            return false;
+          }
+        }
+      }
+
+      function createPendingCicSubmission(proofPayload, submitResult, requestedFormat, completedFormat, requestedAt, draft){
+        const attachments = collectDraftAttachments(draft);
+        return {
+          version: 1,
+          id: 'cic-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+          status: 'accepted',
+          previewUrl: 'post-preview.html?cicSaveError=1',
+          createdAt: new Date().toISOString(),
+          acceptedAt: new Date().toISOString(),
+          requestedAt,
+          requestedFormat,
+          completedFormat: completedFormat || requestedFormat,
+          jobId: submitResult && submitResult.jobId ? submitResult.jobId : '',
+          proofPayload,
+          submitResult: {
+            jobId: submitResult && submitResult.jobId ? submitResult.jobId : '',
+            result: submitResult && submitResult.result ? submitResult.result : null
+          },
+          attachmentsExpected: attachments.length
+        };
+      }
+
+      async function returnToInitialSearchAfterCicRequest(pendingSubmission){
+        if(cicSuccessRedirecting) return;
+        cicSuccessRedirecting = true;
+        if(!rememberPendingCicSubmission(pendingSubmission)){
+          cicSuccessRedirecting = false;
+          throw new Error('CIC request was accepted, but this browser could not store the save monitor.');
+        }
+        await clearWorkflowShellBeforeInitialSearch();
+        window.location.href = CIC_REQUESTED_RETURN_URL;
       }
 
       function summarizeProxyFailure(response, raw){
@@ -1430,6 +1494,32 @@
         return bounty;
       }
 
+      function isBountyFunded(bounty){
+        if(!bounty || typeof bounty !== 'object') return false;
+        const candidates = [
+          bounty.paymentStatus,
+          bounty.status,
+          bounty.stripePaymentStatus,
+          bounty.checkoutStatus
+        ];
+        return candidates.some(value=>{
+          const normalized = String(value || '').trim().toLowerCase();
+          return normalized === 'paid'
+            || normalized === 'funded'
+            || normalized === 'complete'
+            || normalized === 'completed'
+            || normalized === 'succeeded';
+        });
+      }
+
+      function requiresFundedBounty(proofPayload){
+        return !!(
+          proofPayload
+          && proofPayload.problemKind === 'problem'
+          && proofPayload.proofState !== 'YY'
+        );
+      }
+
       function normalizeProofState(value){
         const text = String(value || '').trim().toUpperCase();
         return text === 'NY' || text === 'YY' || text === 'YN' || text === 'NN' ? text : '';
@@ -1486,7 +1576,7 @@
       }
 
       function isUnresolvedProblemDraft(draft){
-        return getDraftProblemKind(draft) === 'problem' && getDraftProofState(draft) === 'NY';
+        return getDraftProblemKind(draft) === 'problem' && getDraftProofState(draft) !== 'YY';
       }
 
       function resolvePostKindFromProofState(draftKind, proofState){
@@ -1511,15 +1601,15 @@
         if(bountyAmountEl){
           bountyAmountEl.value = String(Math.max(1, Math.round(amountCents / 100)));
         }
-        if(bounty && (bounty.paymentStatus === 'paid' || bounty.status === 'paid')){
+        if(isBountyFunded(bounty)){
           if(bountyStateEl) bountyStateEl.textContent = 'Funded ' + formatBountyAmount(amountCents, currency);
           setBountyStatus('This problem has a funded bounty.', 'success');
         }else if(bounty && bounty.stripeSessionId){
           if(bountyStateEl) bountyStateEl.textContent = 'Checkout created';
           setBountyStatus('Checkout was created. Complete payment to fund the bounty.');
         }else{
-          if(bountyStateEl) bountyStateEl.textContent = 'Not funded';
-          setBountyStatus('');
+          if(bountyStateEl) bountyStateEl.textContent = 'Required';
+          setBountyStatus('A funded bounty is required before CIC submission.', 'error');
         }
       }
 
@@ -1619,8 +1709,8 @@
           setBountyStatus('Bounties can be added to problem posts only.', 'error');
           return;
         }
-        if(proofPayload.proofState !== 'NY'){
-          setBountyStatus('Bounties are only available for unsolved propositions.', 'error');
+        if(proofPayload.proofState === 'YY'){
+          setBountyStatus('Bounties are only available before the proposition is already solved.', 'error');
           return;
         }
 
@@ -2071,7 +2161,7 @@
           code: proof.code,
           problemKind,
           proofState,
-          bounty: problemKind === 'problem' && proofState === 'NY' ? getDraftBounty(draft) : null
+          bounty: problemKind === 'problem' && proofState !== 'YY' ? getDraftBounty(draft) : null
         };
       }
 
@@ -2271,6 +2361,12 @@
           setHelperStatus('No proof code is saved yet.', 'error');
           return;
         }
+        if(requiresFundedBounty(proofPayload) && !isBountyFunded(proofPayload.bounty)){
+          syncBountyPanel(draft);
+          setBountyStatus('Fund the bounty before requesting CIC conversion for this problem.', 'error');
+          setHelperStatus('A funded bounty is required before this problem can be submitted.', 'error');
+          return;
+        }
 
         const requestedAt = new Date().toISOString();
         let requestedFormat = null;
@@ -2291,6 +2387,8 @@
               fileName: proofPayload.fileName,
               code: proofPayload.code,
               problemKind: proofPayload.problemKind,
+              proofState: proofPayload.proofState,
+              bounty: proofPayload.bounty,
               verify: true,
               async: true,
               format
@@ -2308,13 +2406,9 @@
 
             if(response.status === 202 && payload.job && payload.job.id){
               setHelperProgress(60, 'Queued', 'pending');
-              const result = await waitForHelperJob(payload.job.id, (job)=>{
-                const statusView = describeHelperJob(job);
-                setHelperProgress(statusView.progress, statusView.message, 'pending');
-              });
               return {
                 jobId: payload.job.id,
-                result
+                result: null
               };
             }
 
@@ -2345,54 +2439,28 @@
             completedFormat = 'typed-lambda-v1';
           }
 
-          setHelperProgress(92, 'Finalizing result', 'pending');
-          const savedResult = await persistProblemOnVercel(
+          setHelperProgress(submitResult.jobId ? 70 : 86, submitResult.jobId ? 'CIC request queued' : 'CIC request accepted', 'success');
+          const pendingSubmission = createPendingCicSubmission(
             proofPayload,
             submitResult,
             requestedFormat,
             completedFormat || requestedFormat,
-            requestedAt
-          );
-
-          const persisted = !!(
-            savedResult
-            && savedResult.storage
-            && savedResult.storage.persisted
-          );
-          if(!persisted){
-            throw new Error('CIC conversion completed, but Supabase save did not persist.');
-          }
-          const problemId = savedResult && savedResult.problemId ? savedResult.problemId : null;
-          const attachmentResult = await persistProblemAttachmentsOnSupabase(problemId, draft);
-          const finalResult = savedResult && typeof savedResult === 'object'
-            ? {
-              ...savedResult,
-              attachments: attachmentResult
-            }
-            : savedResult;
-          await persistHelperResult({
-            status: 'succeeded',
             requestedAt,
-            completedAt: new Date().toISOString(),
+            draft
+          );
+          await persistHelperResult({
+            status: submitResult.jobId ? 'queued' : 'accepted',
+            requestedAt,
+            acceptedAt: new Date().toISOString(),
             jobId: submitResult.jobId,
             language: proofPayload.language,
             fileName: proofPayload.fileName,
             title: proofPayload.title,
             format: completedFormat || requestedFormat,
             requestedFormat,
-            problemId,
-            result: finalResult || submitResult.result
+            result: submitResult.result || null
           });
-          setHelperProgress(
-            100,
-            attachmentResult && attachmentResult.count
-              ? 'Problem and attachments saved'
-              : 'Problem saved',
-            'success'
-          );
-          if(persisted && isCicFormat(completedFormat || requestedFormat)){
-            await returnToInitialSearchAfterCicSave();
-          }
+          await returnToInitialSearchAfterCicRequest(pendingSubmission);
           return;
         }catch(err){
           const message = err && err.message ? err.message : String(err);

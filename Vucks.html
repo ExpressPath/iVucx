@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>iVucx</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lexend&display=swap" rel="stylesheet" />
   <style>
     :root{
       --bg-white:Canvas;
@@ -211,6 +214,56 @@
       visibility:hidden;
       pointer-events:none;
       transform:translateY(8px);
+    }
+
+    .cic-save-error-popup{
+      position:fixed;
+      top:calc(18px + env(safe-area-inset-top));
+      right:calc(18px + env(safe-area-inset-right));
+      z-index:80;
+      width:min(360px, calc(100vw - 36px));
+      opacity:0;
+      visibility:hidden;
+      pointer-events:none;
+      transform:translateY(-8px);
+      transition:opacity .22s ease, transform .22s ease, visibility .22s ease;
+    }
+
+    .cic-save-error-popup.is-visible{
+      opacity:1;
+      visibility:visible;
+      pointer-events:auto;
+      transform:translateY(0);
+    }
+
+    .cic-save-error-card{
+      display:block;
+      width:100%;
+      border:1px solid color-mix(in srgb, CanvasText 13%, transparent);
+      border-radius:14px;
+      padding:14px 15px;
+      background:color-mix(in srgb, Canvas 92%, CanvasText 8%);
+      color:CanvasText;
+      box-shadow:0 18px 45px rgba(0,0,0,0.18);
+      text-align:left;
+      cursor:pointer;
+      backdrop-filter:blur(18px) saturate(130%);
+    }
+
+    .cic-save-error-title{
+      display:block;
+      margin:0 0 4px;
+      color:#b3261e;
+      font-size:13px;
+      font-weight:760;
+      line-height:1.35;
+    }
+
+    .cic-save-error-copy{
+      display:block;
+      color:color-mix(in srgb, CanvasText 72%, transparent);
+      font-size:12px;
+      line-height:1.45;
     }
 
     @media (max-width:640px){
@@ -480,12 +533,27 @@
       backdrop-filter:blur(10px);
     }
 
+    .search-input-stack{
+      flex:1;
+      min-width:0;
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .search-container.expanded .search-input-stack{
+      flex:1;
+      min-height:0;
+    }
+
     .search-input{
       flex:1;
       border:none;
       outline:none;
       font-size:16px;
-      font-family:"Latin Modern Roman","CMU Serif","Computer Modern Serif","Computer Modern","Times New Roman",serif;
+      font-family:"Lexend","Inter","SF Pro Text","Segoe UI",system-ui,sans-serif;
+      font-weight:400;
       background:transparent;
       color:var(--search-surface-text);
       resize:none;
@@ -512,12 +580,174 @@
     body.login-check .search-input{ color:#fff; caret-color:#fff; }
 
     body.suggestions-open .search-input{
-      border:1px solid var(--search-prompt-input-border);
+      flex:0 0 auto;
+      height:100%;
+      border:0;
       border-radius:16px;
       padding:10px 12px;
       background:var(--search-prompt-input-bg);
       color:var(--search-prompt-input-text);
       caret-color:var(--search-prompt-input-text);
+      box-shadow:none;
+    }
+
+    .chat-quote-composer{
+      display:none;
+      width:100%;
+      border:1px solid var(--search-prompt-input-border);
+      border-radius:15px;
+      background:color-mix(in srgb, var(--search-prompt-input-bg) 88%, transparent);
+      color:var(--search-prompt-input-text);
+      padding:9px 10px;
+      font-family:"Lexend","Inter","SF Pro Text","Segoe UI",system-ui,sans-serif;
+      box-shadow:0 10px 24px rgba(15,23,42,0.08);
+    }
+
+    .chat-quote-composer.is-visible{
+      display:grid;
+      gap:6px;
+    }
+
+    .problem-solve-composer{
+      display:none;
+      width:100%;
+      border:1px solid rgba(126,165,255,0.24);
+      border-radius:15px;
+      background:color-mix(in srgb, var(--search-prompt-input-bg) 88%, transparent);
+      color:var(--search-prompt-input-text);
+      padding:10px 11px;
+      font-family:"Lexend","Inter","SF Pro Text","Segoe UI",system-ui,sans-serif;
+      box-shadow:0 10px 24px rgba(15,23,42,0.08);
+    }
+
+    .problem-solve-composer.is-visible{
+      display:grid;
+      gap:6px;
+    }
+
+    .problem-solve-composer-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      color:var(--search-chat-muted);
+      font-size:11px;
+      line-height:1.2;
+    }
+
+    .problem-solve-composer-title{
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      color:var(--search-chat-citation-id);
+      font-weight:600;
+    }
+
+    .problem-solve-composer-clear{
+      flex:0 0 auto;
+      width:24px;
+      height:24px;
+      display:grid;
+      place-items:center;
+      border:0;
+      border-radius:8px;
+      background:transparent;
+      color:inherit;
+      font:inherit;
+      font-size:18px;
+      line-height:1;
+      cursor:pointer;
+    }
+
+    .problem-solve-composer-clear:hover,
+    .problem-solve-composer-clear:focus-visible{
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+    }
+
+    .problem-solve-composer-text{
+      display:-webkit-box;
+      -webkit-line-clamp:3;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+      color:var(--search-chat-card-text);
+      font-size:13px;
+      font-weight:400;
+      line-height:1.42;
+    }
+
+    body.mode-q .problem-solve-composer{
+      border-color:rgba(143,185,255,0.22);
+      background:rgba(255,255,255,0.045);
+      color:#edf2ff;
+      box-shadow:0 14px 34px rgba(0,0,0,0.24);
+    }
+
+    body.mode-q .problem-solve-composer-text{
+      color:#edf2ff;
+    }
+
+    .chat-quote-composer-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      color:var(--search-chat-muted);
+      font-size:11px;
+      line-height:1.2;
+    }
+
+    .chat-quote-composer-title{
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      font-weight:400;
+    }
+
+    .chat-quote-composer-clear{
+      flex:0 0 auto;
+      width:24px;
+      height:24px;
+      display:grid;
+      place-items:center;
+      border:0;
+      border-radius:8px;
+      background:transparent;
+      color:inherit;
+      font:inherit;
+      font-size:18px;
+      line-height:1;
+      cursor:pointer;
+    }
+
+    .chat-quote-composer-clear:hover,
+    .chat-quote-composer-clear:focus-visible{
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+    }
+
+    .chat-quote-composer-text{
+      display:-webkit-box;
+      -webkit-line-clamp:3;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+      color:var(--search-chat-card-text);
+      font-size:13px;
+      font-weight:400;
+      line-height:1.42;
+    }
+
+    body.mode-q .chat-quote-composer{
+      border-color:rgba(255,255,255,0.14);
+      background:rgba(255,255,255,0.045);
+      color:#edf2ff;
+      box-shadow:0 14px 34px rgba(0,0,0,0.24);
+    }
+
+    body.mode-q .chat-quote-composer-text{
+      color:#edf2ff;
     }
 
     body.mode-q.suggestions-open .search-input{
@@ -2653,7 +2883,8 @@
       outline:0;
       background:transparent;
       color:inherit;
-      font:inherit;
+      font-family:"Lexend","Inter","SF Pro Text","Segoe UI",system-ui,sans-serif;
+      font-weight:400;
       font-size:15px;
       line-height:1.45;
       padding:2px;
@@ -3052,6 +3283,10 @@
       overflow:hidden;
     }
 
+    .flash-reader-sidebar.has-syntax{
+      width:min(1180px, 94vw);
+    }
+
     body.flash-reader-open .flash-reader-sidebar{
       transform:translate(-50%, -50%) scale(1);
       opacity:1;
@@ -3110,8 +3345,21 @@
       cursor:pointer;
     }
 
-    .flash-reader-stage{
+    .flash-reader-main{
       flex:1;
+      min-height:0;
+      display:grid;
+      grid-template-columns:minmax(0, 1fr) 0;
+      gap:0;
+      transition:grid-template-columns .32s cubic-bezier(.22,1,.36,1),gap .32s cubic-bezier(.22,1,.36,1);
+    }
+
+    .flash-reader-sidebar.has-syntax .flash-reader-main{
+      grid-template-columns:minmax(0, .88fr) minmax(320px, .72fr);
+      gap:16px;
+    }
+
+    .flash-reader-stage{
       min-height:0;
       display:grid;
       place-items:center;
@@ -3131,6 +3379,10 @@
       color:#f4f7ff;
     }
 
+    .flash-reader-sidebar.has-syntax .flash-reader-stage{
+      overflow:hidden;
+    }
+
     .flash-reader-word{
       width:100%;
       max-width:100%;
@@ -3139,10 +3391,14 @@
       position:relative;
       font-size:clamp(42px, 6.4vw, 82px);
       line-height:1.05;
-      font-weight:820;
+      font-weight:400;
       white-space:nowrap;
       overflow:visible;
-      font-family:"Inter","SF Pro Text","Segoe UI",system-ui,sans-serif;
+      font-family:"Lexend","Inter","SF Pro Text","Segoe UI",system-ui,sans-serif;
+    }
+
+    .flash-reader-sidebar.has-syntax .flash-reader-word{
+      font-size:clamp(34px, 4.3vw, 62px);
     }
 
     .flash-reader-word-line{
@@ -3160,14 +3416,14 @@
     }
 
     .flash-reader-word-pivot{
-      color:#2563eb;
+      color:#dc2626;
       text-align:center;
-      text-shadow:0 0 18px rgba(37,99,235,0.18);
+      text-shadow:0 0 18px rgba(220,38,38,0.18);
     }
 
     body.mode-q .flash-reader-word-pivot{
-      color:#8fb9ff;
-      text-shadow:0 0 20px rgba(143,185,255,0.24);
+      color:#ff8a8a;
+      text-shadow:0 0 20px rgba(255,138,138,0.24);
     }
 
     .flash-reader-word-after{
@@ -3180,7 +3436,7 @@
       display:block;
       color:var(--search-chat-muted);
       font-size:clamp(22px, 3.2vw, 36px);
-      font-weight:760;
+      font-weight:400;
       font-family:inherit;
     }
 
@@ -3188,6 +3444,94 @@
       font-weight:720;
       letter-spacing:.01em;
     }
+
+    .flash-reader-syntax{
+      min-width:0;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+      border:1px solid var(--search-chat-item-border);
+      border-radius:18px;
+      background:color-mix(in srgb, var(--search-prompt-input-bg) 82%, transparent);
+      color:var(--search-chat-card-text);
+      opacity:0;
+      transform:translateX(-10px) scale(.98);
+      overflow:hidden;
+      pointer-events:none;
+      transition:opacity .24s ease,transform .32s cubic-bezier(.22,1,.36,1);
+    }
+
+    .flash-reader-sidebar.has-syntax .flash-reader-syntax{
+      opacity:1;
+      transform:translateX(0) scale(1);
+      pointer-events:auto;
+    }
+
+    body.mode-q .flash-reader-syntax{
+      border-color:rgba(255,255,255,0.12);
+      background:#0f141d;
+      color:#f4f7ff;
+    }
+
+    .flash-reader-syntax-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:14px 16px 10px;
+      border-bottom:1px solid color-mix(in srgb, var(--search-chat-item-border) 82%, transparent);
+    }
+
+    .flash-reader-syntax-kicker{
+      color:var(--search-chat-muted);
+      font-size:11px;
+      font-weight:820;
+      letter-spacing:.08em;
+      line-height:1.2;
+      text-transform:uppercase;
+    }
+
+    .flash-reader-syntax-type{
+      color:var(--search-chat-citation-id);
+      font-size:12px;
+      font-weight:820;
+      line-height:1.2;
+    }
+
+    .flash-reader-syntax-code{
+      flex:1;
+      min-height:0;
+      margin:0;
+      padding:18px;
+      overflow:auto;
+      color:inherit;
+      font-size:clamp(13px, 1.05vw, 16px);
+      line-height:1.62;
+      white-space:pre-wrap;
+      word-break:break-word;
+      tab-size:2;
+      font-family:"SFMono-Regular","Cascadia Code","JetBrains Mono","Fira Code",Consolas,monospace;
+    }
+
+    .flash-reader-syntax.is-math .flash-reader-syntax-code{
+      display:grid;
+      place-items:center;
+      font-size:clamp(22px, 2.2vw, 34px);
+      line-height:1.35;
+      font-family:"Cambria Math","STIX Two Math","Latin Modern Math","Noto Sans Math","Times New Roman",math,serif;
+    }
+
+    .flash-code-keyword{ color:#2563eb; font-weight:760; }
+    .flash-code-string{ color:#0f8f5f; }
+    .flash-code-comment{ color:#64748b; font-style:italic; }
+    .flash-code-number{ color:#a855f7; }
+    .flash-code-symbol{ color:#dc2626; }
+
+    body.mode-q .flash-code-keyword{ color:#93c5fd; }
+    body.mode-q .flash-code-string{ color:#7dd3fc; }
+    body.mode-q .flash-code-comment{ color:#94a3b8; }
+    body.mode-q .flash-code-number{ color:#c4b5fd; }
+    body.mode-q .flash-code-symbol{ color:#fda4af; }
 
     .flash-reader-foot{
       display:flex;
@@ -3209,6 +3553,15 @@
       .flash-reader-sidebar{
         width:calc(100vw - 22px);
         height:min(650px, calc(100vh - 28px));
+      }
+
+      .flash-reader-sidebar.has-syntax{
+        width:calc(100vw - 22px);
+      }
+
+      .flash-reader-sidebar.has-syntax .flash-reader-main{
+        grid-template-columns:1fr;
+        grid-template-rows:minmax(180px, .72fr) minmax(220px, .78fr);
       }
 
       .flash-read-button{
@@ -3446,6 +3799,20 @@
       overflow:auto;
       font-size:15px;
       line-height:1.6;
+    }
+
+    .chat-math-block.is-display-math{
+      overflow-x:auto;
+      text-align:center;
+      font-family:"Cambria Math","STIX Two Math","Latin Modern Math","Noto Sans Math","Times New Roman",math,serif;
+      font-size:17px;
+      line-height:1.72;
+    }
+
+    .chat-inline-math{
+      display:inline;
+      white-space:nowrap;
+      font-family:"Cambria Math","STIX Two Math","Latin Modern Math","Noto Sans Math","Times New Roman",math,serif;
     }
 
     body.mode-q .chat-math-block{
@@ -4477,6 +4844,39 @@
       color:rgba(143,184,255,0.56);
     }
 
+    .problem-preview-prove-btn{
+      display:none;
+      align-items:center;
+      justify-content:center;
+      min-height:34px;
+      margin-left:12px;
+      padding:0 13px;
+      border:1px solid rgba(143,184,255,0.32);
+      border-radius:10px;
+      background:linear-gradient(135deg, rgba(43,102,255,0.2), rgba(125,90,255,0.16));
+      color:#dbe8ff;
+      font:inherit;
+      font-size:12px;
+      font-weight:760;
+      letter-spacing:.02em;
+      cursor:pointer;
+      box-shadow:0 10px 26px rgba(47,111,255,0.12);
+      transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease;
+    }
+
+    .problem-preview-prove-btn.is-visible{
+      display:inline-flex;
+    }
+
+    .problem-preview-prove-btn:hover,
+    .problem-preview-prove-btn:focus-visible{
+      transform:translateY(-1px);
+      border-color:rgba(161,198,255,0.56);
+      background:linear-gradient(135deg, rgba(47,111,255,0.34), rgba(132,92,255,0.26));
+      color:#ffffff;
+      outline:none;
+    }
+
     .problem-preview-main{
       flex:1;
       min-height:0;
@@ -4943,6 +5343,13 @@
   aria-label="Open PROVF policy outline"
 >https://expresspath.github.io/provf-outline/</a>
 
+<div class="cic-save-error-popup" id="cicSaveErrorPopup" role="alert" aria-live="assertive" aria-hidden="true">
+  <button class="cic-save-error-card" id="cicSaveErrorCard" type="button">
+    <span class="cic-save-error-title">保存できませんでした</span>
+    <span class="cic-save-error-copy" id="cicSaveErrorCopy">クリックして投稿前プレビューへ戻れます。</span>
+  </button>
+</div>
+
 <div class="fixed-wrapper">
   <div class="search-container" id="searchContainer">
 
@@ -4950,12 +5357,28 @@
     <div class="pose-problem-brand" aria-hidden="true">Pose problem</div>
 
     <form class="search-box" id="searchForm">
-      <textarea
-        class="search-input"
-        id="searchInput"
-        placeholder="Search..."
-        rows="1"
-      ></textarea>
+      <div class="search-input-stack">
+        <div class="problem-solve-composer" id="problemSolveComposer" hidden>
+          <div class="problem-solve-composer-head">
+            <div class="problem-solve-composer-title" id="problemSolveComposerTitle">Solving problem</div>
+            <button class="problem-solve-composer-clear" id="problemSolveComposerClear" type="button" aria-label="Cancel problem solving">&times;</button>
+          </div>
+          <div class="problem-solve-composer-text" id="problemSolveComposerText"></div>
+        </div>
+        <div class="chat-quote-composer" id="chatQuoteComposer" hidden>
+          <div class="chat-quote-composer-head">
+            <div class="chat-quote-composer-title" id="chatQuoteComposerTitle">Replying to selection</div>
+            <button class="chat-quote-composer-clear" id="chatQuoteComposerClear" type="button" aria-label="Remove selected quote">&times;</button>
+          </div>
+          <div class="chat-quote-composer-text" id="chatQuoteComposerText"></div>
+        </div>
+        <textarea
+          class="search-input"
+          id="searchInput"
+          placeholder="Search..."
+          rows="1"
+        ></textarea>
+      </div>
       <div class="upload-shell" id="uploadShell">
         <div class="upload-main">
           <button class="upload-dropzone" id="uploadDropzone" type="button" aria-label="Upload files or folders" title="Click to upload files. Right-click or drop a folder to upload a folder.">
@@ -5035,9 +5458,18 @@
       </div>
       <button class="flash-reader-close" id="flashReaderClose" type="button" aria-label="Close flash reading">&times;</button>
     </header>
-    <button class="flash-reader-stage" id="flashReaderStage" type="button" aria-label="Start or pause flash reading">
-      <div class="flash-reader-word is-placeholder" id="flashReaderWord">Space or tap</div>
-    </button>
+    <div class="flash-reader-main">
+      <button class="flash-reader-stage" id="flashReaderStage" type="button" aria-label="Start or pause flash reading">
+        <div class="flash-reader-word is-placeholder" id="flashReaderWord">Space or tap</div>
+      </button>
+      <aside class="flash-reader-syntax" id="flashReaderSyntax" aria-label="Syntax preview" aria-live="polite">
+        <div class="flash-reader-syntax-head">
+          <div class="flash-reader-syntax-kicker">Syntax</div>
+          <div class="flash-reader-syntax-type" id="flashReaderSyntaxType">Code</div>
+        </div>
+        <pre class="flash-reader-syntax-code" id="flashReaderSyntaxCode"></pre>
+      </aside>
+    </div>
     <footer class="flash-reader-foot">
       <div id="flashReaderProgress">0 / 0</div>
       <div class="flash-reader-speed" id="flashReaderSpeed">Standard · 2.7 WPS</div>
@@ -5150,6 +5582,7 @@
       <button class="problem-preview-tab" id="problemPreviewSourceTab" type="button" role="tab" aria-selected="true">Source</button>
       <span class="problem-preview-divider" aria-hidden="true">/</span>
       <button class="problem-preview-tab" id="problemPreviewUploadsTab" type="button" role="tab" aria-selected="false">Uploads</button>
+      <button class="problem-preview-prove-btn" id="problemPreviewProveBtn" type="button">証明する</button>
     </div>
   </header>
   <main class="problem-preview-main">
@@ -5325,6 +5758,9 @@
   const flashReaderClose = document.getElementById('flashReaderClose');
   const flashReaderStage = document.getElementById('flashReaderStage');
   const flashReaderWord = document.getElementById('flashReaderWord');
+  const flashReaderSyntax = document.getElementById('flashReaderSyntax');
+  const flashReaderSyntaxType = document.getElementById('flashReaderSyntaxType');
+  const flashReaderSyntaxCode = document.getElementById('flashReaderSyntaxCode');
   const flashReaderProgress = document.getElementById('flashReaderProgress');
   const flashReaderSpeed = document.getElementById('flashReaderSpeed');
   const citationPreviewDrawer = document.getElementById('citationPreviewDrawer');
@@ -5336,11 +5772,20 @@
   const citationPreviewAttachments = document.getElementById('citationPreviewAttachments');
   const citationPreviewProof = document.getElementById('citationPreviewProof');
   const chatSelectionQuote = document.getElementById('chatSelectionQuote');
+  const chatQuoteComposer = document.getElementById('chatQuoteComposer');
+  const chatQuoteComposerTitle = document.getElementById('chatQuoteComposerTitle');
+  const chatQuoteComposerText = document.getElementById('chatQuoteComposerText');
+  const chatQuoteComposerClear = document.getElementById('chatQuoteComposerClear');
+  const problemSolveComposer = document.getElementById('problemSolveComposer');
+  const problemSolveComposerTitle = document.getElementById('problemSolveComposerTitle');
+  const problemSolveComposerText = document.getElementById('problemSolveComposerText');
+  const problemSolveComposerClear = document.getElementById('problemSolveComposerClear');
   const problemPreviewPage = document.getElementById('problemPreviewPage');
   const problemPreviewBack = document.getElementById('problemPreviewBack');
   const problemPreviewCard = document.getElementById('problemPreviewCard');
   const problemPreviewSourceTab = document.getElementById('problemPreviewSourceTab');
   const problemPreviewUploadsTab = document.getElementById('problemPreviewUploadsTab');
+  const problemPreviewProveBtn = document.getElementById('problemPreviewProveBtn');
   const problemPreviewTitle = document.getElementById('problemPreviewTitle');
   const problemPreviewHeading = document.getElementById('problemPreviewHeading');
   const problemPreviewMeta = document.getElementById('problemPreviewMeta');
@@ -5352,7 +5797,11 @@
   const problemPreviewSourceGutter = document.getElementById('problemPreviewSourceGutter');
   const problemPreviewUploadSidebar = document.getElementById('problemPreviewUploadSidebar');
   const problemPreviewAttachmentStage = document.getElementById('problemPreviewAttachmentStage');
+  const cicSaveErrorPopup = document.getElementById('cicSaveErrorPopup');
+  const cicSaveErrorCard = document.getElementById('cicSaveErrorCard');
+  const cicSaveErrorCopy = document.getElementById('cicSaveErrorCopy');
   const EDITOR_RETURN_KEY = 'ivucxEditorReturn';
+  const CIC_PENDING_SUBMISSION_KEY = 'ivucxPendingCicSubmissionV1';
   let attachedFiles = [];
   let lastInputValue = input.value;
   const modeDrafts = {
@@ -5487,6 +5936,7 @@
   setMode(false);
 
   function getCurrentProblemKind(){
+    if(pendingProblemSolveContext && (state === 1 || selectionMode)) return 'theorem';
     return state === 1 || selectionMode ? 'problem' : 'search';
   }
 
@@ -6351,6 +6801,7 @@
         window.uploadControls.preserveInBackground();
       }
       setModeDraft(1, rememberedContent || compactGrayAcceptedValue, rememberedFiles);
+      const solveContext = pendingProblemSolveContext ? { ...pendingProblemSolveContext } : null;
       const initPayload = {
         proofAssistant: choice,
         problemKind: getCurrentProblemKind(),
@@ -6358,6 +6809,7 @@
         draft: '',
         keepSummaryBackground: true,
         attachedFileNames: rememberedFiles.map(file=>file.name),
+        solveContext,
         sourceState: state,
         createdAt: new Date().toISOString()
       };
@@ -6565,6 +7017,16 @@
       setPopupStatus(copied ? 'Copied to clipboard.' : 'Copy failed. Please copy manually.');
     });
   });
+
+  if(cicSaveErrorCard){
+    cicSaveErrorCard.addEventListener('click', ()=>{
+      const pending = readPendingCicSubmission();
+      const target = pending && pending.previewUrl
+        ? pending.previewUrl
+        : 'post-preview.html?cicSaveError=1';
+      window.location.href = target;
+    });
+  }
 
   window.addEventListener('keydown', e=>{
     if(e.key !== 'Escape') return;
@@ -6855,6 +7317,8 @@
   let editingSuggestionDraft = '';
   let selectedAssistantQuoteText = '';
   let selectedAssistantQuoteTurnId = 0;
+  let pendingAssistantQuote = null;
+  let pendingProblemSolveContext = null;
   let searchSidebarCloseTimer = 0;
   let searchKeepBusy = false;
   let searchKeepSavedId = '';
@@ -6869,6 +7333,7 @@
   let flashReaderIndex = 0;
   let flashReaderTimer = 0;
   let flashReaderSpeedIndex = 0;
+  let flashReaderWordCount = 0;
   const answerStreamTimers = new Map();
   let mathTypesetTimer = null;
   let activeCitationPreview = null;
@@ -7140,6 +7605,528 @@
     }
   }
 
+  function readSessionValue(key){
+    try{
+      return sessionStorage.getItem(key);
+    }catch(err){
+      return null;
+    }
+  }
+
+  function writeSessionValue(key, value){
+    try{
+      sessionStorage.setItem(key, value);
+      return true;
+    }catch(err){
+      return false;
+    }
+  }
+
+  function removeSessionValue(key){
+    try{
+      sessionStorage.removeItem(key);
+    }catch(err){
+      // ignore storage failure
+    }
+  }
+
+  function readPendingCicSubmission(){
+    const raw = readLocalValue(CIC_PENDING_SUBMISSION_KEY)
+      || readSessionValue(CIC_PENDING_SUBMISSION_KEY);
+    if(!raw) return null;
+    try{
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    }catch(err){
+      return null;
+    }
+  }
+
+  function writePendingCicSubmission(record){
+    const payload = JSON.stringify(record || {});
+    if(writeLocalValue(CIC_PENDING_SUBMISSION_KEY, payload)){
+      removeSessionValue(CIC_PENDING_SUBMISSION_KEY);
+      return true;
+    }
+    return writeSessionValue(CIC_PENDING_SUBMISSION_KEY, payload);
+  }
+
+  function removePendingCicSubmission(){
+    removeLocalValue(CIC_PENDING_SUBMISSION_KEY);
+    removeSessionValue(CIC_PENDING_SUBMISSION_KEY);
+  }
+
+  function hasPendingCicSubmission(){
+    const pending = readPendingCicSubmission();
+    return !!(pending && pending.status !== 'succeeded');
+  }
+
+  function cicMonitorDelay(ms){
+    return new Promise(resolve=>setTimeout(resolve, ms));
+  }
+
+  function parseCicMonitorJson(raw){
+    if(!raw) return null;
+    try{
+      return JSON.parse(raw);
+    }catch(err){
+      return null;
+    }
+  }
+
+  function getCicMonitorError(payload, fallback){
+    if(payload && typeof payload.error === 'string' && payload.error.trim()){
+      return payload.error.trim();
+    }
+    if(payload && payload.job && payload.job.error){
+      if(typeof payload.job.error === 'string') return payload.job.error;
+      if(typeof payload.job.error.message === 'string') return payload.job.error.message;
+    }
+    if(payload && payload.details && typeof payload.details.error === 'string'){
+      return payload.details.error;
+    }
+    return fallback || 'CIC save failed.';
+  }
+
+  async function fetchPendingCicJob(jobId){
+    const response = await fetch('/api/helper/jobs/' + encodeURIComponent(jobId), {
+      method:'GET',
+      cache:'no-store',
+      credentials:'same-origin',
+      headers:{ 'Accept':'application/json' }
+    });
+    const raw = await response.text();
+    const payload = parseCicMonitorJson(raw);
+    if(!response.ok || !payload){
+      throw new Error(getCicMonitorError(payload, raw || 'Could not load CIC job.'));
+    }
+    return payload;
+  }
+
+  function normalizePendingCicJob(payload){
+    const job = payload && payload.job && typeof payload.job === 'object'
+      ? payload.job
+      : (payload && typeof payload === 'object' ? payload : null);
+    if(!job){
+      throw new Error('CIC job payload is missing.');
+    }
+    const status = String(job.status || payload.status || '').trim().toLowerCase();
+    const result = job.result && typeof job.result === 'object'
+      ? job.result
+      : (payload.result && typeof payload.result === 'object' ? payload.result : null);
+    if(status === 'succeeded' || status === 'success' || status === 'completed' || status === 'done'){
+      return { done:true, failed:false, result };
+    }
+    if(result && result.ok){
+      return { done:true, failed:false, result };
+    }
+    if(status === 'failed' || status === 'error' || status === 'cancelled' || status === 'canceled'){
+      return { done:true, failed:true, result:null, error:getCicMonitorError(payload, 'CIC conversion failed.') };
+    }
+    return { done:false, failed:false, result:null };
+  }
+
+  function isTransientCicMonitorError(error){
+    const message = String(error && error.message ? error.message : error || '').toLowerCase();
+    return message.includes('502')
+      || message.includes('503')
+      || message.includes('504')
+      || message.includes('bad gateway')
+      || message.includes('service unavailable')
+      || message.includes('gateway timeout')
+      || message.includes('timed out')
+      || message.includes('network')
+      || message.includes('hibernate-wake-error')
+      || message.includes('no-deploy');
+  }
+
+  async function waitForPendingCicResult(pending){
+    const directResult = pending
+      && pending.submitResult
+      && pending.submitResult.result
+      && typeof pending.submitResult.result === 'object'
+      ? pending.submitResult.result
+      : null;
+    if(directResult) return directResult;
+    const jobId = pending && pending.jobId ? pending.jobId : '';
+    if(!jobId){
+      throw new Error('CIC request has no job id or result to save.');
+    }
+    const startedAt = Date.now();
+    const timeoutMs = 45 * 60 * 1000;
+    while(Date.now() - startedAt < timeoutMs){
+      let payload = null;
+      try{
+        payload = await fetchPendingCicJob(jobId);
+      }catch(err){
+        if(isTransientCicMonitorError(err)){
+          await cicMonitorDelay(2600);
+          continue;
+        }
+        throw err;
+      }
+      const job = normalizePendingCicJob(payload);
+      if(job.failed){
+        throw new Error(job.error || 'CIC conversion failed.');
+      }
+      if(job.done){
+        if(!job.result){
+          throw new Error('CIC job completed without a conversion result.');
+        }
+        return job.result;
+      }
+      await cicMonitorDelay(1800);
+    }
+    throw new Error('Timed out while waiting for CIC conversion.');
+  }
+
+  async function persistPendingCicProblem(pending, result){
+    const proofPayload = pending && pending.proofPayload && typeof pending.proofPayload === 'object'
+      ? pending.proofPayload
+      : {};
+    if(result && result.storage && result.storage.persisted && result.problemId){
+      return result;
+    }
+    const response = await fetch('/api/helper/persist', {
+      method:'POST',
+      credentials:'same-origin',
+      headers:{
+        'Content-Type':'application/json',
+        'Accept':'application/json'
+      },
+      body:JSON.stringify({
+        title:proofPayload.title,
+        language:proofPayload.language,
+        fileName:proofPayload.fileName,
+        code:proofPayload.code,
+        problemKind:proofPayload.problemKind,
+        proofState:proofPayload.proofState,
+        bounty:proofPayload.bounty,
+        verify:true,
+        format:pending.completedFormat || pending.requestedFormat,
+        requestedFormat:pending.requestedFormat,
+        requestedAt:pending.requestedAt,
+        jobId:pending.jobId || (pending.submitResult && pending.submitResult.jobId) || '',
+        result
+      })
+    });
+    const raw = await response.text();
+    const payload = parseCicMonitorJson(raw);
+    if(!response.ok || !payload || !payload.ok){
+      throw new Error(getCicMonitorError(payload, raw || 'Supabase save failed.'));
+    }
+    const saved = payload.result && typeof payload.result === 'object'
+      ? payload.result
+      : result;
+    const persisted = !!(saved && saved.storage && saved.storage.persisted);
+    if(!persisted){
+      const storage = saved && saved.storage && typeof saved.storage === 'object' ? saved.storage : {};
+      throw new Error(
+        saved && saved.persistenceWarning
+          ? saved.persistenceWarning
+          : (storage.error || storage.message || 'CIC conversion completed, but Supabase save did not persist.')
+      );
+    }
+    return saved;
+  }
+
+  function normalizeCicAttachmentPath(path){
+    return String(path || '')
+      .replace(/\\/g, '/')
+      .split('/')
+      .filter(part=>part && part !== '.' && part !== '..')
+      .join('/');
+  }
+
+  function collectCicDraftAttachments(draft){
+    const record = draft
+      && draft.summarySlide
+      && draft.summarySlide.record
+      && typeof draft.summarySlide.record === 'object'
+      ? draft.summarySlide.record
+      : null;
+    const editorState = record && record.editorState && typeof record.editorState === 'object'
+      ? record.editorState
+      : null;
+    const uploads = editorState && Array.isArray(editorState.uploads)
+      ? editorState.uploads
+      : (editorState && Array.isArray(editorState.slides)
+        ? editorState.slides
+          .map(slide=>slide && slide.document && typeof slide.document === 'object' ? slide.document : null)
+          .filter(Boolean)
+        : []);
+    return uploads
+      .map((upload, index)=>{
+        if(!upload || typeof upload !== 'object') return null;
+        const title = String(upload.title || upload.name || `attachment-${index + 1}`).trim();
+        const relativePath = normalizeCicAttachmentPath(upload.relativePath || upload.path || title);
+        const id = String(upload.blobId || upload.id || `attachment-${index + 1}`).trim();
+        return {
+          id,
+          blobId:id,
+          title,
+          path:relativePath,
+          relativePath,
+          kind:String(upload.kind || 'file').trim(),
+          ext:String(upload.ext || '').trim(),
+          mime:String(upload.mime || '').trim(),
+          size:Number(upload.size) || 0,
+          scanStatus:String(upload.scanStatus || '').trim(),
+          scanLabel:String(upload.scanLabel || '').trim(),
+          scanCheckedAt:String(upload.scanCheckedAt || '').trim(),
+          importedAt:String(upload.importedAt || '').trim(),
+          source:String(upload.source || 'local').trim(),
+          url:typeof upload.url === 'string' ? upload.url : '',
+          text:typeof upload.text === 'string' ? upload.text : ''
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function cicDataUrlToBlob(dataUrl){
+    const raw = String(dataUrl || '');
+    const match = raw.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+    if(!match) return null;
+    const mime = match[1] || 'application/octet-stream';
+    const isBase64 = !!match[2];
+    const payload = match[3] || '';
+    try{
+      const binary = isBase64 ? atob(payload) : decodeURIComponent(payload);
+      const bytes = new Uint8Array(binary.length);
+      for(let index = 0; index < binary.length; index += 1){
+        bytes[index] = binary.charCodeAt(index);
+      }
+      return new Blob([bytes], { type:mime });
+    }catch(err){
+      return null;
+    }
+  }
+
+  async function resolveCicAttachmentBlob(attachment){
+    const blobId = attachment && (attachment.blobId || attachment.id);
+    if(blobId && theoremDraftStore && typeof theoremDraftStore.getUploadBlob === 'function'){
+      const blob = await theoremDraftStore.getUploadBlob(blobId);
+      if(blob) return blob;
+    }
+    if(attachment && attachment.url && attachment.url.startsWith('data:')){
+      return cicDataUrlToBlob(attachment.url);
+    }
+    if(attachment && attachment.text){
+      return new Blob([attachment.text], { type:attachment.mime || 'text/plain' });
+    }
+    return null;
+  }
+
+  async function postCicMonitorJson(url, body){
+    const response = await fetch(url, {
+      method:'POST',
+      credentials:'same-origin',
+      headers:{
+        'Content-Type':'application/json',
+        'Accept':'application/json'
+      },
+      body:JSON.stringify(body)
+    });
+    const raw = await response.text();
+    const payload = parseCicMonitorJson(raw);
+    if(!response.ok || !payload || payload.ok === false){
+      throw new Error(getCicMonitorError(payload, raw || 'Request failed.'));
+    }
+    return payload;
+  }
+
+  async function uploadPendingCicAttachment(upload, blob){
+    const form = new FormData();
+    form.append('cacheControl', '3600');
+    form.append('', blob);
+    const headers = upload && upload.uploadHeaders && typeof upload.uploadHeaders === 'object'
+      ? upload.uploadHeaders
+      : {};
+    const response = await fetch(upload.signedUrl, {
+      method:'PUT',
+      headers,
+      body:form
+    });
+    if(!response.ok){
+      const raw = await response.text().catch(()=>'');
+      throw new Error(raw || `Attachment upload failed (${response.status}).`);
+    }
+  }
+
+  async function persistPendingCicAttachments(problemId){
+    if(!problemId || !theoremDraftStore || typeof theoremDraftStore.read !== 'function'){
+      return { persisted:true, count:0, attachments:[] };
+    }
+    const draft = await theoremDraftStore.read();
+    const attachments = collectCicDraftAttachments(draft);
+    if(!attachments.length){
+      return { persisted:true, count:0, attachments:[] };
+    }
+    const plan = await postCicMonitorJson('/api/helper/attachments/sign', {
+      problemId,
+      attachments
+    });
+    const uploads = Array.isArray(plan.uploads) ? plan.uploads : [];
+    const completed = [];
+    for(let index = 0; index < uploads.length; index += 1){
+      const upload = uploads[index];
+      const original = attachments.find(item=>item.id === upload.clientId || item.id === upload.id)
+        || attachments[index];
+      const blob = await resolveCicAttachmentBlob(original);
+      if(!blob){
+        throw new Error(`${original && original.title ? original.title : 'Attachment'} cannot be saved permanently because its file data is missing.`);
+      }
+      await uploadPendingCicAttachment(upload, blob);
+      completed.push({
+        ...original,
+        bucket:upload.bucket,
+        storagePath:upload.storagePath
+      });
+    }
+    const saved = await postCicMonitorJson('/api/helper/attachments/complete', {
+      problemId,
+      attachments:completed
+    });
+    return {
+      persisted:true,
+      count:Array.isArray(saved.attachments) ? saved.attachments.length : completed.length,
+      attachments:saved.attachments || completed,
+      bucket:saved.bucket || plan.bucket || ''
+    };
+  }
+
+  function getPendingCicProblemId(savedResult){
+    return savedResult && savedResult.problemId
+      ? savedResult.problemId
+      : (savedResult && savedResult.storage && savedResult.storage.problemId ? savedResult.storage.problemId : null);
+  }
+
+  async function patchPendingCicDraft(pending, patch){
+    if(!theoremDraftStore || typeof theoremDraftStore.patch !== 'function') return null;
+    try{
+      return await theoremDraftStore.patch({
+        helper:{
+          lambdaConversion:{
+            ...(patch || {}),
+            requestedAt:pending && pending.requestedAt ? pending.requestedAt : null,
+            jobId:pending && pending.jobId ? pending.jobId : '',
+            title:pending && pending.proofPayload ? pending.proofPayload.title : '',
+            language:pending && pending.proofPayload ? pending.proofPayload.language : '',
+            fileName:pending && pending.proofPayload ? pending.proofPayload.fileName : '',
+            requestedFormat:pending && pending.requestedFormat ? pending.requestedFormat : '',
+            format:pending && (pending.completedFormat || pending.requestedFormat) ? (pending.completedFormat || pending.requestedFormat) : ''
+          }
+        }
+      });
+    }catch(err){
+      return null;
+    }
+  }
+
+  async function clearPendingCicDraftIfUnchanged(pending){
+    if(!theoremDraftStore || typeof theoremDraftStore.read !== 'function' || typeof theoremDraftStore.clear !== 'function') return;
+    const proofPayload = pending && pending.proofPayload && typeof pending.proofPayload === 'object'
+      ? pending.proofPayload
+      : null;
+    if(!proofPayload) return;
+    try{
+      const draft = await theoremDraftStore.read();
+      const proof = draft && draft.proof && typeof draft.proof === 'object'
+        ? draft.proof
+        : null;
+      const title = draft && draft.title && typeof draft.title.text === 'string'
+        ? draft.title.text.trim()
+        : '';
+      const proofFileName = String(proof && (proof.fileName || proof.name) || '').trim();
+      const proofLanguage = String(proof && proof.language || '').trim().toLowerCase();
+      const payloadFileName = String(proofPayload.fileName || '').trim();
+      const payloadLanguage = String(proofPayload.language || '').trim().toLowerCase();
+      const sameDraft = !!(
+        proof
+        && String(proof.code || '') === String(proofPayload.code || '')
+        && (!proofFileName || !payloadFileName || proofFileName === payloadFileName)
+        && (!proofLanguage || !payloadLanguage || proofLanguage === payloadLanguage)
+        && title === String(proofPayload.title || '').trim()
+      );
+      if(sameDraft){
+        await theoremDraftStore.clear();
+      }
+    }catch(err){
+      // Keep the draft if we cannot prove it is the submitted one.
+    }
+  }
+
+  function showCicSaveErrorPopup(message){
+    const text = String(message || '').trim();
+    if(cicSaveErrorCopy){
+      cicSaveErrorCopy.textContent = text
+        ? `${text} クリックして投稿前プレビューへ戻れます。`
+        : 'クリックして投稿前プレビューへ戻れます。';
+    }
+    if(cicSaveErrorPopup){
+      cicSaveErrorPopup.classList.add('is-visible');
+      cicSaveErrorPopup.setAttribute('aria-hidden', 'false');
+    }
+  }
+
+  async function markPendingCicSubmissionFailed(pending, message){
+    const next = {
+      ...(pending || {}),
+      status:'error',
+      error:String(message || 'Supabase save failed.'),
+      failedAt:new Date().toISOString()
+    };
+    writePendingCicSubmission(next);
+    await patchPendingCicDraft(next, {
+      status:'failed',
+      completedAt:new Date().toISOString(),
+      error:next.error
+    });
+    return next;
+  }
+
+  let cicMonitorActive = false;
+
+  async function monitorPendingCicSubmission(){
+    if(cicMonitorActive) return;
+    const pending = readPendingCicSubmission();
+    if(!pending) return;
+    if(pending.status === 'error'){
+      showCicSaveErrorPopup(pending.error || 'Supabase save failed.');
+      return;
+    }
+    cicMonitorActive = true;
+    try{
+      const result = await waitForPendingCicResult(pending);
+      if(!result || !result.ok){
+        throw new Error('Only successful CIC conversion results can be saved.');
+      }
+      const savedResult = await persistPendingCicProblem(pending, result);
+      const problemId = getPendingCicProblemId(savedResult);
+      const attachmentResult = await persistPendingCicAttachments(problemId);
+      const finalResult = savedResult && typeof savedResult === 'object'
+        ? {
+          ...savedResult,
+          attachments:attachmentResult
+        }
+        : savedResult;
+      await patchPendingCicDraft(pending, {
+        status:'succeeded',
+        completedAt:new Date().toISOString(),
+        problemId,
+        result:finalResult
+      });
+      await clearPendingCicDraftIfUnchanged(pending);
+      removePendingCicSubmission();
+    }catch(err){
+      const message = err && err.message ? err.message : String(err);
+      await markPendingCicSubmissionFailed(pending, message);
+      showCicSaveErrorPopup(message);
+    }finally{
+      cicMonitorActive = false;
+    }
+  }
+
   function normalizeCookieConsentStatus(value){
     return 'accepted';
   }
@@ -7263,6 +8250,7 @@
   function saveSelectionNavigation(currentScreen, previousScreen, proofAssistant = ''){
     return patchTheoremDraftRecord({
       problemKind: getCurrentProblemKind(),
+      solveContext: pendingProblemSolveContext ? { ...pendingProblemSolveContext } : null,
       title: {
         text: getTheoremTitleText(),
         updatedAt: new Date().toISOString()
@@ -7286,6 +8274,7 @@
       : null;
     return patchTheoremDraftRecord({
       problemKind: getCurrentProblemKind(),
+      solveContext: pendingProblemSolveContext ? { ...pendingProblemSolveContext } : null,
       title: {
         text: getTheoremTitleText(),
         updatedAt: new Date().toISOString()
@@ -7305,6 +8294,7 @@
 
   async function restoreTheoremDraftTitle(){
     if(!theoremDraftStore || typeof theoremDraftStore.read !== 'function') return false;
+    if(hasPendingCicSubmission()) return false;
     try{
       const draft = await theoremDraftStore.read();
       if(!draft || !draft.title || typeof draft.title.text !== 'string') return false;
@@ -8035,6 +9025,7 @@
     suggestionTurns = [];
     editingSuggestionTurnId = 0;
     editingSuggestionDraft = '';
+    clearChatQuoteComposer();
 
     if(suggestionBody){
       suggestionBody.innerHTML = '';
@@ -8546,6 +9537,7 @@
     }
     editingSuggestionTurnId = 0;
     editingSuggestionDraft = '';
+    clearChatQuoteComposer();
     const turns = keep.conversation.turns
       .filter(turn=>turn && (turn.query || turn.answer))
       .map(turn=>({
@@ -8667,11 +9659,139 @@
     return null;
   }
 
+  function isFlashReaderExcludedHeading(text){
+    const value = String(text || '')
+      .replace(/^#+\s*/, '')
+      .replace(/\s+/g, '');
+    return value.includes('保存データから読めること')
+      || value.includes('読み取り上の注意')
+      || value.includes('読み上げ上の注意');
+  }
+
+  function isAnswerSectionHeadingLine(line){
+    const value = String(line || '').trim();
+    return /^#{1,6}\s+\S+/.test(value)
+      || /^.{1,42}$/.test(value) && (
+        isFlashReaderExcludedHeading(value)
+        || /^(Sources?|Overview|AI Overview|Source preview|保存データ|読み取り|読み上げ)/i.test(value)
+      );
+  }
+
+  function stripFlashReaderExcludedSections(answer){
+    const lines = String(answer || '').replace(/\r\n/g, '\n').split('\n');
+    const kept = [];
+    let skipping = false;
+    for(let index = 0; index < lines.length; index += 1){
+      const line = lines[index];
+      if(isFlashReaderExcludedHeading(line)){
+        skipping = true;
+        continue;
+      }
+      if(skipping && isAnswerSectionHeadingLine(line)){
+        skipping = false;
+      }
+      if(!skipping) kept.push(line);
+    }
+    return kept.join('\n');
+  }
+
   function getFlashReaderSourceText(){
     const latestFinalTurn = getLatestFinalFlashReaderTurn();
     return latestFinalTurn
-      ? stripFlashReaderMarkdown(latestFinalTurn.fullAnswer || latestFinalTurn.answer)
+      ? stripFlashReaderMarkdown(stripFlashReaderExcludedSections(latestFinalTurn.fullAnswer || latestFinalTurn.answer))
       : '';
+  }
+
+  function getFlashReaderSourceAnswer(){
+    const latestFinalTurn = getLatestFinalFlashReaderTurn();
+    return latestFinalTurn ? stripFlashReaderExcludedSections(latestFinalTurn.fullAnswer || latestFinalTurn.answer || '') : '';
+  }
+
+  function createFlashReaderWordItem(text){
+    return { type:'word', text:String(text || '') };
+  }
+
+  function createFlashReaderSyntaxItem(kind, text){
+    return { type:'syntax', kind:kind || 'code', text:String(text || '') };
+  }
+
+  function isFlashReaderSyntaxItem(item){
+    return !!item && typeof item === 'object' && item.type === 'syntax';
+  }
+
+  function isFlashReaderWordItem(item){
+    return typeof item === 'string' || (!!item && typeof item === 'object' && item.type === 'word');
+  }
+
+  function getFlashReaderItemText(item){
+    if(typeof item === 'string') return item;
+    return String(item && item.text || '');
+  }
+
+  function getFlashReaderSyntaxLabel(kind){
+    if(kind === 'coq') return 'Coq';
+    if(kind === 'lean') return 'Lean';
+    if(kind === 'math') return 'Math';
+    return 'Code';
+  }
+
+  function inferFlashReaderSyntaxKind(language, code){
+    const lang = String(language || '').trim().toLowerCase();
+    const text = String(code || '').trim();
+    if(!text) return '';
+    if(/\b(?:lean|lean4|\.lean)\b/.test(lang)) return 'lean';
+    if(/\b(?:coq|rocq|gallina|\.v)\b/.test(lang)) return 'coq';
+    if(/\b(?:theorem|lemma|def|example|inductive|structure|namespace|variable|import|where|by|simp|rw|intro|exact)\b/.test(text) && /(?: :=| by\b| =>|∀|→|↔|Prop|Type)/.test(text)){
+      return 'lean';
+    }
+    if(/\b(?:Theorem|Lemma|Definition|Fixpoint|Inductive|Proof|Qed|Admitted|forall|Prop|Type|intros|exact|reflexivity|simpl|rewrite|apply)\b/.test(text)){
+      return 'coq';
+    }
+    return lang ? 'code' : '';
+  }
+
+  function appendFlashReaderTextItems(items, text){
+    tokenizeFlashReaderText(stripFlashReaderMarkdown(text)).forEach(token=>{
+      if(!token) return;
+      if(isFlashReaderMathLike(token) && hasFlashReaderMathOperator(token)){
+        items.push(createFlashReaderSyntaxItem('math', stripFlashReaderMathDelimiters(token)));
+        return;
+      }
+      items.push(createFlashReaderWordItem(token));
+    });
+  }
+
+  function buildFlashReaderSequenceFromAnswer(answer){
+    const source = String(answer || '');
+    const items = [];
+    const pattern = /```([^\n`]*)\n?([\s\S]*?)```|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]|\$\$([\s\S]+?)\$\$|\$([^$\n]{1,240})\$|`([^`]+)`/g;
+    let lastIndex = 0;
+    let match;
+    while((match = pattern.exec(source))){
+      if(match.index > lastIndex){
+        appendFlashReaderTextItems(items, source.slice(lastIndex, match.index));
+      }
+      if(match[2] !== undefined){
+        const kind = inferFlashReaderSyntaxKind(match[1], match[2]);
+        if(kind) items.push(createFlashReaderSyntaxItem(kind, match[2].trim()));
+      }else if(match[3] !== undefined || match[4] !== undefined || match[5] !== undefined || match[6] !== undefined){
+        const mathText = (match[3] || match[4] || match[5] || match[6] || '').trim();
+        if(mathText) items.push(createFlashReaderSyntaxItem('math', mathText));
+      }else if(match[7] !== undefined){
+        const inlineCode = match[7].trim();
+        const kind = inferFlashReaderSyntaxKind('', inlineCode);
+        if(kind && kind !== 'code'){
+          items.push(createFlashReaderSyntaxItem(kind, inlineCode));
+        }else{
+          appendFlashReaderTextItems(items, inlineCode);
+        }
+      }
+      lastIndex = pattern.lastIndex;
+    }
+    if(lastIndex < source.length){
+      appendFlashReaderTextItems(items, source.slice(lastIndex));
+    }
+    return items.filter(item=>isFlashReaderSyntaxItem(item) || getFlashReaderItemText(item).trim());
   }
 
   function tokenizeFlashReaderText(text){
@@ -9109,8 +10229,111 @@
     return buildFlashReaderCjkChunks(tokens, sourceHasCjk);
   }
 
+  function getFlashReaderWordTotal(items){
+    return (Array.isArray(items) ? items : []).filter(isFlashReaderReadableWordItem).length;
+  }
+
+  function getFlashReaderWordPosition(index){
+    let count = 0;
+    for(let i = 0; i <= index && i < flashReaderTokens.length; i += 1){
+      if(isFlashReaderReadableWordItem(flashReaderTokens[i])) count += 1;
+    }
+    return count;
+  }
+
+  function findFlashReaderWordAtOrBefore(index){
+    for(let i = Math.min(index, flashReaderTokens.length - 1); i >= 0; i -= 1){
+      if(isFlashReaderReadableWordItem(flashReaderTokens[i])) return getFlashReaderItemText(flashReaderTokens[i]);
+    }
+    return '';
+  }
+
+  function moveFlashReaderIndexByWordCount(deltaWords){
+    const direction = deltaWords < 0 ? -1 : 1;
+    let remaining = Math.abs(deltaWords);
+    let nextIndex = flashReaderIndex;
+    while(remaining > 0){
+      const candidate = nextIndex + direction;
+      if(candidate < 0 || candidate >= flashReaderTokens.length) break;
+      nextIndex = candidate;
+      if(isFlashReaderReadableWordItem(flashReaderTokens[nextIndex])) remaining -= 1;
+    }
+    flashReaderIndex = Math.max(0, Math.min(nextIndex, Math.max(0, flashReaderTokens.length - 1)));
+  }
+
+  function getActiveFlashReaderSyntax(index){
+    let active = null;
+    for(let i = 0; i <= index && i < flashReaderTokens.length; i += 1){
+      const item = flashReaderTokens[i];
+      if(isFlashReaderSyntaxItem(item)) active = item;
+    }
+    return active;
+  }
+
+  function escapeFlashReaderHtml(value){
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function highlightFlashReaderCode(code, kind){
+    let html = escapeFlashReaderHtml(code);
+    const protectedParts = [];
+    const protect = (pattern, className)=>{
+      html = html.replace(pattern, match=>{
+        const key = `\uE000${String.fromCharCode(0xE100 + protectedParts.length)}\uE001`;
+        protectedParts.push(`<span class="${className}">${match}</span>`);
+        return key;
+      });
+    };
+    protect(/(&quot;[^&]*(?:&quot;)?|'[^']*(?:')?)/g, 'flash-code-string');
+    if(kind === 'coq'){
+      protect(/(\(\*[\s\S]*?\*\))/g, 'flash-code-comment');
+    }else if(kind === 'lean'){
+      protect(/(--[^\n]*)/g, 'flash-code-comment');
+    }else{
+      protect(/(\/\/[^\n]*|#[^\n]*)/g, 'flash-code-comment');
+    }
+    html = html.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="flash-code-number">$1</span>');
+    html = html.replace(/(∀|∃|→|←|↔|⇒|:=|=>|=|≤|≥|≠|∧|∨|¬|\+|-|\*|\/)/g, '<span class="flash-code-symbol">$1</span>');
+    if(kind === 'coq'){
+      html = html.replace(/\b(Theorem|Lemma|Corollary|Definition|Fixpoint|Inductive|Record|Proof|Qed|Admitted|Abort|forall|exists|fun|match|with|end|Prop|Type|Set|intros|intro|exact|reflexivity|simpl|rewrite|apply|destruct|induction|assumption|split|left|right)\b/g, '<span class="flash-code-keyword">$1</span>');
+    }else if(kind === 'lean'){
+      html = html.replace(/\b(theorem|lemma|def|example|axiom|constant|inductive|structure|class|namespace|section|variable|variables|import|open|where|by|let|have|show|exact|intro|intros|simp|rw|apply|constructor|cases|induction|match|with|Prop|Type|Sort)\b/g, '<span class="flash-code-keyword">$1</span>');
+    }
+    protectedParts.forEach((part, index)=>{
+      html = html.replace(`\uE000${String.fromCharCode(0xE100 + index)}\uE001`, part);
+    });
+    return html;
+  }
+
+  function renderFlashReaderSyntaxPanel(item){
+    const active = isFlashReaderSyntaxItem(item) ? item : null;
+    if(flashReaderSidebar) flashReaderSidebar.classList.toggle('has-syntax', !!active);
+    if(!flashReaderSyntax || !flashReaderSyntaxType || !flashReaderSyntaxCode) return;
+    flashReaderSyntax.classList.toggle('is-math', !!active && active.kind === 'math');
+    if(!active){
+      flashReaderSyntaxType.textContent = 'Code';
+      flashReaderSyntaxCode.textContent = '';
+      return;
+    }
+    flashReaderSyntaxType.textContent = getFlashReaderSyntaxLabel(active.kind);
+    if(active.kind === 'math'){
+      flashReaderSyntaxCode.textContent = formatFlashReaderMathDisplay(active.text);
+      return;
+    }
+    flashReaderSyntaxCode.innerHTML = highlightFlashReaderCode(active.text, active.kind);
+  }
+
   function refreshFlashReaderTokens(resetToStart = false){
-    flashReaderTokens = tokenizeFlashReaderText(getFlashReaderSourceText());
+    flashReaderTokens = buildFlashReaderSequenceFromAnswer(getFlashReaderSourceAnswer());
+    if(!flashReaderTokens.length){
+      flashReaderTokens = tokenizeFlashReaderText(getFlashReaderSourceText()).map(createFlashReaderWordItem);
+    }
+    flashReaderWordCount = getFlashReaderWordTotal(flashReaderTokens);
     if(resetToStart){
       flashReaderIndex = 0;
     }else if(flashReaderIndex >= flashReaderTokens.length){
@@ -9124,9 +10347,13 @@
     return FLASH_READER_SPEEDS[flashReaderSpeedIndex] || FLASH_READER_SPEEDS[0];
   }
 
-  function getFlashReaderInterval(word){
+  function getFlashReaderInterval(item){
     const speed = getFlashReaderSpeed();
-    const value = String(word || '').trim();
+    if(isFlashReaderSyntaxItem(item)){
+      const syntaxWeight = item.kind === 'math' ? 1.55 : 1.72;
+      return Math.round((1000 / speed.wps) * syntaxWeight);
+    }
+    const value = getFlashReaderItemText(item).trim();
     const cleanValue = stripFlashReaderDisplaySymbols(stripFlashReaderMathDelimiters(value));
     const effectiveLength = Math.max(1, Array.from(cleanValue).length);
     const lengthWeight = Math.min(1.82, Math.max(0.86, 0.78 + (effectiveLength / 13)));
@@ -9162,15 +10389,15 @@
       return '"Cambria Math","STIX Two Math","Latin Modern Math","Noto Sans Math","Times New Roman",math,serif';
     }
     if(/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(value)){
-      return '"Hiragino Sans","Yu Gothic","Yu Gothic UI","Meiryo","Noto Sans JP",system-ui,sans-serif';
+      return '"Lexend","Hiragino Sans","Yu Gothic","Yu Gothic UI","Meiryo","Noto Sans JP",system-ui,sans-serif';
     }
     if(/[\p{Script=Hangul}]/u.test(value)){
-      return '"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif';
+      return '"Lexend","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif';
     }
     if(/[\p{Script=Han}]/u.test(value)){
-      return '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif';
+      return '"Lexend","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif';
     }
-    return '"Inter","SF Pro Text","Segoe UI",system-ui,sans-serif';
+    return '"Lexend","Inter","SF Pro Text","Segoe UI",system-ui,sans-serif';
   }
 
   function mapFlashReaderScriptText(text, mode){
@@ -9202,6 +10429,17 @@
     return value;
   }
 
+  function getFlashReaderDisplayText(word){
+    return isFlashReaderMathLike(word)
+      ? formatFlashReaderMathDisplay(word)
+      : stripFlashReaderDisplaySymbols(stripFlashReaderMathDelimiters(word));
+  }
+
+  function isFlashReaderReadableWordItem(item){
+    if(!isFlashReaderWordItem(item)) return false;
+    return !!getFlashReaderDisplayText(getFlashReaderItemText(item)).trim();
+  }
+
   function alignFlashReaderOrpLine(lineEl, pivotEl){
     if(!lineEl || !pivotEl || !flashReaderStage) return;
     lineEl.style.transform = 'translateX(0px)';
@@ -9213,11 +10451,10 @@
   }
 
   function renderFlashReaderOrpWord(word){
-    if(!flashReaderWord) return;
+    if(!flashReaderWord) return false;
     const isMathWord = isFlashReaderMathLike(word);
-    const displayWord = isMathWord
-      ? formatFlashReaderMathDisplay(word)
-      : stripFlashReaderDisplaySymbols(stripFlashReaderMathDelimiters(word));
+    const displayWord = getFlashReaderDisplayText(word);
+    if(!displayWord) return false;
     const chars = Array.from(displayWord);
     const pivotIndex = getFlashReaderOrpIndex(displayWord);
     flashReaderWord.replaceChildren();
@@ -9243,6 +10480,7 @@
     line.append(before, pivot, after);
     flashReaderWord.appendChild(line);
     alignFlashReaderOrpLine(line, pivot);
+    return true;
   }
 
   function renderFlashReader(){
@@ -9251,18 +10489,23 @@
       flashReaderSpeed.textContent = `${speed.label} · ${speed.wps.toFixed(1)} WPS`;
     }
     if(flashReaderProgress){
-      flashReaderProgress.textContent = flashReaderTokens.length
-        ? `${Math.min(flashReaderIndex + 1, flashReaderTokens.length)} / ${flashReaderTokens.length}`
+      flashReaderProgress.textContent = flashReaderWordCount
+        ? `${Math.min(getFlashReaderWordPosition(flashReaderIndex), flashReaderWordCount)} / ${flashReaderWordCount}`
         : '0 / 0';
     }
+    renderFlashReaderSyntaxPanel(getActiveFlashReaderSyntax(flashReaderIndex));
     if(!flashReaderWord) return;
-    const current = flashReaderTokens[flashReaderIndex] || '';
-    if(current){
-      renderFlashReaderOrpWord(current);
+    const current = flashReaderTokens[flashReaderIndex] || null;
+    const word = isFlashReaderReadableWordItem(current)
+      ? getFlashReaderItemText(current)
+      : findFlashReaderWordAtOrBefore(flashReaderIndex);
+    if(word && renderFlashReaderOrpWord(word)){
+      return;
     }else{
       flashReaderWord.replaceChildren();
-      flashReaderWord.textContent = 'Space or tap';
+      flashReaderWord.textContent = isFlashReaderSyntaxItem(current) ? 'Syntax' : 'Space or tap';
       flashReaderWord.classList.add('is-placeholder');
+      flashReaderWord.classList.remove('is-math');
     }
   }
 
@@ -9276,8 +10519,8 @@
 
   function scheduleFlashReaderStep(){
     if(!flashReaderPlaying || !flashReaderTokens.length) return;
-    const currentWord = flashReaderTokens[flashReaderIndex] || '';
-    const delay = getFlashReaderInterval(currentWord);
+    const currentItem = flashReaderTokens[flashReaderIndex] || null;
+    const delay = getFlashReaderInterval(currentItem);
     flashReaderTimer = window.setTimeout(()=>{
       flashReaderTimer = 0;
       if(!flashReaderPlaying) return;
@@ -9324,7 +10567,7 @@
     if(!flashReaderTokens.length) refreshFlashReaderTokens();
     const activeSpeed = getFlashReaderSpeed();
     const rewindWords = Math.max(1, Math.round(activeSpeed.wps * 3));
-    flashReaderIndex = Math.max(0, flashReaderIndex - rewindWords);
+    moveFlashReaderIndexByWordCount(-rewindWords);
     if(flashReaderSpeedIndex > 0){
       flashReaderSpeedIndex = 0;
     }
@@ -9362,6 +10605,7 @@
       });
     }else{
       stopFlashReader();
+      renderFlashReaderSyntaxPanel(null);
     }
   }
 
@@ -9542,17 +10786,34 @@
     return lines.join('\n') || 'No additional details.';
   }
 
+  function stripSourceReviewSyntax(text){
+    return String(text || '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/\\\[[\s\S]*?\\\]/g, ' ')
+      .replace(/\\\([\s\S]*?\\\)/g, ' ')
+      .replace(/\$\$[\s\S]*?\$\$/g, ' ')
+      .replace(/\$[^$\n]{1,240}\$/g, ' ')
+      .replace(/`[^`]+`/g, ' ')
+      .split(/\r?\n/)
+      .filter(line=>!/\b(?:Theorem|Lemma|Definition|Fixpoint|Inductive|Proof|Qed|Admitted|theorem|lemma|def|example|by|exact|intro|simp|rw)\b/.test(line))
+      .join(' ')
+      .replace(/[∀∃→←↔⇒:=≤≥≠≈∧∨¬⊢⊨λ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   function summarizeCitationText(citation){
     if(!citation) return 'No summary is available for this source.';
     const pieces = [
+      citation.summary,
+      citation.description,
       citation.quote,
-      citation.normalizedTermPreview,
-      citation.sourceCode
-    ].map(value=>String(value || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+      citation.title
+    ].map(value=>stripSourceReviewSyntax(value)).filter(Boolean);
     const base = pieces.find(Boolean) || '';
     if(!base){
       const kind = citation.kind ? `${citation.kind} source` : 'saved source';
-      return `This ${kind} is saved in the database, but no readable summary text was included with the citation.`;
+      return `This ${kind} is saved in the database. Source review hides formulas and proof syntax here so the preview stays easy to scan.`;
     }
     const summary = base.length > 680 ? base.slice(0, 679).trimEnd() + '...' : base;
     const prefix = citation.kind && citation.kind !== 'unknown'
@@ -9661,21 +10922,13 @@
       meta || 'No proof file metadata was saved.'
     );
 
-    const declarations = extractProofDeclarations(sourceText);
-    if(declarations.length){
-      declarations.forEach(item=>{
-        appendCitationStructureRow(
-          containerEl,
-          'ƒ',
-          [item.type, item.name].filter(Boolean).join(' '),
-          `line ${item.line}`
-        );
-      });
-      return;
-    }
-
-    if(citation && citation.normalizedTermPreview){
-      appendCitationStructureRow(containerEl, '∑', 'Normalized term preview', truncateSidebarText(citation.normalizedTermPreview, 220));
+    if(sourceText || citation && citation.normalizedTermPreview){
+      appendCitationStructureRow(
+        containerEl,
+        'i',
+        'Proof/source snapshot saved',
+        'Formula and proof syntax details are hidden in Source preview. Use Go to page for the full read-only source.'
+      );
       return;
     }
 
@@ -9691,6 +10944,37 @@
       || value.includes('読み上げ上の注意');
   }
 
+  function normalizeDisplayMathText(text){
+    const value = String(text || '').trim();
+    if((value.startsWith('\\[') && value.endsWith('\\]')) || (value.startsWith('$$') && value.endsWith('$$'))){
+      return value;
+    }
+    if(value.startsWith('\\(') && value.endsWith('\\)')){
+      return `\\[${value.slice(2, -2).trim()}\\]`;
+    }
+    if(value.startsWith('$') && value.endsWith('$') && value.length > 1){
+      return `$$${value.slice(1, -1).trim()}$$`;
+    }
+    return value;
+  }
+
+  function isStandaloneAnswerMathLine(line){
+    const trimmed = String(line || '').trim();
+    if(!trimmed) return false;
+    if(trimmed.startsWith('$$') || trimmed.startsWith('\\[')) return true;
+    if(/^\\\([\s\S]+\\\)$/.test(trimmed) || /^\$[^$\n]+\$$/.test(trimmed)){
+      return hasFlashReaderMathOperator(trimmed) || /[=<>≤≥≠≈+\-*/×÷^_]/.test(trimmed);
+    }
+    return false;
+  }
+
+  function appendAnswerMathBlock(answerEl, mathText){
+    const math = document.createElement('div');
+    math.className = 'chat-math-block is-display-math';
+    math.textContent = normalizeDisplayMathText(mathText);
+    answerEl.appendChild(math);
+  }
+
   function appendInlineAnswerContent(targetEl, text, turn){
     if(!targetEl) return;
     let value = String(text || '');
@@ -9701,7 +10985,7 @@
         value = value.slice(0, openTitle);
       }
     }
-    const pattern = /\[\[([^\]]+)\]\]|[\[［](P\d+)[\]］]|(`[^`]+`)|(\*\*[^*]+\*\*)/gi;
+    const pattern = /\[\[([^\]]+)\]\]|[\[［](P\d+)[\]］]|(`[^`]+`)|(\*\*[^*]+\*\*)|(\\\([\s\S]+?\\\))|(\$[^$\n]{1,240}\$)/gi;
     let lastIndex = 0;
     let match;
     while((match = pattern.exec(value))){
@@ -9710,6 +10994,7 @@
       }
       const inlineCode = match[3] || '';
       const boldText = match[4] || '';
+      const inlineMath = match[5] || match[6] || '';
       if(inlineCode){
         const code = document.createElement('code');
         code.textContent = inlineCode.slice(1, -1);
@@ -9721,6 +11006,14 @@
         const strong = document.createElement('strong');
         appendInlineAnswerContent(strong, boldText.slice(2, -2), turn);
         targetEl.appendChild(strong);
+        lastIndex = pattern.lastIndex;
+        continue;
+      }
+      if(inlineMath){
+        const math = document.createElement('span');
+        math.className = 'chat-inline-math';
+        math.textContent = inlineMath;
+        targetEl.appendChild(math);
         lastIndex = pattern.lastIndex;
         continue;
       }
@@ -9810,7 +11103,7 @@
     const trimmed = String(lines[index] || '').trim();
     return !trimmed
       || trimmed.startsWith('```')
-      || trimmed.startsWith('$$')
+      || isStandaloneAnswerMathLine(trimmed)
       || /^(#{1,4})\s+/.test(trimmed)
       || /^[-*•]\s+/.test(trimmed)
       || /^\d+[.)]\s+/.test(trimmed)
@@ -9864,23 +11157,25 @@
         continue;
       }
 
-      if(trimmed.startsWith('$$')){
+      if(isStandaloneAnswerMathLine(trimmed)){
         flushAnswerList(answerEl, listState);
         const mathLines = [line];
-        const sameLineClosed = trimmed.length > 2 && trimmed.endsWith('$$');
+        const isDollarBlock = trimmed.startsWith('$$');
+        const isBracketBlock = trimmed.startsWith('\\[');
+        const closeToken = isDollarBlock ? '$$' : isBracketBlock ? '\\]' : '';
+        const sameLineClosed = closeToken
+          ? trimmed.length > closeToken.length && trimmed.endsWith(closeToken)
+          : true;
         lineIndex += 1;
-        while(!sameLineClosed && lineIndex < lines.length){
+        while(!sameLineClosed && closeToken && lineIndex < lines.length){
           mathLines.push(lines[lineIndex]);
-          if(String(lines[lineIndex] || '').trim().endsWith('$$')){
+          if(String(lines[lineIndex] || '').trim().endsWith(closeToken)){
             lineIndex += 1;
             break;
           }
           lineIndex += 1;
         }
-        const math = document.createElement('div');
-        math.className = 'chat-math-block';
-        math.textContent = mathLines.join('\n');
-        answerEl.appendChild(math);
+        appendAnswerMathBlock(answerEl, mathLines.join('\n'));
         continue;
       }
 
@@ -10219,6 +11514,12 @@
       problemPreviewSource.textContent = sourceText;
       problemPreviewSource.classList.toggle('is-empty', !getCitationSourceText(citation));
     }
+    if(problemPreviewProveBtn){
+      const canProve = isUnsolvedProblemCitation(citation);
+      problemPreviewProveBtn.classList.toggle('is-visible', canProve);
+      problemPreviewProveBtn.hidden = !canProve;
+      problemPreviewProveBtn.setAttribute('aria-hidden', canProve ? 'false' : 'true');
+    }
     renderProblemPreviewAttachments(citation);
   }
 
@@ -10244,6 +11545,56 @@
     closeCitationPreview();
     problemPreviewPage.hidden = false;
     problemPreviewPage.setAttribute('aria-hidden', 'false');
+  }
+
+  async function startProblemSolveFromPreview(){
+    if(!activeCitationPreview || !isUnsolvedProblemCitation(activeCitationPreview)) return;
+    const context = buildProblemSolveContext(activeCitationPreview);
+    if(!context) return;
+    pendingProblemSolveContext = context;
+    closeProblemPreviewPage();
+    closeCitationPreview();
+    clearSuggestionPane();
+    selectionMode = false;
+    input.value = '';
+    lastInputValue = '';
+    attachedFiles = [];
+    rememberedContent = '';
+    rememberedFiles = [];
+    compactGrayAcceptedValue = '';
+    setModeDraft(1, '', []);
+    renderAttachments();
+    renderProblemSolveComposer();
+    if(state !== 1){
+      applyState(1);
+    }else{
+      bodyEl.classList.add('scrolled');
+      syncCompactGrayLayoutState();
+      adjustTextarea({ immediate:true });
+      persistModeState();
+    }
+    await Promise.race([
+      patchTheoremDraftRecord({
+        problemKind:getCurrentProblemKind(),
+        solveContext:context,
+        title:{
+          text:'',
+          updatedAt:new Date().toISOString(),
+          reason:'problem-solve-start'
+        },
+        navigation:{
+          currentScreen:'gray-compact',
+          previousScreen:'problem-preview',
+          updatedAt:new Date().toISOString()
+        }
+      }),
+      new Promise(resolve=>setTimeout(resolve, 350))
+    ]);
+    requestAnimationFrame(()=>{
+      renderProblemSolveComposer();
+      adjustTextarea({ immediate:true });
+      if(input) input.focus();
+    });
   }
 
   function closeProblemPreviewPage(){
@@ -10858,6 +12209,98 @@
     }
   }
 
+  function renderChatQuoteComposer(){
+    const hasQuote = !!(pendingAssistantQuote && pendingAssistantQuote.text);
+    if(!chatQuoteComposer) return;
+    chatQuoteComposer.hidden = !hasQuote;
+    chatQuoteComposer.classList.toggle('is-visible', hasQuote);
+    if(chatQuoteComposerTitle){
+      chatQuoteComposerTitle.textContent = hasQuote
+        ? `Replying to ${pendingAssistantQuote.sourceTitle || 'selection'}`
+        : 'Replying to selection';
+    }
+    if(chatQuoteComposerText){
+      chatQuoteComposerText.textContent = hasQuote ? pendingAssistantQuote.text : '';
+    }
+  }
+
+  function isUnsolvedProblemCitation(citation){
+    if(!citation || typeof citation !== 'object') return false;
+    const kind = String(citation.kind || '').trim().toLowerCase();
+    const proofState = String(citation.proofState || '').trim().toUpperCase();
+    if(proofState === 'YY') return false;
+    return kind === 'problem' || proofState === 'NY';
+  }
+
+  function buildProblemSolveContext(citation){
+    if(!citation || typeof citation !== 'object') return null;
+    const title = String(citation.title || 'Untitled problem').trim() || 'Untitled problem';
+    return {
+      version:1,
+      mode:'problem-solve',
+      problemId:String(citation.problemId || citation.id || '').trim(),
+      citationId:String(citation.id || '').trim(),
+      title,
+      quote:String(citation.quote || '').trim(),
+      sourceCode:getCitationSourceText(citation),
+      language:String(citation.language || '').trim(),
+      fileName:String(citation.fileName || '').trim(),
+      proofState:String(citation.proofState || '').trim(),
+      kind:String(citation.kind || '').trim(),
+      normalizedFormat:String(citation.normalizedFormat || '').trim(),
+      normalizedTermPreview:String(citation.normalizedTermPreview || '').trim(),
+      attachments:Array.isArray(citation.attachments) ? citation.attachments : [],
+      createdAt:new Date().toISOString()
+    };
+  }
+
+  function renderProblemSolveComposer(){
+    const context = pendingProblemSolveContext;
+    const hasContext = !!(context && context.title);
+    if(!problemSolveComposer) return;
+    problemSolveComposer.hidden = !hasContext;
+    problemSolveComposer.classList.toggle('is-visible', hasContext);
+    if(problemSolveComposerTitle){
+      problemSolveComposerTitle.textContent = hasContext ? context.title : 'Solving problem';
+    }
+    if(problemSolveComposerText){
+      const parts = [];
+      if(context && context.kind) parts.push(context.kind);
+      if(context && context.proofState) parts.push('proof ' + context.proofState);
+      if(context && context.language) parts.push(context.language);
+      const meta = parts.length ? parts.join(' / ') + ': ' : '';
+      problemSolveComposerText.textContent = hasContext
+        ? meta + (context.quote || context.sourceCode || 'Saved problem reference will be attached to the proof editor.')
+        : '';
+    }
+  }
+
+  function clearProblemSolveContext(){
+    pendingProblemSolveContext = null;
+    renderProblemSolveComposer();
+  }
+
+  function clearChatQuoteComposer(){
+    pendingAssistantQuote = null;
+    renderChatQuoteComposer();
+  }
+
+  function formatPendingQuoteForPrompt(){
+    if(!pendingAssistantQuote || !pendingAssistantQuote.text) return '';
+    const quoted = String(pendingAssistantQuote.text || '')
+      .split(/\r?\n/)
+      .map(line=>`> ${line.trim()}`)
+      .join('\n');
+    return `From ${pendingAssistantQuote.sourceTitle || 'AI response'}:\n${quoted}`;
+  }
+
+  function composePromptWithPendingQuote(promptText){
+    const prompt = String(promptText || '').trim();
+    const quoted = formatPendingQuoteForPrompt();
+    if(!quoted) return prompt;
+    return prompt ? `${quoted}\n\n${prompt}` : quoted;
+  }
+
   function getSelectionTextInAssistantAnswer(){
     const selection = window.getSelection ? window.getSelection() : null;
     if(!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
@@ -10908,15 +12351,11 @@
     if(!quote || !input || isSuggestionBusy()) return;
     const turn = suggestionTurns.find(entry=>entry && entry.id === selectedAssistantQuoteTurnId);
     const sourceTitle = turn && turn.query ? truncateSidebarText(turn.query, 90) : 'AI response';
-    const quoted = quote
-      .split(/\r?\n/)
-      .map(line=>`> ${line.trim()}`)
-      .join('\n');
-    const insertion = `From ${sourceTitle}:\n${quoted}\n\n`;
-    const current = String(input.value || '');
-    input.value = current ? `${current.trimEnd()}\n\n${insertion}` : insertion;
-    lastInputValue = input.value;
-    input.dispatchEvent(new Event('input', { bubbles:true }));
+    pendingAssistantQuote = {
+      text:quote,
+      sourceTitle
+    };
+    renderChatQuoteComposer();
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
     hideChatSelectionQuote();
@@ -11028,6 +12467,21 @@
       e.preventDefault();
     });
     chatSelectionQuote.addEventListener('click', addSelectedQuoteToChat);
+  }
+
+  if(chatQuoteComposerClear){
+    chatQuoteComposerClear.addEventListener('click', ()=>{
+      clearChatQuoteComposer();
+      if(input) input.focus();
+    });
+  }
+
+  if(problemSolveComposerClear){
+    problemSolveComposerClear.addEventListener('click', ()=>{
+      clearProblemSolveContext();
+      if(input) input.focus();
+      adjustTextarea();
+    });
   }
 
   document.addEventListener('selectionchange', ()=>{
@@ -11191,6 +12645,12 @@
   if(problemPreviewUploadsTab){
     problemPreviewUploadsTab.addEventListener('click', ()=>{
       setProblemPreviewView('uploads');
+    });
+  }
+
+  if(problemPreviewProveBtn){
+    problemPreviewProveBtn.addEventListener('click', ()=>{
+      startProblemSolveFromPreview();
     });
   }
 
@@ -11861,6 +13321,16 @@
     return Math.ceil(lineHeight + paddingTop + paddingBottom);
   }
 
+  function getInputHeightForLineLimit(lineLimit){
+    const computed = window.getComputedStyle(input);
+    const lineHeight = parseFloat(computed.lineHeight) || 22.4;
+    const paddingTop = parseFloat(computed.paddingTop) || 0;
+    const paddingBottom = parseFloat(computed.paddingBottom) || 0;
+    const borderTop = parseFloat(computed.borderTopWidth) || 0;
+    const borderBottom = parseFloat(computed.borderBottomWidth) || 0;
+    return Math.ceil((lineHeight * lineLimit) + paddingTop + paddingBottom + borderTop + borderBottom);
+  }
+
   function clearContainerHeightCleanup(){
     if(containerHeightCleanupTimer){
       clearTimeout(containerHeightCleanupTimer);
@@ -12051,6 +13521,12 @@
   function runAdjustTextarea(){
     const { contentHeight, lineCount, shouldCollapseByLineCount, wouldExpand } = measureCurrentInputLayout();
     updateLineCount(lineCount);
+    const inputStack = input ? input.closest('.search-input-stack') : null;
+    if(inputStack && !hasSuggestionResults){
+      inputStack.style.height = '';
+      input.style.minHeight = '';
+      input.style.maxHeight = '';
+    }
 
     const hasExternalContent = bodyEl.classList.contains('scrolled')
       && window.uploadState
@@ -12062,6 +13538,8 @@
     }
 
     if(hasSuggestionResults){
+      const maxPromptHeight = getInputHeightForLineLimit(13);
+      const promptHeight = Math.min(contentHeight, maxPromptHeight);
       clearExpandedUiRevealTimer();
       container.classList.remove('editor-ui-ready');
       container.classList.remove('expanded');
@@ -12070,7 +13548,10 @@
       container.style.height = '';
       input.style.overflow = 'auto';
       input.style.height = 'auto';
-      input.style.height = Math.min(contentHeight, 148) + 'px';
+      input.style.height = promptHeight + 'px';
+      input.style.minHeight = promptHeight + 'px';
+      input.style.maxHeight = promptHeight + 'px';
+      if(inputStack) inputStack.style.height = promptHeight + 'px';
       return;
     }
 
@@ -12211,20 +13692,23 @@
     const v = input.value.trim();
     const hasFiles = attachedFiles.length > 0;
     const hasEditorContent = !!(window.uploadState && window.uploadState.hasContent);
+    const hasPendingQuote = !!(pendingAssistantQuote && pendingAssistantQuote.text);
+    const hasProblemSolveContext = !!pendingProblemSolveContext;
 
     if(state === 1){
-      if(!v && !hasFiles && !hasEditorContent) return;
+      if(!v && !hasFiles && !hasEditorContent && !hasProblemSolveContext) return;
       enterSelectionMode();
       return;
     }
 
-    if(!v && !hasFiles) return;
+    if(!v && !hasFiles && !hasPendingQuote) return;
 
     if(state === 0){
-      const queryText = v;
+      const queryText = composePromptWithPendingQuote(v);
       const attachedNames = hasFiles ? attachedFiles.map(file=>file.name) : [];
       input.value = '';
       lastInputValue = '';
+      clearChatQuoteComposer();
       setModeDraft(0, input.value, attachedFiles);
       adjustTextarea();
       persistModeState();
@@ -12692,6 +14176,7 @@
     hydrateCookieConsentFromServer();
     syncTopKeepButtonVisibility();
     syncFlashReadButton();
+    monitorPendingCicSubmission();
     if(stripeSetupReturnShouldOpenBlue && state !== 2){
       applyState(2);
     }else{

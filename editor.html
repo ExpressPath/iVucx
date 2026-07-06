@@ -606,6 +606,16 @@
       background:rgba(47,129,247,0.14);
     }
 
+    .file-row.problem-reference{
+      border-color:rgba(125,92,255,0.26);
+      background:rgba(125,92,255,0.08);
+    }
+
+    .file-row.problem-reference.active{
+      border-color:rgba(143,184,255,0.62);
+      background:rgba(47,129,247,0.18);
+    }
+
     .folder-row.active-folder{
       border-color:rgba(125,133,144,0.35);
       background:rgba(125,133,144,0.12);
@@ -694,6 +704,10 @@
       line-height:1.25;
     }
 
+    .file-row.problem-reference .file-meta{
+      color:#9fb9ff;
+    }
+
     .file-remove-btn{
       width:24px;
       height:24px;
@@ -710,6 +724,11 @@
     .file-row:hover .file-remove-btn,
     .file-remove-btn:focus{
       visibility:visible;
+    }
+
+    .file-row.problem-reference .file-remove-btn{
+      visibility:visible;
+      color:#9fb9ff;
     }
 
     .file-remove-btn:hover{
@@ -1297,6 +1316,34 @@
         return normalized === 'problem' || normalized === 'theorem' ? normalized : 'theorem';
       }
 
+      function normalizeSolveContext(value){
+        const source = value && typeof value === 'object' ? value : null;
+        if(!source) return null;
+        const title = String(source.title || '').trim();
+        const sourceCode = String(source.sourceCode || source.source || source.code || '').trim();
+        if(!title && !sourceCode) return null;
+        return {
+          version:1,
+          mode:'problem-solve',
+          problemId:String(source.problemId || '').trim(),
+          citationId:String(source.citationId || '').trim(),
+          title:title || 'Untitled problem',
+          quote:String(source.quote || '').trim(),
+          sourceCode,
+          language:resolveLanguage(source.language || selectedLanguage),
+          fileName:String(source.fileName || '').trim(),
+          proofState:String(source.proofState || '').trim(),
+          kind:String(source.kind || 'problem').trim(),
+          normalizedFormat:String(source.normalizedFormat || '').trim(),
+          normalizedTermPreview:String(source.normalizedTermPreview || '').trim(),
+          attachments:Array.isArray(source.attachments) ? source.attachments : [],
+          createdAt:String(source.createdAt || new Date().toISOString())
+        };
+      }
+
+      const solveContext = normalizeSolveContext(initPayload.solveContext);
+      const isProblemSolveMode = !!solveContext;
+
 
       let summaryText = typeof initPayload.summary === 'string'
         ? initPayload.summary
@@ -1648,11 +1695,13 @@
         if(item.type === 'file'){
           const file = proofFiles.find(entry=>entry && entry.id === item.id);
           if(!file) return false;
+          if(isProblemReferenceFile(file)) return false;
           return !proofPathEquals(getProofFileFolderPath(file.name), target);
         }
         if(item.type === 'folder'){
           const source = normalizeProofFolderPath(item.path);
           if(!source) return false;
+          if(proofFiles.some(file=>file && isProblemReferenceFile(file) && isProofPathInsideFolder(file.name, source))) return false;
           if(proofPathEquals(source, target)) return false;
           if(target && isProofPathInsideFolder(target, source)) return false;
           return !proofPathEquals(getProofFolderParentPath(source), target);
@@ -1695,6 +1744,13 @@
         const fileRow = target.closest('.file-row');
         const folderRow = target.closest('.folder-row');
         if(fileRow && fileRow.dataset.fileId){
+          const file = proofFiles.find(entry=>entry && entry.id === fileRow.dataset.fileId);
+          if(isProblemReferenceFile(file)){
+            event.preventDefault();
+            proofDragItem = null;
+            setStatus('Problem reference is locked', true);
+            return;
+          }
           proofDragItem = { type: 'file', id: fileRow.dataset.fileId };
         }else if(folderRow && folderRow.dataset.folderPath){
           proofDragItem = { type: 'folder', path: normalizeProofFolderPath(folderRow.dataset.folderPath) };
@@ -1921,6 +1977,116 @@
         return baseName;
       }
 
+      function sanitizeProblemReferenceName(title){
+        const base = sanitizeProofPathSegment(title || 'Problem')
+          .replace(/[\/\\]+/g, '-')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 72) || 'Problem';
+        return '@' + base;
+      }
+
+      function getProblemReferenceFileName(){
+        const stem = sanitizeProblemReferenceName(solveContext && solveContext.title);
+        return ensureProofFileExtension(stem);
+      }
+
+      function commentBlockForLanguage(text){
+        const value = String(text || '').trim();
+        if(!value) return '';
+        if(selectedLanguage === 'Coq'){
+          return '(*\n' + value.replace(/\*\)/g, '* )') + '\n*)';
+        }
+        if(selectedLanguage === 'Lean'){
+          return '/-\n' + value.replace(/-\//g, '- /') + '\n-/';
+        }
+        return value.split(/\r?\n/).map(line=>'-- ' + line).join('\n');
+      }
+
+      function buildProblemReferenceCode(){
+        if(!solveContext) return '';
+        const lines = [];
+        lines.push('PROVF problem reference');
+        lines.push('Title: ' + (solveContext.title || 'Untitled problem'));
+        if(solveContext.problemId) lines.push('Problem ID: ' + solveContext.problemId);
+        if(solveContext.language) lines.push('Original language: ' + solveContext.language);
+        if(solveContext.fileName) lines.push('Original file: ' + solveContext.fileName);
+        if(solveContext.proofState) lines.push('Proof state: ' + solveContext.proofState);
+        if(solveContext.quote) lines.push('Quote: ' + solveContext.quote);
+        if(solveContext.sourceCode){
+          lines.push('');
+          lines.push('Saved source:');
+          lines.push(solveContext.sourceCode);
+        }
+        return commentBlockForLanguage(lines.join('\n'));
+      }
+
+      function buildProblemSolveMainStarter(){
+        if(!solveContext) return '';
+        const title = solveContext.title || 'the selected problem';
+        if(selectedLanguage === 'Coq'){
+          return [
+            '(* Prove the selected PROVF problem in this file.',
+            '   Problem: ' + title.replace(/\*\)/g, '* )'),
+            '   Keep @' + title.replace(/\*\)/g, '* )') + ' as the read-only reference.',
+            '*)',
+            ''
+          ].join('\n');
+        }
+        if(selectedLanguage === 'Lean'){
+          return [
+            '/- Prove the selected PROVF problem in this file.',
+            '   Problem: ' + title.replace(/-\//g, '- /'),
+            '   Keep the @ problem file as the read-only reference.',
+            '-/',
+            ''
+          ].join('\n');
+        }
+        return '';
+      }
+
+      function isProblemReferenceFile(file){
+        return !!(
+          file
+          && (
+            file.role === 'problem-reference'
+            || file.readOnly === true
+            || file.locked === true
+          )
+        );
+      }
+
+      function ensureProblemReferenceFiles(){
+        if(!isProblemSolveMode || !solveContext) return;
+        const referenceName = getProblemReferenceFileName();
+        const hasReference = proofFiles.some(file=>isProblemReferenceFile(file));
+        if(!hasReference){
+          const reference = createProofFileRecord(referenceName, buildProblemReferenceCode(), {
+            id:'problem-reference-' + (solveContext.problemId || solveContext.citationId || Date.now().toString(36)),
+            readOnly:true,
+            locked:true,
+            role:'problem-reference',
+            problemReference:solveContext
+          });
+          proofFiles.unshift(reference);
+        }
+
+        const hasEditable = proofFiles.some(file=>file && !isProblemReferenceFile(file));
+        if(!hasEditable){
+          const main = createProofFileRecord(selectedConfig.fileName, buildProblemSolveMainStarter(), {
+            id:'problem-main-' + Date.now().toString(36)
+          });
+          proofFiles.push(main);
+          activeProofFileId = main.id;
+        }else{
+          const activeFile = getActiveProofFile();
+          if(!activeFile || isProblemReferenceFile(activeFile)){
+            const firstEditable = proofFiles.find(file=>file && !isProblemReferenceFile(file));
+            if(firstEditable) activeProofFileId = firstEditable.id;
+          }
+        }
+      }
+
       function createBlankProofFile(){
         saveActiveProofFileContent();
         const input = window.prompt('New file', getDefaultNewFilePath());
@@ -2038,6 +2204,12 @@
           name: fileName,
           language: selectedLanguage,
           code: typeof code === 'string' ? code : '',
+          readOnly: options.readOnly === true,
+          locked: options.locked === true,
+          role: typeof options.role === 'string' ? options.role : '',
+          problemReference: options.problemReference && typeof options.problemReference === 'object'
+            ? options.problemReference
+            : null,
           createdAt: options.createdAt || new Date().toISOString(),
           updatedAt: options.updatedAt || new Date().toISOString()
         };
@@ -2050,9 +2222,14 @@
       function saveActiveProofFileContent(){
         const activeFile = getActiveProofFile();
         if(!activeFile || !canReadEditorContent()) return;
+        if(isProblemReferenceFile(activeFile)) return;
         activeFile.code = getEditorCode();
         activeFile.updatedAt = new Date().toISOString();
         renderProofFileList();
+      }
+
+      function syncEditorReadOnlyForActiveFile(){
+        setEditorReadOnly(isProblemReferenceFile(getActiveProofFile()));
       }
 
       function setEditorContent(text){
@@ -2133,7 +2310,9 @@
         function renderFile(file, depth){
           const row = document.createElement('div');
           row.className = 'file-row';
-          row.draggable = true;
+          const isReference = isProblemReferenceFile(file);
+          if(isReference) row.classList.add('problem-reference');
+          row.draggable = !isReference;
           row.dataset.fileId = file.id;
           if(file.id === activeProofFileId) row.classList.add('active');
 
@@ -2150,7 +2329,9 @@
           const meta = document.createElement('span');
           meta.className = 'file-meta';
           const lineCount = getProofFileLineCount(file.code);
-          meta.textContent = lineCount + (lineCount === 1 ? ' line' : ' lines');
+          meta.textContent = isReference
+            ? 'problem reference / ' + lineCount + (lineCount === 1 ? ' line' : ' lines')
+            : lineCount + (lineCount === 1 ? ' line' : ' lines');
 
           select.append(label, meta);
 
@@ -2160,7 +2341,7 @@
           remove.dataset.fileId = file.id;
           remove.setAttribute('aria-label', 'Remove ' + (file.name || 'file'));
           remove.textContent = 'x';
-          remove.disabled = proofFiles.length <= 1;
+          remove.disabled = !isReference && proofFiles.filter(item=>item && !isProblemReferenceFile(item)).length <= 1;
 
           row.append(select, remove);
           fileListEl.appendChild(row);
@@ -2201,7 +2382,13 @@
           const file = createProofFileRecord(raw.name || raw.fileName || fallbackName, raw.code || '', {
             id: raw.id,
             createdAt: raw.createdAt,
-            updatedAt: raw.updatedAt
+            updatedAt: raw.updatedAt,
+            readOnly: raw.readOnly === true,
+            locked: raw.locked === true,
+            role: typeof raw.role === 'string' ? raw.role : '',
+            problemReference: raw.problemReference && typeof raw.problemReference === 'object'
+              ? raw.problemReference
+              : null
           });
           proofFiles.push(file);
         });
@@ -2210,10 +2397,16 @@
           proofFiles.push(createProofFileRecord(fallbackName, fallbackCode || ''));
         }
 
+        ensureProblemReferenceFiles();
+
         const requestedActive = typeof activeId === 'string' && activeId.trim() ? activeId.trim() : '';
         activeProofFileId = proofFiles.some(file=>file.id === requestedActive)
           ? requestedActive
           : proofFiles[0].id;
+        if(isProblemReferenceFile(getActiveProofFile())){
+          const firstEditable = proofFiles.find(file=>file && !isProblemReferenceFile(file));
+          if(firstEditable) activeProofFileId = firstEditable.id;
+        }
 
         const activeFile = getActiveProofFile();
         if(activeFile){
@@ -2222,6 +2415,7 @@
           setActiveProofFileName(activeFile.name);
         }
         renderProofFileList();
+        syncEditorReadOnlyForActiveFile();
       }
 
       function buildProofFileSnapshot(){
@@ -2234,6 +2428,12 @@
           name: file.name,
           language: selectedLanguage,
           code: typeof file.code === 'string' ? file.code : '',
+          readOnly: file.readOnly === true,
+          locked: file.locked === true,
+          role: typeof file.role === 'string' ? file.role : '',
+          problemReference: file.problemReference && typeof file.problemReference === 'object'
+            ? file.problemReference
+            : null,
           createdAt: file.createdAt || '',
           updatedAt: file.updatedAt || new Date().toISOString()
         }));
@@ -2248,6 +2448,7 @@
         expandFolderPath(activeFolderPath);
         setActiveProofFileName(nextFile.name);
         setEditorContent(nextFile.code);
+        syncEditorReadOnlyForActiveFile();
         renderProofFileList();
         scheduleProofDraftSave('switch-proof-file');
       }
@@ -2260,6 +2461,10 @@
         saveActiveProofFileContent();
         const index = proofFiles.findIndex(file=>file && file.id === id);
         if(index < 0) return;
+        if(isProblemReferenceFile(proofFiles[index])){
+          cancelProblemSolutionFromReference();
+          return;
+        }
         const removingActive = proofFiles[index].id === activeProofFileId;
         proofFiles.splice(index, 1);
         if(removingActive){
@@ -2275,6 +2480,25 @@
         renderProofFileList();
         setStatus('File removed');
         scheduleProofDraftSave('remove-proof-file');
+      }
+
+      async function cancelProblemSolutionFromReference(){
+        const ok = window.confirm('問題の回答をキャンセルします。');
+        if(!ok) return;
+        try{
+          if(theoremDraftStore && typeof theoremDraftStore.clear === 'function'){
+            await theoremDraftStore.clear();
+          }
+        }catch(err){
+          // Navigation is still the important cancellation action.
+        }
+        try{
+          sessionStorage.removeItem(INIT_STORAGE_KEY);
+          sessionStorage.removeItem(EDITOR_RETURN_KEY);
+        }catch(err){
+          // ignore storage cleanup failure
+        }
+        window.location.href = 'index.html';
       }
 
       function addProofFileRecords(records){
@@ -2898,6 +3122,9 @@
           path:file.path,
           language:selectedLanguage,
           active:file.id === activeProofFileId,
+          readOnly:file.readOnly === true,
+          locked:file.locked === true,
+          role:file.role || '',
           code:file.code
         }));
       }
@@ -3058,7 +3285,7 @@
           if(activeFile && typeof activeFile.code === 'string' && activeFile.code !== initialText){
             editorInstance.setValue(activeFile.code);
           }
-          setEditorReadOnly(false);
+          syncEditorReadOnlyForActiveFile();
 
           editorInstance.addCommand(monacoRef.KeyMod.CtrlCmd | monacoRef.KeyCode.Enter, function(){
             runProof();
@@ -3078,7 +3305,7 @@
         editorMount.style.display = 'none';
         fallbackEditor.style.display = 'block';
         fallbackEditor.value = initialText;
-        fallbackEditor.readOnly = false;
+        fallbackEditor.readOnly = isProblemReferenceFile(getActiveProofFile());
         saveProofDraftSnapshot('fallback-ready');
         fallbackEditor.addEventListener('input', function(){
           scheduleProofDraftSave('fallback-edit');
@@ -3105,10 +3332,14 @@
         }
         const files = buildProofFileSnapshot();
         const folders = buildProofFolderSnapshot();
-        const activeFile = files.find(file=>file.id === activeProofFileId) || files[0] || null;
+        const activeFileRaw = files.find(file=>file.id === activeProofFileId) || files[0] || null;
+        const activeFile = activeFileRaw && !isProblemReferenceFile(activeFileRaw)
+          ? activeFileRaw
+          : (files.find(file=>file && !isProblemReferenceFile(file)) || activeFileRaw);
 
         await patchTheoremDraftRecord({
           problemKind: getProblemKindFromInit(),
+          solveContext: solveContext ? { ...solveContext } : null,
           title: {
             text: summaryText || '',
             updatedAt: new Date().toISOString()
@@ -3472,6 +3703,10 @@
       function getSafeEditorDraftForPersistence(){
         saveActiveProofFileContent();
         const activeFile = getActiveProofFile();
+        if(activeFile && isProblemReferenceFile(activeFile)){
+          const firstEditable = proofFiles.find(file=>file && !isProblemReferenceFile(file));
+          if(firstEditable) return typeof firstEditable.code === 'string' ? firstEditable.code : '';
+        }
         if(activeFile){
           return typeof activeFile.code === 'string' ? activeFile.code : '';
         }
@@ -3481,12 +3716,35 @@
         return typeof initialDraft === 'string' ? initialDraft : '';
       }
 
+      function buildRunnableProofCode(){
+        saveActiveProofFileContent();
+        const editableFiles = proofFiles
+          .filter(file=>file && !isProblemReferenceFile(file))
+          .map(file=>({
+            name:file.name || selectedConfig.fileName,
+            code:typeof file.code === 'string' ? file.code : ''
+          }))
+          .filter(file=>file.code.trim());
+        if(editableFiles.length === 0) return '';
+        if(editableFiles.length === 1) return editableFiles[0].code;
+        return editableFiles.map(file=>{
+          const header = selectedLanguage === 'Coq'
+            ? '(* File: ' + file.name.replace(/\*\)/g, '* )') + ' *)'
+            : '/- File: ' + file.name.replace(/-\//g, '- /') + ' -/';
+          return header + '\n' + file.code;
+        }).join('\n\n');
+      }
+
       function buildProofDraftSnapshot(reason = 'proof-editor'){
         const files = buildProofFileSnapshot();
         const folders = buildProofFolderSnapshot();
-        const activeFile = files.find(file=>file.id === activeProofFileId) || files[0] || null;
+        const activeFileRaw = files.find(file=>file.id === activeProofFileId) || files[0] || null;
+        const activeFile = activeFileRaw && !isProblemReferenceFile(activeFileRaw)
+          ? activeFileRaw
+          : (files.find(file=>file && !isProblemReferenceFile(file)) || activeFileRaw);
         return {
           problemKind: getProblemKindFromInit(),
+          solveContext: solveContext ? { ...solveContext } : null,
           title: {
             text: summaryText || '',
             updatedAt: new Date().toISOString()
@@ -3558,6 +3816,29 @@
           const storedProof = record.proof && typeof record.proof === 'object'
             ? record.proof
             : null;
+          const storedSolveContext = record.solveContext && typeof record.solveContext === 'object'
+            ? normalizeSolveContext(record.solveContext)
+            : null;
+          if(isProblemSolveMode){
+            const sameProblem = !!(
+              storedSolveContext
+              && (
+                (solveContext.problemId && storedSolveContext.problemId === solveContext.problemId)
+                || (!solveContext.problemId && storedSolveContext.title === solveContext.title)
+              )
+            );
+            if(!sameProblem){
+              return {
+                summary: summaryText,
+                draft: initialDraft,
+                goalsText: '',
+                fileName: getActiveProofFileName(),
+                files: [],
+                folders: [],
+                activeFileId: ''
+              };
+            }
+          }
           if(storedProof){
             const storedProofState = typeof storedProof.proofState === 'string'
               ? storedProof.proofState
@@ -4939,7 +5220,7 @@
         runBtn.disabled = true;
         setStatus('Running...');
 
-        const code = getSafeEditorDraftForPersistence();
+        const code = buildRunnableProofCode();
         let validationResult = null;
 
         let shouldResetCoq = false;
