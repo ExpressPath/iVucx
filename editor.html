@@ -1316,6 +1316,21 @@
         return normalized === 'problem' || normalized === 'theorem' ? normalized : 'theorem';
       }
 
+      function normalizeSolveContextTerm(value){
+        if(value && typeof value === 'object') return value;
+        if(typeof value === 'string'){
+          const text = value.trim();
+          if(!text) return null;
+          try{
+            const parsed = JSON.parse(text);
+            return parsed && typeof parsed === 'object' ? parsed : text;
+          }catch(err){
+            return text;
+          }
+        }
+        return null;
+      }
+
       function normalizeSolveContext(value){
         const source = value && typeof value === 'object' ? value : null;
         if(!source) return null;
@@ -1335,7 +1350,11 @@
           proofState:String(source.proofState || '').trim(),
           kind:String(source.kind || 'problem').trim(),
           normalizedFormat:String(source.normalizedFormat || '').trim(),
+          normalizedTerm:normalizeSolveContextTerm(source.normalizedTerm),
           normalizedTermPreview:String(source.normalizedTermPreview || '').trim(),
+          selectedConditionals:Array.isArray(source.selectedConditionals)
+            ? source.selectedConditionals.filter(item=>item && typeof item === 'object')
+            : [],
           attachments:Array.isArray(source.attachments) ? source.attachments : [],
           createdAt:String(source.createdAt || new Date().toISOString())
         };
@@ -1343,6 +1362,8 @@
 
       const solveContext = normalizeSolveContext(initPayload.solveContext);
       const isProblemSolveMode = !!solveContext;
+      const PROBLEM_TARGET_NAME = 'provf_problem_target';
+      const PROBLEM_SOLUTION_NAME = 'provf_solution';
 
 
       let summaryText = typeof initPayload.summary === 'string'
@@ -1991,6 +2012,27 @@
         return ensureProofFileExtension(stem);
       }
 
+      function getSelectedSolveConditionals(){
+        return solveContext && Array.isArray(solveContext.selectedConditionals)
+          ? solveContext.selectedConditionals.filter(item=>item && typeof item === 'object')
+          : [];
+      }
+
+      function getConditionalReferenceKey(conditional, index){
+        return String(conditional.conditionalProblemId || conditional.postedAt || conditional.conditionalTitle || index).trim();
+      }
+
+      function getConditionalAssumptionName(conditional, index){
+        const source = getConditionalReferenceKey(conditional, index) || 'conditional_' + index;
+        return sanitizeCicIdentifier('provf_conditional_' + source, 'provf_conditional_' + index);
+      }
+
+      function getConditionalReferenceFileName(conditional, index){
+        const title = conditional && (conditional.conditionalTitle || conditional.fileName || ('Conditional ' + (index + 1)));
+        const stem = sanitizeProblemReferenceName('Conditional ' + title);
+        return ensureProofFileExtension(stem);
+      }
+
       function commentBlockForLanguage(text){
         const value = String(text || '').trim();
         if(!value) return '';
@@ -2001,6 +2043,240 @@
           return '/-\n' + value.replace(/-\//g, '- /') + '\n-/';
         }
         return value.split(/\r?\n/).map(line=>'-- ' + line).join('\n');
+      }
+
+      function parseCicJsonValue(value){
+        if(value && typeof value === 'object') return value;
+        if(typeof value === 'string'){
+          const text = value.trim();
+          if(!text) return null;
+          try{
+            const parsed = JSON.parse(text);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+          }catch(err){
+            return null;
+          }
+        }
+        return null;
+      }
+
+      function unwrapCicTerm(value){
+        let current = value;
+        for(let i = 0; i < 6; i += 1){
+          if(!current || typeof current !== 'object') return current;
+          if(current.term && typeof current.term === 'object'){
+            current = current.term;
+            continue;
+          }
+          if(current.value && typeof current.value === 'object'){
+            current = current.value;
+            continue;
+          }
+          if(current.normalized && typeof current.normalized === 'object'){
+            current = current.normalized;
+            continue;
+          }
+          if(current.cic && typeof current.cic === 'object'){
+            current = current.cic;
+            continue;
+          }
+          if(current.expression && typeof current.expression === 'object'){
+            current = current.expression;
+            continue;
+          }
+          break;
+        }
+        return current;
+      }
+
+      function getProblemCicTerm(){
+        if(!solveContext) return null;
+        const direct = unwrapCicTerm(parseCicJsonValue(solveContext.normalizedTerm) || solveContext.normalizedTerm);
+        if(direct && typeof direct === 'object') return direct;
+        const preview = unwrapCicTerm(parseCicJsonValue(solveContext.normalizedTermPreview));
+        return preview && typeof preview === 'object' ? preview : null;
+      }
+
+      function sanitizeCicIdentifier(value, fallback){
+        const base = String(value || fallback || 'x')
+          .replace(/[^A-Za-z0-9_']/g, '_')
+          .replace(/^[^A-Za-z_]+/, '')
+          .replace(/_+/g, '_')
+          .replace(/^_+|_+$/g, '');
+        const candidate = base || fallback || 'x';
+        const reserved = new Set([
+          'theorem','lemma','def','Definition','Theorem','Proof','Qed','fun','forall',
+          'let','in','by','match','with','Type','Prop','True','False'
+        ]);
+        return reserved.has(candidate) ? candidate + '_value' : candidate;
+      }
+
+      function getCicNodeKind(term){
+        if(!term || typeof term !== 'object') return '';
+        return String(term.kind || term.tag || term.type || term.node || term.constructor || '').trim().toLowerCase();
+      }
+
+      function getCicField(term, names){
+        if(!term || typeof term !== 'object') return undefined;
+        for(const name of names){
+          if(Object.prototype.hasOwnProperty.call(term, name)) return term[name];
+        }
+        return undefined;
+      }
+
+      function getCicName(value){
+        if(value && typeof value === 'object'){
+          return String(value.name || value.id || value.ident || value.value || value.text || '').trim();
+        }
+        return String(value || '').trim();
+      }
+
+      function getCicNameLeaf(name){
+        const parts = String(name || '').split(/[.:/]+/).filter(Boolean);
+        return parts.length ? parts[parts.length - 1] : String(name || '');
+      }
+
+      function mapCicName(name){
+        const raw = getCicName(name);
+        const leaf = getCicNameLeaf(raw);
+        const key = leaf.toLowerCase();
+        if(key === 'true') return 'True';
+        if(key === 'false') return 'False';
+        if(key === 'prop') return 'Prop';
+        if(key === 'type') return 'Type';
+        if(key === 'eq') return selectedLanguage === 'Coq' ? 'eq' : 'Eq';
+        if(key === 'and') return selectedLanguage === 'Coq' ? 'and' : 'And';
+        if(key === 'or') return selectedLanguage === 'Coq' ? 'or' : 'Or';
+        if(key === 'iff') return selectedLanguage === 'Coq' ? 'iff' : 'Iff';
+        if(key === 'not') return selectedLanguage === 'Coq' ? 'not' : 'Not';
+        return sanitizeCicIdentifier(leaf || raw, 'cic_const');
+      }
+
+      function isMappedCicName(value, names){
+        const leaf = getCicNameLeaf(getCicName(value)).toLowerCase();
+        return names.includes(leaf);
+      }
+
+      function getCicAppParts(term){
+        const fn = getCicField(term, ['fn', 'func', 'function', 'head', 'callee', 'operator']);
+        let args = getCicField(term, ['args', 'arguments', 'params']);
+        if(!Array.isArray(args)) args = [];
+        return { fn, args };
+      }
+
+      function renderCicTerm(term, env){
+        const scope = Array.isArray(env) ? env : [];
+        if(term === null || term === undefined) throw new Error('empty CIC node');
+        if(typeof term === 'string'){
+          const raw = term.trim();
+          if(!raw) throw new Error('empty raw CIC text');
+          if(/\b(Theorem|Lemma|Definition|Fixpoint|Axiom|Parameter|Variable|Inductive|Qed|Admitted|admit|sorry)\b/i.test(raw)){
+            throw new Error('raw CIC text is not an expression');
+          }
+          return raw;
+        }
+        if(typeof term === 'number' || typeof term === 'boolean') return String(term);
+        if(!term || typeof term !== 'object') throw new Error('unsupported CIC node');
+
+        const kind = getCicNodeKind(term);
+        if(kind === 'raw' || kind === 'raw-text' || kind === 'text'){
+          return renderCicTerm(getCicField(term, ['value', 'text', 'raw']), scope);
+        }
+        if(kind === 'sort'){
+          const sortName = String(getCicField(term, ['name', 'value', 'sort']) || 'Prop').trim();
+          return /type/i.test(sortName) ? 'Type' : 'Prop';
+        }
+        if(kind === 'var' || kind === 'local'){
+          return sanitizeCicIdentifier(getCicField(term, ['name', 'id', 'ident', 'value']), 'x');
+        }
+        if(kind === 'rel' || kind === 'debruijn' || kind === 'db'){
+          const index = Number(getCicField(term, ['index', 'idx', 'value']));
+          if(Number.isFinite(index) && index >= 0 && index < scope.length) return scope[scope.length - 1 - index];
+          return sanitizeCicIdentifier(getCicField(term, ['name', 'value']), 'x' + (Number.isFinite(index) ? index : ''));
+        }
+        if(kind === 'const' || kind === 'constant' || kind === 'ind' || kind === 'inductive'){
+          return mapCicName(getCicField(term, ['name', 'id', 'ident', 'value', 'path']));
+        }
+        if(kind === 'lit' || kind === 'literal'){
+          return renderCicTerm(getCicField(term, ['value', 'text']), scope);
+        }
+        if(kind === 'app' || kind === 'application'){
+          const parts = getCicAppParts(term);
+          if(!parts.fn) throw new Error('CIC application has no function');
+          const args = parts.args.map(arg=>renderCicTerm(arg, scope));
+          if(isMappedCicName(parts.fn, ['eq']) && args.length >= 2) return '(' + args[0] + ' = ' + args[1] + ')';
+          if(isMappedCicName(parts.fn, ['and']) && args.length >= 2) return '(' + (selectedLanguage === 'Coq' ? 'and' : 'And') + ' ' + args[0] + ' ' + args[1] + ')';
+          if(isMappedCicName(parts.fn, ['or']) && args.length >= 2) return '(' + (selectedLanguage === 'Coq' ? 'or' : 'Or') + ' ' + args[0] + ' ' + args[1] + ')';
+          if(isMappedCicName(parts.fn, ['iff']) && args.length >= 2) return '(' + (selectedLanguage === 'Coq' ? 'iff' : 'Iff') + ' ' + args[0] + ' ' + args[1] + ')';
+          if(isMappedCicName(parts.fn, ['not']) && args.length >= 1) return '(' + (selectedLanguage === 'Coq' ? 'not' : 'Not') + ' ' + args[0] + ')';
+          const head = renderCicTerm(parts.fn, scope);
+          return '(' + [head, ...args].join(' ') + ')';
+        }
+        if(kind === 'prod' || kind === 'forall' || kind === 'pi'){
+          const name = sanitizeCicIdentifier(getCicField(term, ['name', 'binder', 'varName']), 'x' + scope.length);
+          const typeTerm = getCicField(term, ['type', 'domain', 'argType']);
+          const bodyTerm = getCicField(term, ['body', 'codomain', 'result']);
+          if(!typeTerm || !bodyTerm) throw new Error('CIC forall is incomplete');
+          const typeCode = renderCicTerm(typeTerm, scope);
+          const bodyCode = renderCicTerm(bodyTerm, scope.concat(name));
+          return selectedLanguage === 'Coq'
+            ? '(forall ' + name + ' : ' + typeCode + ', ' + bodyCode + ')'
+            : '(forall (' + name + ' : ' + typeCode + '), ' + bodyCode + ')';
+        }
+        if(kind === 'lambda' || kind === 'lam'){
+          const name = sanitizeCicIdentifier(getCicField(term, ['name', 'binder', 'varName']), 'x' + scope.length);
+          const typeTerm = getCicField(term, ['type', 'domain', 'argType']);
+          const bodyTerm = getCicField(term, ['body', 'result']);
+          if(!typeTerm || !bodyTerm) throw new Error('CIC lambda is incomplete');
+          const typeCode = renderCicTerm(typeTerm, scope);
+          const bodyCode = renderCicTerm(bodyTerm, scope.concat(name));
+          return '(fun ' + (selectedLanguage === 'Coq' ? name + ' : ' + typeCode : '(' + name + ' : ' + typeCode + ')') + ' => ' + bodyCode + ')';
+        }
+        if(kind === 'let' || kind === 'letin'){
+          const name = sanitizeCicIdentifier(getCicField(term, ['name', 'binder', 'varName']), 'x' + scope.length);
+          const typeTerm = getCicField(term, ['type', 'annotation']);
+          const valueTerm = getCicField(term, ['value', 'expr', 'definition']);
+          const bodyTerm = getCicField(term, ['body', 'result']);
+          if(!valueTerm || !bodyTerm) throw new Error('CIC let is incomplete');
+          const typePart = typeTerm ? ' : ' + renderCicTerm(typeTerm, scope) : '';
+          const valueCode = renderCicTerm(valueTerm, scope);
+          const bodyCode = renderCicTerm(bodyTerm, scope.concat(name));
+          return selectedLanguage === 'Coq'
+            ? '(let ' + name + typePart + ' := ' + valueCode + ' in ' + bodyCode + ')'
+            : '(let ' + name + typePart + ' := ' + valueCode + '; ' + bodyCode + ')';
+        }
+
+        if(Object.prototype.hasOwnProperty.call(term, 'kind') || Object.prototype.hasOwnProperty.call(term, 'tag')){
+          throw new Error('unsupported CIC node: ' + (kind || 'unknown'));
+        }
+        if(Object.prototype.hasOwnProperty.call(term, 'raw')){
+          return renderCicTerm(term.raw, scope);
+        }
+        if(Object.prototype.hasOwnProperty.call(term, 'value')){
+          return renderCicTerm(term.value, scope);
+        }
+        if(Object.prototype.hasOwnProperty.call(term, 'text')){
+          return renderCicTerm(term.text, scope);
+        }
+        if(Object.prototype.hasOwnProperty.call(term, 'sourceText')){
+          return renderCicTerm(term.sourceText, scope);
+        }
+        if(Object.prototype.hasOwnProperty.call(term, 'name')){
+          return mapCicName(term.name);
+        }
+        throw new Error('unsupported CIC structure');
+      }
+
+      function translateCicProblemTarget(){
+        const term = getProblemCicTerm();
+        if(!term) return { ok:false, reason:'CIC normalized term is missing.' };
+        try{
+          const expression = renderCicTerm(term, []);
+          if(!expression || !expression.trim()) throw new Error('empty translated expression');
+          return { ok:true, expression:expression.trim() };
+        }catch(err){
+          return { ok:false, reason:err && err.message ? err.message : 'CIC translation failed.' };
+        }
       }
 
       function buildProblemReferenceCode(){
@@ -2018,28 +2294,98 @@
           lines.push('Saved source:');
           lines.push(solveContext.sourceCode);
         }
-        return commentBlockForLanguage(lines.join('\n'));
+        const comment = commentBlockForLanguage(lines.join('\n'));
+        const translated = translateCicProblemTarget();
+        if(!translated.ok){
+          const failure = selectedLanguage === 'Coq'
+            ? 'Check PROVF_CIC_TRANSLATION_FAILED.'
+            : '#check PROVF_CIC_TRANSLATION_FAILED';
+          return [
+            comment,
+            '',
+            commentBlockForLanguage('CIC translation failed: ' + translated.reason),
+            failure
+          ].filter(Boolean).join('\n');
+        }
+        if(selectedLanguage === 'Coq'){
+          return [
+            comment,
+            '',
+            'Definition ' + PROBLEM_TARGET_NAME + ' : Prop := ' + translated.expression + '.'
+          ].filter(Boolean).join('\n');
+        }
+        if(selectedLanguage === 'Lean'){
+          return [
+            comment,
+            '',
+            'def ' + PROBLEM_TARGET_NAME + ' : Prop := ' + translated.expression
+          ].filter(Boolean).join('\n');
+        }
+        return comment;
+      }
+
+      function buildConditionalReferenceCode(conditional, index){
+        const item = conditional && typeof conditional === 'object' ? conditional : {};
+        const assumptionName = getConditionalAssumptionName(item, index);
+        const lines = [];
+        lines.push('PROVF conditional reference');
+        lines.push('Title: ' + (item.conditionalTitle || 'Conditional'));
+        if(item.conditionalProblemId) lines.push('Conditional ID: ' + item.conditionalProblemId);
+        if(item.language) lines.push('Original language: ' + item.language);
+        if(item.fileName) lines.push('Original file: ' + item.fileName);
+        if(item.postedAt) lines.push('Posted at: ' + item.postedAt);
+        lines.push('Use symbol: ' + assumptionName);
+        if(item.sourceCode){
+          lines.push('');
+          lines.push('Saved conditional proof source:');
+          lines.push(item.sourceCode);
+        }
+        const comment = commentBlockForLanguage(lines.join('\n'));
+        if(selectedLanguage === 'Coq'){
+          return [
+            comment,
+            '',
+            'Axiom ' + assumptionName + ' : ' + PROBLEM_TARGET_NAME + '.'
+          ].join('\n');
+        }
+        if(selectedLanguage === 'Lean'){
+          return [
+            comment,
+            '',
+            'axiom ' + assumptionName + ' : ' + PROBLEM_TARGET_NAME
+          ].join('\n');
+        }
+        return comment;
       }
 
       function buildProblemSolveMainStarter(){
         if(!solveContext) return '';
         const title = solveContext.title || 'the selected problem';
+        const conditionals = getSelectedSolveConditionals();
+        const conditionalLines = conditionals.map((conditional, index)=>{
+          return '   Conditional: ' + getConditionalAssumptionName(conditional, index) + ' : ' + PROBLEM_TARGET_NAME + '.';
+        });
         if(selectedLanguage === 'Coq'){
           return [
             '(* Prove the selected PROVF problem in this file.',
             '   Problem: ' + title.replace(/\*\)/g, '* )'),
-            '   Keep @' + title.replace(/\*\)/g, '* )') + ' as the read-only reference.',
+            '   Complete ' + PROBLEM_SOLUTION_NAME + ' : ' + PROBLEM_TARGET_NAME + '.',
+            ...conditionalLines.map(line=>line.replace(/\*\)/g, '* )')),
             '*)',
-            ''
+            '',
+            'Theorem ' + PROBLEM_SOLUTION_NAME + ' : ' + PROBLEM_TARGET_NAME + '.',
+            'Proof.'
           ].join('\n');
         }
         if(selectedLanguage === 'Lean'){
           return [
             '/- Prove the selected PROVF problem in this file.',
             '   Problem: ' + title.replace(/-\//g, '- /'),
-            '   Keep the @ problem file as the read-only reference.',
+            '   Complete ' + PROBLEM_SOLUTION_NAME + ' : ' + PROBLEM_TARGET_NAME + '.',
+            ...conditionalLines.map(line=>line.replace(/-\//g, '- /')),
             '-/',
-            ''
+            '',
+            'theorem ' + PROBLEM_SOLUTION_NAME + ' : ' + PROBLEM_TARGET_NAME + ' := by'
           ].join('\n');
         }
         return '';
@@ -2070,6 +2416,23 @@
           });
           proofFiles.unshift(reference);
         }
+
+        const selectedConditionals = getSelectedSolveConditionals();
+        selectedConditionals.forEach((conditional, index)=>{
+          const key = getConditionalReferenceKey(conditional, index);
+          const hasConditionalReference = proofFiles.some(file=>file && file.role === 'conditional-reference' && file.conditionalReferenceKey === key);
+          if(hasConditionalReference) return;
+          const reference = createProofFileRecord(getConditionalReferenceFileName(conditional, index), buildConditionalReferenceCode(conditional, index), {
+            id:'conditional-reference-' + (key || index),
+            readOnly:true,
+            locked:true,
+            role:'conditional-reference',
+            conditionalReferenceKey:key,
+            conditionalReference:conditional
+          });
+          const insertAt = Math.min(1 + index, proofFiles.length);
+          proofFiles.splice(insertAt, 0, reference);
+        });
 
         const hasEditable = proofFiles.some(file=>file && !isProblemReferenceFile(file));
         if(!hasEditable){
@@ -3457,7 +3820,8 @@
       async function validateCoqProof(code){
         setStatus('Validating Coq proof...');
         outputEl.textContent = 'Checking Coq proof...\n';
-        const normalized = stripCoqCommentsAndStrings(code);
+        const validationScanCode = stripAllowedConditionalAssumptions(code);
+        const normalized = stripCoqCommentsAndStrings(validationScanCode);
         const libraryCatalog = buildCoqLibraryCatalog(initPayload);
         const libraryCheck = validateCoqLibraryUsage(normalized, libraryCatalog);
         if(!libraryCheck.ok){
@@ -3479,7 +3843,7 @@
           outputEl.textContent = '[Coq Validation]\n' + conflictMessage;
           return { status: 'rejected', proof_state: 'NN', reason: conflictMessage };
         }
-        const closure = analyzeCoqClosure(code);
+        const closure = analyzeCoqClosure(validationScanCode);
         if(closure.proofState === 'NN'){
           setStatus('Coq validation failed', true);
           outputEl.textContent = '[Coq Validation]\n' + closure.reason;
@@ -3487,7 +3851,7 @@
         }
 
         if(closure.proofState !== 'NY'){
-          const soundnessIssue = findCoqUnsoundToken(code);
+          const soundnessIssue = findCoqUnsoundToken(validationScanCode);
           if(soundnessIssue){
             const summary = soundnessIssue.line + ':' + soundnessIssue.col + ' ' + soundnessIssue.message + ' (' + soundnessIssue.token + ') (remaining goals: unknown).';
             setStatus('Coq soundness failed', true);
@@ -3718,6 +4082,13 @@
 
       function buildRunnableProofCode(){
         saveActiveProofFileContent();
+        const referenceFiles = proofFiles
+          .filter(file=>file && isProblemReferenceFile(file))
+          .map(file=>({
+            name:file.name || getProblemReferenceFileName(),
+            code:typeof file.code === 'string' ? file.code : ''
+          }))
+          .filter(file=>file.code.trim());
         const editableFiles = proofFiles
           .filter(file=>file && !isProblemReferenceFile(file))
           .map(file=>({
@@ -3725,14 +4096,51 @@
             code:typeof file.code === 'string' ? file.code : ''
           }))
           .filter(file=>file.code.trim());
-        if(editableFiles.length === 0) return '';
-        if(editableFiles.length === 1) return editableFiles[0].code;
-        return editableFiles.map(file=>{
+        const runnableFiles = isProblemSolveMode
+          ? referenceFiles.concat(editableFiles)
+          : editableFiles;
+        if(runnableFiles.length === 0) return '';
+        if(!isProblemSolveMode && runnableFiles.length === 1) return runnableFiles[0].code;
+        return runnableFiles.map(file=>{
           const header = selectedLanguage === 'Coq'
             ? '(* File: ' + file.name.replace(/\*\)/g, '* )') + ' *)'
             : '/- File: ' + file.name.replace(/-\//g, '- /') + ' -/';
           return header + '\n' + file.code;
         }).join('\n\n');
+      }
+
+      function validateProblemSolveTargetBeforeRun(){
+        if(!isProblemSolveMode) return '';
+        const translated = translateCicProblemTarget();
+        if(!translated.ok) return 'CIC target translation failed: ' + translated.reason;
+        saveActiveProofFileContent();
+        const editableCode = proofFiles
+          .filter(file=>file && !isProblemReferenceFile(file))
+          .map(file=>typeof file.code === 'string' ? file.code : '')
+          .join('\n\n');
+        if(!editableCode.trim()) return 'Editable proof file is empty.';
+        const targetPattern = new RegExp('\\b' + PROBLEM_TARGET_NAME + '\\b');
+        if(!targetPattern.test(editableCode)){
+          return 'The editable proof must prove ' + PROBLEM_TARGET_NAME + '.';
+        }
+        return '';
+      }
+
+      function hasSelectedConditionalReferences(){
+        return getSelectedSolveConditionals().length > 0;
+      }
+
+      function stripAllowedConditionalAssumptions(code){
+        let output = String(code || '');
+        getSelectedSolveConditionals().forEach((conditional, index)=>{
+          const name = getConditionalAssumptionName(conditional, index).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          if(selectedLanguage === 'Coq'){
+            output = output.replace(new RegExp('(^|\\n)\\s*Axiom\\s+' + name + '\\s*:\\s*' + PROBLEM_TARGET_NAME + '\\s*\\.\\s*', 'g'), '\n');
+          }else if(selectedLanguage === 'Lean'){
+            output = output.replace(new RegExp('(^|\\n)\\s*axiom\\s+' + name + '\\s*:\\s*' + PROBLEM_TARGET_NAME + '\\s*', 'g'), '\n');
+          }
+        });
+        return output;
       }
 
       function buildProofDraftSnapshot(reason = 'proof-editor'){
@@ -4083,7 +4491,8 @@
 
       async function validateLeanProof(code){
         setStatus('Validating Lean proof...');
-        const normalized = stripLeanCommentsAndStrings(code);
+        const validationScanCode = stripAllowedConditionalAssumptions(code);
+        const normalized = stripLeanCommentsAndStrings(validationScanCode);
         const libraryCatalog = buildLeanLibraryCatalog(initPayload);
         const libraryCheck = validateLeanLibraryUsage(normalized, libraryCatalog);
         if(!libraryCheck.ok){
@@ -4108,7 +4517,7 @@
           return { status: 'rejected', proof_state: 'NN', reason: conflictMessage };
         }
 
-        const closure = analyzeLeanClosure(code);
+        const closure = analyzeLeanClosure(validationScanCode);
         if(closure.proofState === 'NN'){
           setStatus('Lean validation failed', true);
           outputEl.textContent = '[Lean Validation]\n' + (closure.reason || 'Code is empty');
@@ -5221,6 +5630,21 @@
         setStatus('Running...');
 
         const code = buildRunnableProofCode();
+        const problemTargetIssue = validateProblemSolveTargetBeforeRun();
+        if(problemTargetIssue){
+          const failed = {
+            status:'blocked',
+            proof_state:'NN',
+            reason:problemTargetIssue
+          };
+          lastProofValidation = failed;
+          outputEl.textContent = '[Problem Solve]\n' + problemTargetIssue;
+          saveProofDraftSnapshot('problem-solve-target-blocked');
+          setStatus('Problem target not proven', true);
+          running = false;
+          runBtn.disabled = false;
+          return;
+        }
         let validationResult = null;
 
         let shouldResetCoq = false;

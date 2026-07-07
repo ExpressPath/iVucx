@@ -521,6 +521,34 @@
     .bounty-status.success{
       color:#9fc4ff;
     }
+    .conditional-split{
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0,1fr));
+      gap:6px;
+      margin:10px 0 0;
+    }
+    .conditional-split-item{
+      min-width:0;
+      padding:8px;
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:9px;
+      background:rgba(255,255,255,0.035);
+    }
+    .conditional-split-label{
+      display:block;
+      color:#8b949e;
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+    }
+    .conditional-split-value{
+      display:block;
+      margin-top:3px;
+      color:#e6edf3;
+      font-size:12px;
+      font-weight:900;
+    }
     .source-panel{
       display:block;
       border-radius:18px;
@@ -911,6 +939,33 @@
           <button class="bounty-submit" id="bountyCheckoutBtn" type="button">Fund bounty</button>
           <div class="bounty-status" id="bountyStatus" role="status" aria-live="polite"></div>
         </section>
+        <section class="bounty-panel" id="conditionalPanel" aria-label="Conditional bounty" hidden>
+          <div class="bounty-head">
+            <div class="bounty-title">Conditional</div>
+            <div class="bounty-state" id="conditionalState">Not funded</div>
+          </div>
+          <div class="bounty-row">
+            <span class="bounty-prefix">Vx</span>
+            <input class="bounty-input" id="conditionalAmount" type="number" min="1" step="1" inputmode="decimal" value="1" aria-label="Conditional bounty amount" />
+            <span class="bounty-currency">JPY</span>
+          </div>
+          <div class="conditional-split" aria-label="Conditional split">
+            <div class="conditional-split-item">
+              <span class="conditional-split-label">Fee</span>
+              <span class="conditional-split-value" id="conditionalFee">10%</span>
+            </div>
+            <div class="conditional-split-item">
+              <span class="conditional-split-label">Problem</span>
+              <span class="conditional-split-value" id="conditionalProblemShare">45%</span>
+            </div>
+            <div class="conditional-split-item">
+              <span class="conditional-split-label">Creator</span>
+              <span class="conditional-split-value" id="conditionalCreatorShare">45%</span>
+            </div>
+          </div>
+          <button class="bounty-submit" id="conditionalCheckoutBtn" type="button">Fund Conditional</button>
+          <div class="bounty-status" id="conditionalStatus" role="status" aria-live="polite"></div>
+        </section>
         <div class="stage-layout sidebar-empty" id="stageLayout">
           <aside class="preview-sidebar" id="uploadSidebar" aria-label="Uploaded files" hidden></aside>
           <div class="stage-viewport" id="stageViewport">
@@ -977,6 +1032,14 @@
       const bountyCheckoutBtn = document.getElementById('bountyCheckoutBtn');
       const bountyStatusEl = document.getElementById('bountyStatus');
       const bountyStateEl = document.getElementById('bountyState');
+      const conditionalPanelEl = document.getElementById('conditionalPanel');
+      const conditionalAmountEl = document.getElementById('conditionalAmount');
+      const conditionalCheckoutBtn = document.getElementById('conditionalCheckoutBtn');
+      const conditionalStatusEl = document.getElementById('conditionalStatus');
+      const conditionalStateEl = document.getElementById('conditionalState');
+      const conditionalFeeEl = document.getElementById('conditionalFee');
+      const conditionalProblemShareEl = document.getElementById('conditionalProblemShare');
+      const conditionalCreatorShareEl = document.getElementById('conditionalCreatorShare');
       const store = window.ivucxTheoremDraftStore || null;
       const MODE_PERSIST_KEY = 'ivucxModeSnapshotV1';
       const COOKIE_HISTORY_CONSENT_KEY = 'ivucxCookieHistoryConsentV1';
@@ -997,6 +1060,7 @@
       let currentProblemKind = 'theorem';
       let currentProofState = '';
       let bountyBusy = false;
+      let conditionalBusy = false;
       let deckItemLabel = 'Slide';
       let touchStartX = 0;
       let touchStartY = 0;
@@ -1177,6 +1241,20 @@
           },
           attachmentsExpected: attachments.length
         };
+      }
+
+      function getDraftSolveContext(draft){
+        const candidates = [
+          draft && draft.solveContext,
+          draft && draft.navigation && draft.navigation.solveContext,
+          draft && draft.proof && draft.proof.solveContext
+        ];
+        for(const candidate of candidates){
+          if(candidate && typeof candidate === 'object'){
+            return { ...candidate };
+          }
+        }
+        return null;
       }
 
       async function returnToInitialSearchAfterCicRequest(pendingSubmission){
@@ -1512,11 +1590,122 @@
         });
       }
 
+      function getDraftConditionalBounty(draft){
+        const bounty = draft && draft.conditionalBounty && typeof draft.conditionalBounty === 'object'
+          ? draft.conditionalBounty
+          : null;
+        return bounty;
+      }
+
+      function isConditionalFunded(bounty){
+        return isBountyFunded(bounty);
+      }
+
+      function isConditionalProblemAnswer(draft, proofState){
+        const solveContext = getDraftSolveContext(draft);
+        return !!(
+          solveContext
+          && solveContext.problemId
+          && normalizeProofState(proofState || getDraftProofState(draft)) === 'NY'
+        );
+      }
+
+      function getConditionalAmountVx(){
+        const amount = Number(conditionalAmountEl && conditionalAmountEl.value);
+        if(!Number.isFinite(amount)) return 0;
+        return Math.max(0, Math.round(amount * 1000000) / 1000000);
+      }
+
+      function getYenPerVx(){
+        return 200;
+      }
+
+      function splitConditionalYen(amountYen){
+        const total = Math.max(0, Math.round(Number(amountYen) || 0));
+        const feeYen = Math.round(total * 0.10);
+        const problemBountyYen = Math.round(total * 0.45);
+        const creatorYen = Math.max(0, total - feeYen - problemBountyYen);
+        return { feeYen, problemBountyYen, creatorYen };
+      }
+
+      function formatYen(value){
+        return new Intl.NumberFormat('ja-JP', {
+          style:'currency',
+          currency:'JPY',
+          maximumFractionDigits:0
+        }).format(Math.max(0, Math.round(Number(value) || 0)));
+      }
+
+      function updateConditionalSplitPreview(){
+        const amountVx = Math.max(1, getConditionalAmountVx() || 1);
+        const amountYen = Math.round(amountVx * getYenPerVx());
+        const split = splitConditionalYen(amountYen);
+        if(conditionalFeeEl) conditionalFeeEl.textContent = formatYen(split.feeYen);
+        if(conditionalProblemShareEl) conditionalProblemShareEl.textContent = formatYen(split.problemBountyYen);
+        if(conditionalCreatorShareEl) conditionalCreatorShareEl.textContent = formatYen(split.creatorYen);
+      }
+
+      function setConditionalStatus(message, tone){
+        if(!conditionalStatusEl) return;
+        const text = String(message || '').trim();
+        conditionalStatusEl.textContent = text;
+        conditionalStatusEl.classList.remove('error', 'success');
+        if(tone === 'error' || tone === 'success'){
+          conditionalStatusEl.classList.add(tone);
+        }
+      }
+
+      function setConditionalBusy(busy){
+        conditionalBusy = !!busy;
+        if(conditionalCheckoutBtn){
+          conditionalCheckoutBtn.disabled = conditionalBusy;
+          conditionalCheckoutBtn.textContent = conditionalBusy ? 'Opening checkout...' : 'Fund Conditional';
+        }
+      }
+
+      function syncConditionalPanel(draft){
+        if(!conditionalPanelEl) return;
+        const proofState = getDraftProofState(draft);
+        const isConditional = isConditionalProblemAnswer(draft, proofState);
+        conditionalPanelEl.hidden = !isConditional;
+        if(!isConditional){
+          setConditionalStatus('');
+          return;
+        }
+        updateConditionalSplitPreview();
+        const bounty = getDraftConditionalBounty(draft);
+        if(bounty && Number(bounty.amountVx) > 0 && conditionalAmountEl){
+          conditionalAmountEl.value = String(Math.max(1, Number(bounty.amountVx) || 1));
+          updateConditionalSplitPreview();
+        }
+        if(isConditionalFunded(bounty)){
+          if(conditionalStateEl) conditionalStateEl.textContent = 'Funded Vx ' + (Number(bounty.amountVx) || 0).toLocaleString('en-US', { maximumFractionDigits:6 });
+          setConditionalStatus('Conditional funding confirmed.', 'success');
+        }else if(bounty && bounty.stripeSessionId){
+          if(conditionalStateEl) conditionalStateEl.textContent = 'Checkout created';
+          setConditionalStatus('Checkout was created. Complete payment to post this Conditional.');
+        }else{
+          if(conditionalStateEl) conditionalStateEl.textContent = 'Required';
+          setConditionalStatus('A paid Conditional bounty of at least Vx 1 is required.', 'error');
+        }
+      }
+
+      async function patchConditionalBounty(conditionalBounty){
+        if(!store || typeof store.patch !== 'function') return null;
+        return store.patch({
+          conditionalBounty: {
+            ...conditionalBounty,
+            updatedAt: new Date().toISOString()
+          }
+        });
+      }
+
       function requiresFundedBounty(proofPayload){
         return !!(
           proofPayload
           && proofPayload.problemKind === 'problem'
           && proofPayload.proofState !== 'YY'
+          && !(proofPayload.solveContext && proofPayload.solveContext.problemId)
         );
       }
 
@@ -1588,7 +1777,7 @@
 
       function syncBountyPanel(draft){
         if(!bountyPanelEl) return;
-        const isUnresolvedProblem = isUnresolvedProblemDraft(draft);
+        const isUnresolvedProblem = isUnresolvedProblemDraft(draft) && !isConditionalProblemAnswer(draft);
         bountyPanelEl.hidden = !isUnresolvedProblem;
         if(!isUnresolvedProblem){
           setBountyStatus('');
@@ -1689,6 +1878,76 @@
         }
       }
 
+      function removeConditionalQueryParams(){
+        try{
+          const url = new URL(window.location.href);
+          url.searchParams.delete('conditional');
+          url.searchParams.delete('session_id');
+          window.history.replaceState({}, '', url.pathname + (url.search ? url.search : '') + url.hash);
+        }catch(err){
+          // Ignore history cleanup failures.
+        }
+      }
+
+      async function handleConditionalReturn(draft){
+        const params = new URLSearchParams(window.location.search);
+        const state = params.get('conditional');
+        const sessionId = params.get('session_id');
+        if(state === 'cancelled'){
+          setConditionalStatus('Conditional checkout was cancelled.');
+          removeConditionalQueryParams();
+          return draft;
+        }
+        if(state !== 'success' || !sessionId) return draft;
+
+        setConditionalStatus('Confirming Conditional payment...');
+        try{
+          const response = await fetch('/api/conditional-checkout?session_id=' + encodeURIComponent(sessionId), {
+            method:'GET',
+            credentials:'same-origin',
+            headers:{ 'Accept':'application/json' }
+          });
+          const raw = await response.text();
+          const payload = tryParseJson(raw);
+          if(!response.ok || !payload){
+            throw new Error(payload && payload.error ? payload.error : raw || 'Could not confirm Conditional payment.');
+          }
+          const amountYen = Number(payload.amountYen || payload.amountTotal) || 0;
+          const amountVx = Number(payload.amountVx) || (amountYen / getYenPerVx());
+          const nextBounty = {
+            amountYen,
+            amountVx,
+            currency:payload.currency || 'jpy',
+            status:payload.paid ? 'paid' : (payload.status || 'open'),
+            paymentStatus:payload.paymentStatus || '',
+            stripeSessionId:payload.sessionId || sessionId,
+            split:payload.split || splitConditionalYen(amountYen)
+          };
+          await patchConditionalBounty(nextBounty);
+          const nextDraft = {
+            ...(draft || {}),
+            conditionalBounty:{
+              ...(draft && draft.conditionalBounty && typeof draft.conditionalBounty === 'object' ? draft.conditionalBounty : {}),
+              ...nextBounty,
+              updatedAt:new Date().toISOString()
+            }
+          };
+          syncConditionalPanel(nextDraft);
+          setConditionalStatus(
+            payload.paid
+              ? 'Conditional payment confirmed.'
+              : 'Checkout returned, but Stripe has not marked the payment as paid yet.',
+            payload.paid ? 'success' : ''
+          );
+          removeConditionalQueryParams();
+          return nextDraft;
+        }catch(err){
+          setConditionalStatus(err && err.message ? err.message : 'Could not confirm Conditional payment.', 'error');
+          removeConditionalQueryParams();
+          return draft;
+        }
+      }
+
       async function startBountyCheckout(){
         if(bountyBusy) return;
         const amountCents = readBountyAmountCents();
@@ -1751,6 +2010,80 @@
         }catch(err){
           setBountyStatus(err && err.message ? err.message : 'Could not start bounty checkout.', 'error');
           setBountyBusy(false);
+        }
+      }
+
+      async function startConditionalCheckout(){
+        if(conditionalBusy) return;
+        const amountVx = getConditionalAmountVx();
+        if(amountVx < 1){
+          setConditionalStatus('Enter at least Vx 1.', 'error');
+          return;
+        }
+
+        const draft = store && typeof store.read === 'function'
+          ? await store.read()
+          : null;
+        const proofPayload = getProofPayload(draft);
+        if(!proofPayload || !proofPayload.solveContext || !proofPayload.solveContext.problemId){
+          setConditionalStatus('Conditional is available only while answering a saved problem.', 'error');
+          return;
+        }
+        if(proofPayload.proofState !== 'NY'){
+          setConditionalStatus('Conditional requires an axiom-backed NY proof.', 'error');
+          return;
+        }
+        if(!proofPayload.title){
+          window.alert('Conditional投稿には題名が必要です。題名を追加してからもう一度進めてください。');
+          setConditionalStatus('Add a title before funding Conditional.', 'error');
+          return;
+        }
+        if(collectDraftAttachments(draft).length === 0){
+          window.alert('Conditional投稿には添付ファイルが必要です。資料を追加してからもう一度進めてください。');
+          setConditionalStatus('Attach at least one file before funding Conditional.', 'error');
+          return;
+        }
+
+        setConditionalBusy(true);
+        setConditionalStatus('Creating Stripe checkout...');
+        try{
+          const amountYen = Math.round(amountVx * getYenPerVx());
+          const response = await fetch('/api/conditional-checkout', {
+            method:'POST',
+            credentials:'same-origin',
+            headers:{
+              'Content-Type':'application/json',
+              'Accept':'application/json'
+            },
+            body:JSON.stringify({
+              amountVx,
+              title:proofPayload.title,
+              problemId:proofPayload.solveContext.problemId,
+              problemTitle:proofPayload.solveContext.title || '',
+              proofState:proofPayload.proofState,
+              language:proofPayload.language,
+              fileName:proofPayload.fileName,
+              clientReferenceId:'provf-conditional-' + Date.now().toString(36)
+            })
+          });
+          const raw = await response.text();
+          const payload = tryParseJson(raw);
+          if(!response.ok || !payload || !payload.url){
+            throw new Error(payload && payload.error ? payload.error : raw || 'Could not create Conditional checkout.');
+          }
+          await patchConditionalBounty({
+            amountYen:payload.amountYen || amountYen,
+            amountVx:payload.amountVx || amountVx,
+            currency:payload.currency || 'jpy',
+            status:'checkout_created',
+            paymentStatus:'',
+            stripeSessionId:payload.sessionId || '',
+            split:payload.split || splitConditionalYen(payload.amountYen || amountYen)
+          });
+          window.location.href = payload.url;
+        }catch(err){
+          setConditionalStatus(err && err.message ? err.message : 'Could not start Conditional checkout.', 'error');
+          setConditionalBusy(false);
         }
       }
 
@@ -1965,6 +2298,8 @@
             problemKind: proofPayload.problemKind,
             proofState: proofPayload.proofState,
             bounty: proofPayload.bounty,
+            conditionalBounty: proofPayload.conditionalBounty,
+            solveContext: proofPayload.solveContext || null,
             verify: true,
             format: completedFormat || requestedFormat,
             requestedFormat,
@@ -2000,7 +2335,43 @@
             : '';
           throw new Error(warning || storageError || storageMessage || 'CIC conversion completed, but Supabase save did not persist.');
         }
+        await resolveProblemSolutionIfNeeded(proofPayload, saved);
         return saved;
+      }
+
+      async function resolveProblemSolutionIfNeeded(proofPayload, savedResult){
+        const solveContext = proofPayload && proofPayload.solveContext && typeof proofPayload.solveContext === 'object'
+          ? proofPayload.solveContext
+          : null;
+        if(!solveContext || !solveContext.problemId) return null;
+        if(proofPayload.proofState && proofPayload.proofState !== 'YY') return null;
+        const storage = savedResult && savedResult.storage && typeof savedResult.storage === 'object'
+          ? savedResult.storage
+          : {};
+        const solutionProblemId = savedResult && savedResult.problemId
+          ? savedResult.problemId
+          : (storage.problemId || '');
+        if(!solutionProblemId) return null;
+        const response = await fetch('/api/helper/resolve-problem', {
+          method:'POST',
+          credentials:'same-origin',
+          headers:{
+            'Content-Type':'application/json',
+            'Accept':'application/json'
+          },
+          body:JSON.stringify({
+            originalProblemId: solveContext.problemId,
+            solutionProblemId,
+            theoremTitle: proofPayload.title,
+            solveContext
+          })
+        });
+        const raw = await response.text();
+        const payload = tryParseJson(raw);
+        if(!response.ok || !payload || !payload.ok){
+          throw new Error(extractHelperError(payload, raw || 'Problem solution update failed.'));
+        }
+        return payload;
       }
 
       function isTransientHelperJobFailure(status, payload, raw, errorMessage){
@@ -2151,7 +2522,11 @@
           ? draft.title.text.trim()
           : '';
         const proofState = getDraftProofState(draft);
-        const problemKind = resolvePostKindFromProofState(getDraftProblemKind(draft), proofState);
+        const solveContext = getDraftSolveContext(draft);
+        const conditional = isConditionalProblemAnswer(draft, proofState);
+        const problemKind = conditional
+          ? 'conditional'
+          : resolvePostKindFromProofState(getDraftProblemKind(draft), proofState);
         return {
           title,
           language: resolveLanguage(proof.language || currentLanguage),
@@ -2161,7 +2536,9 @@
           code: proof.code,
           problemKind,
           proofState,
-          bounty: problemKind === 'problem' && proofState !== 'YY' ? getDraftBounty(draft) : null
+          bounty: problemKind === 'problem' && proofState !== 'YY' ? getDraftBounty(draft) : null,
+          conditionalBounty: conditional ? getDraftConditionalBounty(draft) : null,
+          solveContext
         };
       }
 
@@ -2361,6 +2738,24 @@
           setHelperStatus('No proof code is saved yet.', 'error');
           return;
         }
+        if(proofPayload.problemKind === 'conditional'){
+          if(!proofPayload.title){
+            window.alert('Conditional投稿には題名が必要です。題名を追加してからもう一度進めてください。');
+            setHelperStatus('A title is required before posting Conditional.', 'error');
+            return;
+          }
+          if(collectDraftAttachments(draft).length === 0){
+            window.alert('Conditional投稿には添付ファイルが必要です。資料を追加してからもう一度進めてください。');
+            setHelperStatus('At least one attachment is required before posting Conditional.', 'error');
+            return;
+          }
+          if(!isConditionalFunded(proofPayload.conditionalBounty)){
+            syncConditionalPanel(draft);
+            setConditionalStatus('Fund the Conditional before requesting CIC conversion.', 'error');
+            setHelperStatus('A paid Conditional bounty of at least Vx 1 is required.', 'error');
+            return;
+          }
+        }
         if(requiresFundedBounty(proofPayload) && !isBountyFunded(proofPayload.bounty)){
           syncBountyPanel(draft);
           setBountyStatus('Fund the bounty before requesting CIC conversion for this problem.', 'error');
@@ -2389,6 +2784,8 @@
               problemKind: proofPayload.problemKind,
               proofState: proofPayload.proofState,
               bounty: proofPayload.bounty,
+              conditionalBounty: proofPayload.conditionalBounty,
+              solveContext: proofPayload.solveContext || null,
               verify: true,
               async: true,
               format
@@ -3175,7 +3572,9 @@
           draft && draft.proof && typeof draft.proof === 'object' ? draft.proof.language : 'Lean'
         );
         draft = await handleBountyReturn(draft);
+        draft = await handleConditionalReturn(draft);
         syncBountyPanel(draft);
+        syncConditionalPanel(draft);
         sourceFiles = collectSourceFiles(draft);
         sourceActiveIndex = resolveSourceActiveIndex(draft, sourceFiles);
         renderActiveSourceFile();
@@ -3221,6 +3620,14 @@
       if(bountyCheckoutBtn){
         bountyCheckoutBtn.addEventListener('click', ()=>{
           startBountyCheckout();
+        });
+      }
+      if(conditionalAmountEl){
+        conditionalAmountEl.addEventListener('input', updateConditionalSplitPreview);
+      }
+      if(conditionalCheckoutBtn){
+        conditionalCheckoutBtn.addEventListener('click', ()=>{
+          startConditionalCheckout();
         });
       }
       if(futureBtn){

@@ -2234,6 +2234,41 @@
       color:#ffb4ad;
     }
 
+    .ivucx-notifications{
+      margin:0 0 14px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .ivucx-notification-card{
+      width:100%;
+      border:1px solid rgba(139,190,255,0.2);
+      border-radius:12px;
+      background:linear-gradient(135deg, rgba(9,31,82,0.46), rgba(28,36,102,0.38));
+      box-shadow:0 10px 24px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.08);
+      color:rgba(238,247,255,0.9);
+      text-align:left;
+      padding:10px 12px;
+      box-sizing:border-box;
+    }
+
+    .ivucx-notification-title{
+      display:block;
+      color:#9fc4ff;
+      font-size:12px;
+      font-weight:760;
+      line-height:1.25;
+      margin-bottom:3px;
+    }
+
+    .ivucx-notification-message{
+      display:block;
+      color:rgba(255,255,255,0.72);
+      font-size:11px;
+      line-height:1.45;
+    }
+
     .rewards-items{
       margin:0;
       padding:0;
@@ -4900,12 +4935,17 @@
     }
 
     .problem-preview-card.is-source,
-    .problem-preview-card.is-uploads{
+    .problem-preview-card.is-uploads,
+    .problem-preview-card.is-conditional{
       grid-template-columns:minmax(0, 1fr);
     }
 
     .problem-preview-card.is-source .problem-preview-attachments-shell,
-    .problem-preview-card.is-uploads .problem-preview-source-shell{
+    .problem-preview-card.is-source .problem-preview-conditionals-shell,
+    .problem-preview-card.is-uploads .problem-preview-source-shell,
+    .problem-preview-card.is-uploads .problem-preview-conditionals-shell,
+    .problem-preview-card.is-conditional .problem-preview-source-shell,
+    .problem-preview-card.is-conditional .problem-preview-attachments-shell{
       display:none;
     }
 
@@ -5189,6 +5229,100 @@
       background:linear-gradient(135deg, #2563eb, #7c3aed);
       font-size:13px;
       font-weight:800;
+    }
+
+    .problem-preview-conditionals-shell{
+      min-width:0;
+      min-height:0;
+      overflow:auto;
+      padding:24px;
+      background:#0d1117;
+    }
+
+    .problem-preview-conditional-list{
+      width:min(980px, 100%);
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      margin:0 auto;
+    }
+
+    .problem-preview-conditional-card{
+      width:100%;
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:14px;
+      background:linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
+      color:#dce7f7;
+      padding:16px 18px;
+      box-shadow:0 18px 44px rgba(0,0,0,0.16);
+    }
+
+    .problem-preview-conditional-title{
+      margin:0 0 7px;
+      color:#9fc4ff;
+      font-size:18px;
+      font-weight:760;
+      line-height:1.25;
+    }
+
+    .problem-preview-conditional-url{
+      margin:0 0 9px;
+      color:#7dd3fc;
+      font-size:12px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .problem-preview-conditional-snippet{
+      margin:0;
+      color:rgba(230,237,243,0.78);
+      font-size:13px;
+      line-height:1.55;
+    }
+
+    .problem-preview-conditional-meta{
+      display:flex;
+      flex-wrap:wrap;
+      gap:7px;
+      margin-top:12px;
+    }
+
+    .problem-preview-conditional-pill{
+      border:1px solid rgba(91,141,255,0.24);
+      border-radius:999px;
+      padding:4px 8px;
+      color:#b8ccff;
+      background:rgba(47,111,255,0.08);
+      font-size:11px;
+      font-weight:800;
+    }
+
+    .problem-preview-conditional-actions{
+      display:flex;
+      justify-content:flex-end;
+      margin-top:14px;
+    }
+
+    .problem-preview-conditional-use{
+      min-height:34px;
+      border:1px solid rgba(143,184,255,0.28);
+      border-radius:9px;
+      background:rgba(255,255,255,0.04);
+      color:#dce7f7;
+      padding:0 12px;
+      font:inherit;
+      font-size:12px;
+      font-weight:820;
+      cursor:pointer;
+      transition:background .18s ease,border-color .18s ease,color .18s ease,transform .12s ease;
+    }
+
+    .problem-preview-conditional-use:hover,
+    .problem-preview-conditional-use.is-selected{
+      border-color:rgba(142,184,255,0.62);
+      background:linear-gradient(135deg, rgba(47,111,255,0.25), rgba(127,92,255,0.2));
+      color:#ffffff;
     }
 
     .problem-preview-section{
@@ -5582,6 +5716,8 @@
       <button class="problem-preview-tab" id="problemPreviewSourceTab" type="button" role="tab" aria-selected="true">Source</button>
       <span class="problem-preview-divider" aria-hidden="true">/</span>
       <button class="problem-preview-tab" id="problemPreviewUploadsTab" type="button" role="tab" aria-selected="false">Uploads</button>
+      <span class="problem-preview-divider" aria-hidden="true">/</span>
+      <button class="problem-preview-tab" id="problemPreviewConditionalTab" type="button" role="tab" aria-selected="false">Conditional</button>
       <button class="problem-preview-prove-btn" id="problemPreviewProveBtn" type="button">証明する</button>
     </div>
   </header>
@@ -5604,6 +5740,9 @@
         <aside class="problem-preview-upload-sidebar" id="problemPreviewUploadSidebar" aria-label="Uploaded files"></aside>
         <div class="problem-preview-attachment-stage" id="problemPreviewAttachmentStage"></div>
       </section>
+      <section class="problem-preview-conditionals-shell" aria-label="Conditional proofs">
+        <div class="problem-preview-conditional-list" id="problemPreviewConditionalList"></div>
+      </section>
     </article>
   </main>
 </section>
@@ -5618,7 +5757,7 @@
 
 <div class="blue-mode-shell" id="blueModeShell">
   <section class="blue-mode-panel" id="blueModePanel" aria-live="polite">
-    <h1 class="vx-title">Vx -- ($ --)</h1>
+    <h1 class="vx-title">Vx -- (¥ --)</h1>
     <div class="vx-auth-row" id="vxAuthRow" hidden></div>
 
     <div class="cash-actions" aria-label="Withdraw and deposit actions">
@@ -5785,6 +5924,7 @@
   const problemPreviewCard = document.getElementById('problemPreviewCard');
   const problemPreviewSourceTab = document.getElementById('problemPreviewSourceTab');
   const problemPreviewUploadsTab = document.getElementById('problemPreviewUploadsTab');
+  const problemPreviewConditionalTab = document.getElementById('problemPreviewConditionalTab');
   const problemPreviewProveBtn = document.getElementById('problemPreviewProveBtn');
   const problemPreviewTitle = document.getElementById('problemPreviewTitle');
   const problemPreviewHeading = document.getElementById('problemPreviewHeading');
@@ -5797,6 +5937,7 @@
   const problemPreviewSourceGutter = document.getElementById('problemPreviewSourceGutter');
   const problemPreviewUploadSidebar = document.getElementById('problemPreviewUploadSidebar');
   const problemPreviewAttachmentStage = document.getElementById('problemPreviewAttachmentStage');
+  const problemPreviewConditionalList = document.getElementById('problemPreviewConditionalList');
   const cicSaveErrorPopup = document.getElementById('cicSaveErrorPopup');
   const cicSaveErrorCard = document.getElementById('cicSaveErrorCard');
   const cicSaveErrorCopy = document.getElementById('cicSaveErrorCopy');
@@ -5820,6 +5961,7 @@
   const ATTACHMENT_ANIM_MS = 180;
   let selectionMode = false;
   let activeProblemAttachmentIndex = 0;
+  let selectedProblemConditionalIds = new Set();
   let problemAttachmentRenderToken = 0;
   let rememberedContent = '';
   let rememberedFiles = [];
@@ -6923,8 +7065,7 @@
         clearLegacyAuth();
         syncLegacyImportVisibility();
 
-        blueModeLoggedIn = !!(result && result.loggedIn);
-        blueModeRewards = Array.isArray(result && result.rewards) ? result.rewards : [];
+        applyBlueModeAccountPayload(result);
         renderRewards();
         loginPopupDismissed = true;
         closeLoginPopup(true);
@@ -6981,8 +7122,7 @@
           loginRecoveryInput.value = recoveryPassword;
         }
 
-        blueModeLoggedIn = !!(result && result.loggedIn);
-        blueModeRewards = Array.isArray(result && result.rewards) ? result.rewards : [];
+        applyBlueModeAccountPayload(result);
         renderRewards();
         loginPopupDismissed = true;
         clearGeneratedCredentials();
@@ -7284,6 +7424,8 @@
   let skipNextGrayDraftSave = false;
   let blueModeLoggedIn = false;
   let blueModeRewards = [];
+  let blueModeBalance = null;
+  let blueModeNotifications = [];
   let isRestoringPersistedMode = false;
   const MODE_PERSIST_KEY = 'ivucxModeSnapshotV1';
   const COOKIE_HISTORY_CONSENT_KEY = 'ivucxCookieHistoryConsentV1';
@@ -7802,6 +7944,8 @@
         problemKind:proofPayload.problemKind,
         proofState:proofPayload.proofState,
         bounty:proofPayload.bounty,
+        conditionalBounty:proofPayload.conditionalBounty,
+        solveContext:proofPayload.solveContext || null,
         verify:true,
         format:pending.completedFormat || pending.requestedFormat,
         requestedFormat:pending.requestedFormat,
@@ -7828,6 +7972,84 @@
       );
     }
     return saved;
+  }
+
+  async function resolvePendingProblemSolutionIfNeeded(pending, savedResult){
+    const proofPayload = pending && pending.proofPayload && typeof pending.proofPayload === 'object'
+      ? pending.proofPayload
+      : {};
+    const solveContext = proofPayload.solveContext && typeof proofPayload.solveContext === 'object'
+      ? proofPayload.solveContext
+      : null;
+    if(!solveContext || !solveContext.problemId) return null;
+    if(proofPayload.proofState && proofPayload.proofState !== 'YY') return null;
+    const storage = savedResult && savedResult.storage && typeof savedResult.storage === 'object'
+      ? savedResult.storage
+      : {};
+    const solutionProblemId = savedResult && savedResult.problemId
+      ? savedResult.problemId
+      : (storage.problemId || '');
+    if(!solutionProblemId) return null;
+    const response = await fetch('/api/helper/resolve-problem', {
+      method:'POST',
+      credentials:'same-origin',
+      headers:{
+        'Content-Type':'application/json',
+        'Accept':'application/json'
+      },
+      body:JSON.stringify({
+        originalProblemId:solveContext.problemId,
+        solutionProblemId,
+        theoremTitle:proofPayload.title,
+        solveContext
+      })
+    });
+    const raw = await response.text();
+    const payload = parseCicMonitorJson(raw);
+    if(!response.ok || !payload || !payload.ok){
+      throw new Error(getCicMonitorError(payload, raw || 'Problem solution update failed.'));
+    }
+    return payload;
+  }
+
+  async function registerPendingProblemConditionalIfNeeded(pending, savedResult){
+    const proofPayload = pending && pending.proofPayload && typeof pending.proofPayload === 'object'
+      ? pending.proofPayload
+      : {};
+    const solveContext = proofPayload.solveContext && typeof proofPayload.solveContext === 'object'
+      ? proofPayload.solveContext
+      : null;
+    if(proofPayload.problemKind !== 'conditional') return null;
+    if(!solveContext || !solveContext.problemId) return null;
+    if(proofPayload.proofState !== 'NY') return null;
+    const storage = savedResult && savedResult.storage && typeof savedResult.storage === 'object'
+      ? savedResult.storage
+      : {};
+    const conditionalProblemId = savedResult && savedResult.problemId
+      ? savedResult.problemId
+      : (storage.problemId || '');
+    if(!conditionalProblemId) return null;
+    const response = await fetch('/api/helper/register-conditional', {
+      method:'POST',
+      credentials:'same-origin',
+      headers:{
+        'Content-Type':'application/json',
+        'Accept':'application/json'
+      },
+      body:JSON.stringify({
+        originalProblemId:solveContext.problemId,
+        conditionalProblemId,
+        conditionalTitle:proofPayload.title,
+        conditionalBounty:proofPayload.conditionalBounty || null,
+        solveContext
+      })
+    });
+    const raw = await response.text();
+    const payload = parseCicMonitorJson(raw);
+    if(!response.ok || !payload || !payload.ok){
+      throw new Error(getCicMonitorError(payload, raw || 'Conditional registration failed.'));
+    }
+    return payload;
   }
 
   function normalizeCicAttachmentPath(path){
@@ -8104,6 +8326,8 @@
       const savedResult = await persistPendingCicProblem(pending, result);
       const problemId = getPendingCicProblemId(savedResult);
       const attachmentResult = await persistPendingCicAttachments(problemId);
+      await resolvePendingProblemSolutionIfNeeded(pending, savedResult);
+      await registerPendingProblemConditionalIfNeeded(pending, savedResult);
       const finalResult = savedResult && typeof savedResult === 'object'
         ? {
           ...savedResult,
@@ -8589,8 +8813,8 @@
     if(!credential) return;
     try{
       const result = await requestAuthJson('/api/google-one-tap', 'POST', { credential });
-      blueModeLoggedIn = true;
-      blueModeRewards = Array.isArray(result && result.rewards) ? result.rewards : [];
+      const loginResult = await checkLogin();
+      applyBlueModeAccountPayload(loginResult && loginResult.loggedIn ? loginResult : { ...result, loggedIn:true });
       if(result && typeof result.accountId === 'string'){
         saveBlueAccountHint(result.accountId);
       }
@@ -8612,7 +8836,7 @@
       if(!status || !status.configured || !status.clientId) return;
       const loginResult = await checkLogin();
       if(loginResult && loginResult.loggedIn){
-        blueModeRewards = Array.isArray(loginResult.rewards) ? loginResult.rewards : [];
+        applyBlueModeAccountPayload(loginResult);
         if(typeof loginResult.accountId === 'string'){
           saveBlueAccountHint(loginResult.accountId);
         }
@@ -9161,6 +9385,24 @@
       const attachments = Array.isArray(citation.attachments)
         ? citation.attachments.map((attachment, attachmentIndex)=>normalizeCitationAttachment(attachment, attachmentIndex)).filter(Boolean)
         : [];
+      const solution = normalizeCitationSolution(citation.solution);
+      const conditionals = Array.isArray(citation.conditionals)
+        ? citation.conditionals.map((conditional, conditionalIndex)=>normalizeCitationConditional(conditional, conditionalIndex)).filter(Boolean)
+        : [];
+      const attachmentNames = [
+        ...attachments,
+        ...(solution && Array.isArray(solution.attachments) ? solution.attachments : []),
+        ...(solution && solution.problem && Array.isArray(solution.problem.attachments) ? solution.problem.attachments : []),
+        ...conditionals.flatMap(conditional=>Array.isArray(conditional.attachments) ? conditional.attachments : [])
+      ].map(attachment=>getCitationAttachmentLabel(attachment)).filter(Boolean);
+      const normalizedTerm = citation.normalizedTerm && typeof citation.normalizedTerm === 'object'
+        ? citation.normalizedTerm
+        : (typeof citation.normalizedTerm === 'string' ? citation.normalizedTerm : null);
+      const normalizedTermPreview = String(citation.normalizedTermPreview || (
+        normalizedTerm && typeof normalizedTerm === 'object'
+          ? JSON.stringify(normalizedTerm)
+          : (normalizedTerm || '')
+      )).trim();
       return {
         id: String(citation.id || fallbackId).trim() || fallbackId,
         problemId: String(citation.problemId || citation.id || '').trim(),
@@ -9173,14 +9415,69 @@
         language: String(citation.language || '').trim(),
         kind: String(citation.kind || '').trim(),
         normalizedFormat: String(citation.normalizedFormat || '').trim(),
-        normalizedTermPreview: String(citation.normalizedTermPreview || citation.normalizedTerm || '').trim(),
+        normalizedTerm,
+        normalizedTermPreview,
         requestedFormat: String(citation.requestedFormat || '').trim(),
         completedFormat: String(citation.completedFormat || '').trim(),
         used: !!citation.used,
         attachments,
-        attachmentNames: attachments.map(attachment=>getCitationAttachmentLabel(attachment)).filter(Boolean)
+        attachmentNames,
+        solution,
+        conditionals
       };
     });
+  }
+
+  function normalizeCitationConditional(rawConditional, index){
+    if(!rawConditional || typeof rawConditional !== 'object') return null;
+    const attachments = Array.isArray(rawConditional.attachments)
+      ? rawConditional.attachments.map((attachment, attachmentIndex)=>normalizeCitationAttachment(attachment, attachmentIndex)).filter(Boolean)
+      : [];
+    return {
+      status:String(rawConditional.status || 'conditional').trim(),
+      originalProblemId:String(rawConditional.originalProblemId || '').trim(),
+      conditionalProblemId:String(rawConditional.conditionalProblemId || '').trim(),
+      problemTitle:String(rawConditional.problemTitle || '').trim(),
+      conditionalTitle:String(rawConditional.conditionalTitle || rawConditional.title || `Conditional ${index + 1}`).trim(),
+      postedAt:String(rawConditional.postedAt || rawConditional.createdAt || '').trim(),
+      bounty:rawConditional.bounty && typeof rawConditional.bounty === 'object' ? rawConditional.bounty : null,
+      sourceCode:String(rawConditional.sourceCode || rawConditional.code || '').trim(),
+      fileName:String(rawConditional.fileName || '').trim(),
+      language:String(rawConditional.language || '').trim(),
+      attachments
+    };
+  }
+
+  function normalizeCitationSolution(rawSolution){
+    if(!rawSolution || typeof rawSolution !== 'object') return null;
+    const solutionAttachments = Array.isArray(rawSolution.attachments)
+      ? rawSolution.attachments.map((attachment, index)=>normalizeCitationAttachment(attachment, index)).filter(Boolean)
+      : [];
+    const rawProblem = rawSolution.problem && typeof rawSolution.problem === 'object'
+      ? rawSolution.problem
+      : {};
+    const problemAttachments = Array.isArray(rawProblem.attachments)
+      ? rawProblem.attachments.map((attachment, index)=>normalizeCitationAttachment(attachment, index)).filter(Boolean)
+      : [];
+    return {
+      status:String(rawSolution.status || '').trim(),
+      originalProblemId:String(rawSolution.originalProblemId || '').trim(),
+      solutionProblemId:String(rawSolution.solutionProblemId || '').trim(),
+      problemTitle:String(rawSolution.problemTitle || '').trim(),
+      theoremTitle:String(rawSolution.theoremTitle || '').trim(),
+      solvedAt:String(rawSolution.solvedAt || '').trim(),
+      bounty:rawSolution.bounty && typeof rawSolution.bounty === 'object' ? rawSolution.bounty : null,
+      sourceCode:String(rawSolution.sourceCode || '').trim(),
+      fileName:String(rawSolution.fileName || '').trim(),
+      language:String(rawSolution.language || '').trim(),
+      attachments:solutionAttachments,
+      problem:{
+        sourceCode:String(rawProblem.sourceCode || '').trim(),
+        fileName:String(rawProblem.fileName || '').trim(),
+        language:String(rawProblem.language || '').trim(),
+        attachments:problemAttachments
+      }
+    };
   }
 
   function buildSuggestionTurnKey(query, fileNames){
@@ -10766,7 +11063,55 @@
 
   function getCitationSourceText(citation){
     if(!citation) return '';
-    return String(citation.sourceCode || citation.quote || '').trim();
+    const baseSource = String(citation.sourceCode || citation.quote || '').trim();
+    const solution = citation.solution && typeof citation.solution === 'object' ? citation.solution : null;
+    if(!solution) return baseSource;
+    if(!solution.sourceCode && !(solution.problem && solution.problem.sourceCode)) return baseSource;
+    const blocks = [];
+    const problemSource = solution.problem && solution.problem.sourceCode
+      ? String(solution.problem.sourceCode || '').trim()
+      : baseSource;
+    const solutionSource = String(solution.sourceCode || '').trim();
+    if(problemSource){
+      const title = solution.problemTitle || citation.title || 'Problem source';
+      blocks.push([
+        '/* Problem: ' + title.replace(/\*\//g, '* /') + ' */',
+        problemSource
+      ].join('\n'));
+    }
+    if(solutionSource){
+      const title = solution.theoremTitle || 'Solved theorem proof';
+      blocks.push([
+        '/* Solution: ' + title.replace(/\*\//g, '* /') + ' */',
+        solutionSource
+      ].join('\n'));
+    }
+    return blocks.length ? blocks.join('\n\n') : baseSource;
+  }
+
+  function getCitationPreviewAttachments(citation){
+    if(!citation || typeof citation !== 'object') return [];
+    const base = Array.isArray(citation.attachments)
+      ? citation.attachments.map(attachment=>({ ...attachment }))
+      : [];
+    const solution = citation.solution && typeof citation.solution === 'object' ? citation.solution : null;
+    if(!solution) return base;
+    const problemAttachments = solution.problem && Array.isArray(solution.problem.attachments)
+      ? solution.problem.attachments
+      : [];
+    const solutionAttachments = Array.isArray(solution.attachments) ? solution.attachments : [];
+    const labelGroup = (attachment, group)=>({
+      ...attachment,
+      title: group + ': ' + (getCitationAttachmentLabel(attachment) || 'Attachment'),
+      source: attachment && attachment.source ? attachment.source : group.toLowerCase()
+    });
+    const merged = [];
+    problemAttachments.forEach(attachment=>merged.push(labelGroup(attachment, 'Problem')));
+    if(!problemAttachments.length){
+      base.forEach(attachment=>merged.push(labelGroup(attachment, 'Problem')));
+    }
+    solutionAttachments.forEach(attachment=>merged.push(labelGroup(attachment, 'Solution')));
+    return merged.length ? merged : base;
   }
 
   function getCitationDetailText(citation){
@@ -10779,8 +11124,20 @@
     if(citation.proofState) lines.push('Proof state: ' + citation.proofState);
     if(citation.requestedFormat) lines.push('Requested format: ' + citation.requestedFormat);
     if(citation.completedFormat) lines.push('Completed format: ' + citation.completedFormat);
-    if(Array.isArray(citation.attachments) && citation.attachments.length){
-      const names = citation.attachments.map(attachment=>getCitationAttachmentLabel(attachment)).filter(Boolean);
+    if(citation.solution && citation.solution.status){
+      const theoremTitle = citation.solution.theoremTitle ? ' -> ' + citation.solution.theoremTitle : '';
+      lines.push('Solved problem' + theoremTitle);
+      if(citation.solution.solvedAt) lines.push('Solved at: ' + citation.solution.solvedAt);
+      if(citation.solution.bounty && Number(citation.solution.bounty.awardedVx) > 0){
+        lines.push('Awarded: Vx ' + citation.solution.bounty.awardedVx);
+      }
+    }
+    if(Array.isArray(citation.conditionals) && citation.conditionals.length){
+      lines.push('Conditionals: ' + citation.conditionals.map(item=>item.conditionalTitle || item.fileName || 'Conditional').join(', '));
+    }
+    const previewAttachments = getCitationPreviewAttachments(citation);
+    if(previewAttachments.length){
+      const names = previewAttachments.map(attachment=>getCitationAttachmentLabel(attachment)).filter(Boolean);
       lines.push('Uploads: ' + names.join(', '));
     }
     return lines.join('\n') || 'No additional details.';
@@ -11438,7 +11795,7 @@
 
   function renderProblemPreviewAttachments(citation){
     if(!problemPreviewUploadSidebar || !problemPreviewAttachmentStage) return;
-    const attachments = citation && Array.isArray(citation.attachments) ? citation.attachments : [];
+    const attachments = getCitationPreviewAttachments(citation);
     problemAttachmentRenderToken += 1;
     const token = problemAttachmentRenderToken;
     problemPreviewUploadSidebar.innerHTML = '';
@@ -11474,6 +11831,82 @@
     renderProblemAttachmentBody(body, attachments[activeProblemAttachmentIndex], token);
   }
 
+  function formatConditionalVx(value){
+    const numeric = Number(value) || 0;
+    return 'Vx ' + numeric.toLocaleString('en-US', { maximumFractionDigits:6 });
+  }
+
+  function getConditionalSnippet(conditional){
+    const text = String(conditional && conditional.sourceCode || '').replace(/\s+/g, ' ').trim();
+    if(!text) return 'No proof code preview is available for this Conditional.';
+    return text.length > 260 ? text.slice(0, 259).trimEnd() + '...' : text;
+  }
+
+  function renderProblemPreviewConditionals(citation){
+    if(!problemPreviewConditionalList) return;
+    problemPreviewConditionalList.innerHTML = '';
+    const conditionals = citation && Array.isArray(citation.conditionals)
+      ? citation.conditionals.slice().sort((a, b)=>String(b.postedAt || '').localeCompare(String(a.postedAt || '')))
+      : [];
+    if(!conditionals.length){
+      const empty = document.createElement('div');
+      empty.className = 'problem-preview-conditional-card';
+      const title = document.createElement('h2');
+      title.className = 'problem-preview-conditional-title';
+      title.textContent = 'No Conditional proofs yet';
+      const snippet = document.createElement('p');
+      snippet.className = 'problem-preview-conditional-snippet';
+      snippet.textContent = 'Conditional proofs with additional bounty will appear here in newest-first order.';
+      empty.append(title, snippet);
+      problemPreviewConditionalList.appendChild(empty);
+      return;
+    }
+    conditionals.forEach((conditional, index)=>{
+      const conditionalId = String(conditional.conditionalProblemId || conditional.postedAt || conditional.conditionalTitle || index).trim();
+      const isSelected = selectedProblemConditionalIds.has(conditionalId);
+      const card = document.createElement('article');
+      card.className = 'problem-preview-conditional-card';
+      const title = document.createElement('h2');
+      title.className = 'problem-preview-conditional-title';
+      title.textContent = conditional.conditionalTitle || `Conditional ${index + 1}`;
+      const url = document.createElement('div');
+      url.className = 'problem-preview-conditional-url';
+      url.textContent = [
+        conditional.language || 'proof',
+        conditional.fileName || '',
+        conditional.postedAt ? conditional.postedAt.slice(0, 10) : ''
+      ].filter(Boolean).join(' / ');
+      const snippet = document.createElement('p');
+      snippet.className = 'problem-preview-conditional-snippet';
+      snippet.textContent = getConditionalSnippet(conditional);
+      const meta = document.createElement('div');
+      meta.className = 'problem-preview-conditional-meta';
+      const bounty = conditional.bounty && typeof conditional.bounty === 'object' ? conditional.bounty : {};
+      const split = bounty.split && typeof bounty.split === 'object' ? bounty.split : {};
+      [
+        bounty.amountVx ? formatConditionalVx(bounty.amountVx) : '',
+        split.problemBountyYen ? 'Problem +' + formatConditionalVx(Number(split.problemBountyYen) / 200) : '',
+        split.creatorYen ? 'Creator +' + formatConditionalVx(Number(split.creatorYen) / 200) : '',
+        Array.isArray(conditional.attachments) && conditional.attachments.length ? `${conditional.attachments.length} uploads` : ''
+      ].filter(Boolean).forEach(value=>{
+        const pill = document.createElement('span');
+        pill.className = 'problem-preview-conditional-pill';
+        pill.textContent = value;
+        meta.appendChild(pill);
+      });
+      const actions = document.createElement('div');
+      actions.className = 'problem-preview-conditional-actions';
+      const useButton = document.createElement('button');
+      useButton.type = 'button';
+      useButton.className = 'problem-preview-conditional-use' + (isSelected ? ' is-selected' : '');
+      useButton.dataset.conditionalId = conditionalId;
+      useButton.textContent = isSelected ? 'Using in proof' : 'Use in proof';
+      actions.appendChild(useButton);
+      card.append(title, url, snippet, meta, actions);
+      problemPreviewConditionalList.appendChild(card);
+    });
+  }
+
   function openCitationPreview(citation){
     if(!citationPreviewDrawer || !citation) return;
     activeCitationPreview = citation;
@@ -11507,8 +11940,17 @@
     appendCitationMetaPills(problemPreviewMeta, citation);
     if(problemPreviewQuote) problemPreviewQuote.textContent = citation.quote || 'No quote preview available.';
     if(problemPreviewDetails) problemPreviewDetails.textContent = getCitationDetailText(citation);
-    if(problemPreviewSourceFile) problemPreviewSourceFile.textContent = citation.fileName || 'Saved source';
-    if(problemPreviewSourceLanguage) problemPreviewSourceLanguage.textContent = citation.language || 'Source';
+    const hasSolutionPreview = !!(citation.solution && citation.solution.sourceCode);
+    if(problemPreviewSourceFile){
+      problemPreviewSourceFile.textContent = hasSolutionPreview
+        ? 'Problem / Solution'
+        : (citation.fileName || 'Saved source');
+    }
+    if(problemPreviewSourceLanguage){
+      problemPreviewSourceLanguage.textContent = hasSolutionPreview
+        ? ([citation.language, citation.solution.language].filter(Boolean).join(' / ') || 'Source')
+        : (citation.language || 'Source');
+    }
     if(problemPreviewSourceGutter) problemPreviewSourceGutter.textContent = Array.from({ length: lineCount }, (_, index)=>String(index + 1)).join('\n');
     if(problemPreviewSource){
       problemPreviewSource.textContent = sourceText;
@@ -11521,13 +11963,15 @@
       problemPreviewProveBtn.setAttribute('aria-hidden', canProve ? 'false' : 'true');
     }
     renderProblemPreviewAttachments(citation);
+    renderProblemPreviewConditionals(citation);
   }
 
   function setProblemPreviewView(view){
-    const normalized = view === 'uploads' ? 'uploads' : 'source';
+    const normalized = view === 'uploads' || view === 'conditional' ? view : 'source';
     if(problemPreviewCard){
       problemPreviewCard.classList.toggle('is-source', normalized === 'source');
       problemPreviewCard.classList.toggle('is-uploads', normalized === 'uploads');
+      problemPreviewCard.classList.toggle('is-conditional', normalized === 'conditional');
     }
     if(problemPreviewSourceTab){
       problemPreviewSourceTab.setAttribute('aria-selected', normalized === 'source' ? 'true' : 'false');
@@ -11535,11 +11979,15 @@
     if(problemPreviewUploadsTab){
       problemPreviewUploadsTab.setAttribute('aria-selected', normalized === 'uploads' ? 'true' : 'false');
     }
+    if(problemPreviewConditionalTab){
+      problemPreviewConditionalTab.setAttribute('aria-selected', normalized === 'conditional' ? 'true' : 'false');
+    }
   }
 
   function openProblemPreviewPage(citation){
     if(!problemPreviewPage || !citation) return;
     activeCitationPreview = citation;
+    selectedProblemConditionalIds = new Set();
     renderProblemPreviewPage(citation);
     setProblemPreviewView('source');
     closeCitationPreview();
@@ -12232,6 +12680,26 @@
     return kind === 'problem' || proofState === 'NY';
   }
 
+  function getSelectedProblemConditionals(citation){
+    if(!citation || !Array.isArray(citation.conditionals) || !selectedProblemConditionalIds.size) return [];
+    return citation.conditionals.filter((conditional, index)=>{
+      const id = String(conditional.conditionalProblemId || conditional.postedAt || conditional.conditionalTitle || index).trim();
+      return id && selectedProblemConditionalIds.has(id);
+    }).map(conditional=>({
+      status:String(conditional.status || 'conditional').trim(),
+      originalProblemId:String(conditional.originalProblemId || '').trim(),
+      conditionalProblemId:String(conditional.conditionalProblemId || '').trim(),
+      problemTitle:String(conditional.problemTitle || '').trim(),
+      conditionalTitle:String(conditional.conditionalTitle || 'Conditional').trim(),
+      postedAt:String(conditional.postedAt || '').trim(),
+      bounty:conditional.bounty && typeof conditional.bounty === 'object' ? conditional.bounty : null,
+      sourceCode:String(conditional.sourceCode || '').trim(),
+      fileName:String(conditional.fileName || '').trim(),
+      language:String(conditional.language || '').trim(),
+      attachments:Array.isArray(conditional.attachments) ? conditional.attachments : []
+    }));
+  }
+
   function buildProblemSolveContext(citation){
     if(!citation || typeof citation !== 'object') return null;
     const title = String(citation.title || 'Untitled problem').trim() || 'Untitled problem';
@@ -12248,7 +12716,9 @@
       proofState:String(citation.proofState || '').trim(),
       kind:String(citation.kind || '').trim(),
       normalizedFormat:String(citation.normalizedFormat || '').trim(),
+      normalizedTerm:citation.normalizedTerm || null,
       normalizedTermPreview:String(citation.normalizedTermPreview || '').trim(),
+      selectedConditionals:getSelectedProblemConditionals(citation),
       attachments:Array.isArray(citation.attachments) ? citation.attachments : [],
       createdAt:new Date().toISOString()
     };
@@ -12648,6 +13118,12 @@
     });
   }
 
+  if(problemPreviewConditionalTab){
+    problemPreviewConditionalTab.addEventListener('click', ()=>{
+      setProblemPreviewView('conditional');
+    });
+  }
+
   if(problemPreviewProveBtn){
     problemPreviewProveBtn.addEventListener('click', ()=>{
       startProblemSolveFromPreview();
@@ -12664,6 +13140,23 @@
       if(!Number.isFinite(index)) return;
       activeProblemAttachmentIndex = Math.max(0, index);
       renderProblemPreviewAttachments(activeCitationPreview);
+    });
+  }
+
+  if(problemPreviewConditionalList){
+    problemPreviewConditionalList.addEventListener('click', event=>{
+      const target = event.target && typeof event.target.closest === 'function'
+        ? event.target.closest('[data-conditional-id]')
+        : null;
+      if(!target || !activeCitationPreview) return;
+      const id = String(target.dataset.conditionalId || '').trim();
+      if(!id) return;
+      if(selectedProblemConditionalIds.has(id)){
+        selectedProblemConditionalIds.delete(id);
+      }else{
+        selectedProblemConditionalIds.add(id);
+      }
+      renderProblemPreviewConditionals(activeCitationPreview);
     });
   }
 
@@ -12755,9 +13248,50 @@
     return [];
   }
 
+  function parseIvucxBalance(payload){
+    const balance = payload && payload.balance && typeof payload.balance === 'object'
+      ? payload.balance
+      : null;
+    if(!balance) return null;
+    const balanceVx = Number(balance.balanceVx || balance.vx || 0);
+    const balanceYen = Number(balance.balanceYen || balance.yen || 0);
+    const display = typeof balance.display === 'string' && balance.display.trim()
+      ? balance.display.trim()
+      : `Vx ${Number.isFinite(balanceVx) ? balanceVx : 0}(¥ ${Number.isFinite(balanceYen) ? Math.round(balanceYen).toLocaleString('ja-JP') : 0})`;
+    return {
+      balanceVx:Number.isFinite(balanceVx) ? balanceVx : 0,
+      balanceYen:Number.isFinite(balanceYen) ? Math.round(balanceYen) : 0,
+      display
+    };
+  }
+
+  function parseIvucxNotifications(payload){
+    const source = Array.isArray(payload && payload.notifications) ? payload.notifications : [];
+    return source.slice(0, 6).map((item, index)=>{
+      const record = item && typeof item === 'object' ? item : {};
+      return {
+        id:String(record.id || `notice-${index + 1}`).trim(),
+        title:String(record.title || 'Notification').trim(),
+        message:String(record.message || '').trim(),
+        createdAt:String(record.createdAt || '').trim(),
+        problemId:String(record.problemId || '').trim(),
+        solutionProblemId:String(record.solutionProblemId || '').trim()
+      };
+    }).filter(item=>item.title || item.message);
+  }
+
+  function applyBlueModeAccountPayload(payload){
+    blueModeLoggedIn = !!(payload && payload.loggedIn);
+    blueModeRewards = Array.isArray(payload && payload.rewards) ? payload.rewards : [];
+    blueModeBalance = parseIvucxBalance(payload);
+    blueModeNotifications = parseIvucxNotifications(payload);
+  }
+
   function updateVxTitle(){
     if(!vxTitle) return;
-    vxTitle.textContent = blueModeLoggedIn ? 'Vx 0($ 0)' : 'Vx -- ($ --)';
+    vxTitle.textContent = blueModeLoggedIn
+      ? (blueModeBalance && blueModeBalance.display ? blueModeBalance.display : 'Vx 0(¥ 0)')
+      : 'Vx -- (¥ --)';
   }
 
   function renderRewards(){
@@ -12806,6 +13340,8 @@
       blueModeLoggedIn = false;
       clearBlueAccountHint();
       blueModeRewards = [];
+      blueModeBalance = null;
+      blueModeNotifications = [];
       cookieHistoryConsent = '';
       cookieConsentOwnerId = '';
       cookieConsentHydrated = false;
@@ -12860,6 +13396,24 @@
     stripeCard.appendChild(stripeStatus);
     rewardsList.appendChild(stripeCard);
 
+    if(blueModeNotifications.length){
+      const noticeList = document.createElement('div');
+      noticeList.className = 'ivucx-notifications';
+      blueModeNotifications.forEach(item=>{
+        const card = document.createElement('div');
+        card.className = 'ivucx-notification-card';
+        const title = document.createElement('span');
+        title.className = 'ivucx-notification-title';
+        title.textContent = item.title || 'Notification';
+        const message = document.createElement('span');
+        message.className = 'ivucx-notification-message';
+        message.textContent = item.message || '';
+        card.append(title, message);
+        noticeList.appendChild(card);
+      });
+      rewardsList.appendChild(noticeList);
+    }
+
     if(blueModeRewards.length === 0){
       const empty = document.createElement('div');
       empty.className = 'rewards-empty';
@@ -12895,6 +13449,8 @@
     blueModeCheckToken += 1;
     blueModeLoggedIn = false;
     blueModeRewards = [];
+    blueModeBalance = null;
+    blueModeNotifications = [];
     loginPopupDismissed = false;
     if(loginRecoveryInput){
       loginRecoveryInput.value = '';
@@ -12909,6 +13465,8 @@
 
     blueModeLoggedIn = false;
     blueModeRewards = [];
+    blueModeBalance = null;
+    blueModeNotifications = [];
     loginPopupDismissed = false;
     hideBlueModePanel();
     closeLoginPopup(false);
@@ -12922,8 +13480,7 @@
     clearTimeout(loadingTimer);
     if(state !== 2 || token !== blueModeCheckToken) return;
 
-    blueModeLoggedIn = loginResult.loggedIn;
-    blueModeRewards = loginResult.rewards;
+    applyBlueModeAccountPayload(loginResult);
     if(loginResult.loggedIn && typeof loginResult.accountId === 'string'){
       saveBlueAccountHint(loginResult.accountId);
     }
@@ -13749,6 +14306,8 @@
         loggedIn,
         accountId,
         rewards,
+        balance: payload && payload.balance ? payload.balance : null,
+        notifications: Array.isArray(payload && payload.notifications) ? payload.notifications : [],
         reason: payload && typeof payload.reason === 'string'
           ? payload.reason
           : (loggedIn ? 'ok' : 'logged_out')
@@ -13760,6 +14319,8 @@
         loggedIn:false,
         accountId:'',
         rewards:[],
+        balance:null,
+        notifications:[],
         reason
       };
     }

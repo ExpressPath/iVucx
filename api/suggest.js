@@ -115,6 +115,7 @@ function normalizeProblemKind(value) {
   const text = String(value || '').trim().toLowerCase();
   if (['problem', 'problems', 'unsolved', 'q'].includes(text)) return 'problem';
   if (['theorem', 'theorems', 'proof', 'proofs', 'solved', 'a'].includes(text)) return 'theorem';
+  if (['conditional', 'conditionals', 'conditioned'].includes(text)) return 'conditional';
   return '';
 }
 
@@ -285,6 +286,112 @@ async function extractAttachmentRecords(requestMeta, client) {
   return records;
 }
 
+async function normalizeSolutionPreview(requestMeta, client) {
+  const solution = requestMeta && isPlainObject(requestMeta.solution)
+    ? requestMeta.solution
+    : null;
+  const solutionOf = requestMeta && isPlainObject(requestMeta.solutionOf)
+    ? requestMeta.solutionOf
+    : null;
+  if (!solution && !solutionOf) return null;
+
+  const problem = solution && isPlainObject(solution.problem) ? solution.problem : {};
+  const solutionAttachments = solution
+    ? await extractAttachmentRecords({ attachments: Array.isArray(solution.attachments) ? solution.attachments : [] }, client)
+    : [];
+  const problemAttachments = await extractAttachmentRecords({
+    attachments: Array.isArray(problem.attachments) ? problem.attachments : []
+  }, client);
+
+  return {
+    status: safeString(solution && solution.status, solutionOf ? 'solution' : ''),
+    originalProblemId: safeString(
+      (solution && solution.originalProblemId)
+      || (solutionOf && solutionOf.problemId)
+    ),
+    solutionProblemId: safeString(solution && solution.solutionProblemId),
+    problemTitle: safeString(
+      (solution && solution.problemTitle)
+      || (solutionOf && solutionOf.problemTitle)
+    ),
+    theoremTitle: safeString(solution && solution.theoremTitle),
+    solvedAt: safeString(solution && solution.solvedAt),
+    bounty: solution && isPlainObject(solution.bounty) ? solution.bounty : null,
+    sourceCode: truncateSourceText(solution && solution.sourceCode, MAX_PREVIEW_SOURCE_CHARS),
+    fileName: safeString(solution && solution.fileName),
+    language: safeString(solution && solution.language),
+    attachments: solutionAttachments,
+    problem: {
+      sourceCode: truncateSourceText(problem.sourceCode, MAX_PREVIEW_SOURCE_CHARS),
+      fileName: safeString(problem.fileName),
+      language: safeString(problem.language),
+      attachments: problemAttachments
+    }
+  };
+}
+
+async function normalizeConditionalPreviews(requestMeta, client) {
+  const conditionals = requestMeta && Array.isArray(requestMeta.conditionals)
+    ? requestMeta.conditionals
+    : [];
+  const previews = [];
+  for (const item of conditionals) {
+    if (!isPlainObject(item)) continue;
+    const attachments = await extractAttachmentRecords({
+      attachments: Array.isArray(item.attachments) ? item.attachments : []
+    }, client);
+    previews.push({
+      status: safeString(item.status, 'conditional'),
+      originalProblemId: safeString(item.originalProblemId),
+      conditionalProblemId: safeString(item.conditionalProblemId),
+      problemTitle: safeString(item.problemTitle),
+      conditionalTitle: safeString(item.conditionalTitle, 'Conditional'),
+      postedAt: safeString(item.postedAt),
+      bounty: item.bounty && isPlainObject(item.bounty) ? item.bounty : null,
+      sourceCode: truncateSourceText(item.sourceCode, MAX_PREVIEW_SOURCE_CHARS),
+      fileName: safeString(item.fileName),
+      language: safeString(item.language),
+      attachments
+    });
+  }
+  return previews.sort((a, b) => String(b.postedAt || '').localeCompare(String(a.postedAt || '')));
+}
+
+function getRowAliasText(row) {
+  const requestMeta = isPlainObject(row && row.request_meta) ? row.request_meta : {};
+  const solution = isPlainObject(requestMeta.solution) ? requestMeta.solution : {};
+  const solutionOf = isPlainObject(requestMeta.solutionOf) ? requestMeta.solutionOf : {};
+  const conditionalOf = isPlainObject(requestMeta.conditionalOf) ? requestMeta.conditionalOf : {};
+  const conditionals = Array.isArray(requestMeta.conditionals) ? requestMeta.conditionals : [];
+  const aliases = Array.isArray(requestMeta.titleAliases) ? requestMeta.titleAliases : [];
+  return [
+    ...aliases,
+    solution.problemTitle,
+    solution.theoremTitle,
+    solution.sourceCode,
+    solutionOf.problemTitle,
+    conditionalOf.problemTitle,
+    conditionalOf.conditionalTitle,
+    ...conditionals.flatMap((item) => isPlainObject(item)
+      ? [item.conditionalTitle, item.sourceCode, item.fileName]
+      : [])
+  ].map((item) => String(item || '').toLowerCase()).join(' ');
+}
+
+function getSearchCanonicalKey(row) {
+  const requestMeta = isPlainObject(row && row.request_meta) ? row.request_meta : {};
+  const solution = isPlainObject(requestMeta.solution) ? requestMeta.solution : null;
+  const solutionOf = isPlainObject(requestMeta.solutionOf) ? requestMeta.solutionOf : null;
+  if (solution && solution.solutionProblemId) return `solution:${solution.solutionProblemId}`;
+  if (solutionOf && row && row.id) return `solution:${row.id}`;
+  return row && row.id ? `row:${row.id}` : '';
+}
+
+function rowHasFullSolutionPreview(row) {
+  const requestMeta = isPlainObject(row && row.request_meta) ? row.request_meta : {};
+  return !!(requestMeta.solution && isPlainObject(requestMeta.solution) && requestMeta.solution.sourceCode);
+}
+
 function inferLegacyRowKind(row) {
   const title = String(row && row.title || '').toLowerCase();
   const fileName = String(row && row.file_name || '').toLowerCase();
@@ -311,8 +418,6 @@ function inferLegacyRowKind(row) {
 function readRowKind(row) {
   const requestMeta = isPlainObject(row.request_meta) ? row.request_meta : {};
   const adapterMeta = isPlainObject(row.adapter_meta) ? row.adapter_meta : {};
-  const proofKind = kindFromProofState(row.proof_state);
-  if (proofKind) return proofKind;
   const storedKind = normalizeProblemKind(
     requestMeta.problemKind
       || requestMeta.postKind
@@ -320,6 +425,9 @@ function readRowKind(row) {
       || adapterMeta.problemKind
       || adapterMeta.postKind
   );
+  if (storedKind === 'conditional') return 'conditional';
+  const proofKind = kindFromProofState(row.proof_state);
+  if (proofKind) return proofKind;
   return storedKind || inferLegacyRowKind(row);
 }
 
@@ -330,7 +438,8 @@ function scoreRow(row, terms) {
   const fileName = String(row.file_name || '').toLowerCase();
   const source = String(row.source_code || '').toLowerCase();
   const cic = stringifyPreview(row.normalized_term, MAX_CIC_CHARS).toLowerCase();
-  const haystack = `${title} ${fileName} ${source} ${cic}`;
+  const alias = getRowAliasText(row);
+  const haystack = `${title} ${fileName} ${source} ${cic} ${alias}`;
 
   let score = rowKind ? 4 : 2;
   if (terms.length === 0) score += 1;
@@ -338,6 +447,7 @@ function scoreRow(row, terms) {
     if (title.includes(term)) score += 12;
     if (fileName.includes(term)) score += 4;
     if (source.includes(term)) score += 6;
+    if (alias.includes(term)) score += 10;
     if (cic.includes(term)) score += 2;
     if (haystack.includes(term)) score += 1;
   }
@@ -351,6 +461,14 @@ async function buildCitation(row, index, client) {
   const cicPreview = stringifyPreview(row.normalized_term, MAX_CIC_CHARS);
   const quote = sourcePreview || cicPreview || title;
   const attachments = await extractAttachmentRecords(requestMeta, client);
+  const solution = await normalizeSolutionPreview(requestMeta, client);
+  const conditionals = await normalizeConditionalPreviews(requestMeta, client);
+  const attachmentNames = [
+    ...attachments,
+    ...(solution && Array.isArray(solution.attachments) ? solution.attachments : []),
+    ...(solution && solution.problem && Array.isArray(solution.problem.attachments) ? solution.problem.attachments : []),
+    ...conditionals.flatMap((conditional) => Array.isArray(conditional.attachments) ? conditional.attachments : [])
+  ].map((item) => getAttachmentLabel(item)).filter(Boolean);
   return {
     id: `P${index + 1}`,
     problemId: row.id,
@@ -364,10 +482,13 @@ async function buildCitation(row, index, client) {
     requestedFormat: safeString(requestMeta.requestedFormat),
     completedFormat: safeString(requestMeta.completedFormat),
     attachments,
-    attachmentNames: attachments.map((item) => getAttachmentLabel(item)).filter(Boolean),
+    attachmentNames,
     quote: truncateText(quote, 420),
     sourceCode: truncateSourceText(row.source_code, MAX_PREVIEW_SOURCE_CHARS),
-    normalizedTermPreview: cicPreview
+    normalizedTerm: row.normalized_term || null,
+    normalizedTermPreview: cicPreview,
+    solution,
+    conditionals
   };
 }
 
@@ -393,7 +514,23 @@ async function searchSavedProblems({ query, limit, offset }) {
     .filter((entry) => entry.score >= 0)
     .sort((a, b) => b.score - a.score || String(b.row.created_at || '').localeCompare(String(a.row.created_at || '')));
 
-  const pageRows = ranked.slice(offset, offset + limit);
+  const deduped = [];
+  const canonicalIndex = new Map();
+  for (const entry of ranked) {
+    const key = getSearchCanonicalKey(entry.row);
+    if (!key || !canonicalIndex.has(key)) {
+      canonicalIndex.set(key, deduped.length);
+      deduped.push(entry);
+      continue;
+    }
+    const existingIndex = canonicalIndex.get(key);
+    const existing = deduped[existingIndex];
+    if (rowHasFullSolutionPreview(entry.row) && !rowHasFullSolutionPreview(existing.row)) {
+      deduped[existingIndex] = entry;
+    }
+  }
+
+  const pageRows = deduped.slice(offset, offset + limit);
   const citations = [];
   for (let index = 0; index < pageRows.length; index += 1) {
     citations.push(await buildCitation(pageRows[index].row, offset + index, client));
@@ -417,6 +554,18 @@ function buildGeminiPrompt({ query, targetKind, citations, history, systemMode }
     requestedFormat: item.requestedFormat,
     completedFormat: item.completedFormat,
     attachments: Array.isArray(item.attachmentNames) ? item.attachmentNames : [],
+    conditionals: Array.isArray(item.conditionals)
+      ? item.conditionals.slice(0, 8).map((conditional) => ({
+          title: conditional.conditionalTitle,
+          language: conditional.language,
+          fileName: conditional.fileName,
+          postedAt: conditional.postedAt,
+          sourceExcerpt: truncateText(conditional.sourceCode, 700),
+          attachments: Array.isArray(conditional.attachments)
+            ? conditional.attachments.map((attachment) => getAttachmentLabel(attachment)).filter(Boolean)
+            : []
+        }))
+      : [],
     quote: item.quote,
     sourceExcerpt: truncateText(item.sourceCode || item.quote, 1100)
   }));
@@ -437,6 +586,7 @@ function buildGeminiPrompt({ query, targetKind, citations, history, systemMode }
       : 'Recent chat history: []',
     '',
     'Use only the provided saved rows as sources.',
+    'Some problem rows include conditionals: axiom-backed conditional proofs connected to the same problem. Treat them as connected source material and distinguish them from full solutions.',
     'Answer in Japanese unless the user query is clearly in another language.',
     'When addressing the person asking, use a natural second person for that language, such as あなた in Japanese or you in English. Do not refer to them as "the user" in the answer.',
     'Format the answer like a Google AI web-search overview: begin with a short direct synthesis, then use compact titled sections, source-backed bullets, and a small comparison table when multiple saved rows are relevant.',

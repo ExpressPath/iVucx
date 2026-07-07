@@ -1,4 +1,4 @@
-import { getGoogleIdentity } from '../lib/google-oauth.js';
+import { getIvucxAccountSnapshot } from '../lib/ivucx.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -7,11 +7,14 @@ export default async function handler(req, res) {
     return;
   }
 
-  const identity = await getGoogleIdentity(req);
-  if (!identity.authenticated) {
+  const snapshot = await getIvucxAccountSnapshot(req);
+  const identity = snapshot.identity || {};
+  if (!snapshot.loggedIn) {
     res.status(200).json({
       loggedIn: false,
       rewards: [],
+      notifications: [],
+      balance: snapshot.balance,
       provider: 'google',
       reason: 'no_google_session'
     });
@@ -23,10 +26,14 @@ export default async function handler(req, res) {
     accountId: identity.accountId,
     email: identity.email,
     name: identity.name,
-    rewards: [],
-    provider: 'google',
+    rewards: snapshot.rewards || [],
+    notifications: snapshot.notifications || [],
+    balance: snapshot.balance,
+    provider: identity.accountProvider || 'google',
     cookieConsent: 'unknown',
     cookieConsentUpdatedAt: null,
+    ivucxUnavailable: !!snapshot.unavailable,
+    ivucxError: snapshot.error || '',
     reason: 'ok'
   });
 }

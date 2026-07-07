@@ -7,10 +7,12 @@ import {
   sendMethodNotAllowed
 } from '../lib/helper-proxy.js';
 import { sendBountyCheckoutResponse } from '../lib/bounty-checkout.js';
+import { sendConditionalCheckoutResponse } from '../lib/conditional-checkout.js';
 import { sendStripeSetupResponse } from '../lib/stripe-setup.js';
 import { sendAttachmentCompleteResponse, sendAttachmentUploadPlanResponse } from '../lib/problem-attachments.js';
 import { sendPersistedProblemResponse, sendProblemPersistenceStatusResponse } from '../lib/problem-store.js';
 import { sendProofAiResponse } from '../lib/proof-ai.js';
+import { sendProblemConditionalRegisterResponse, sendProblemSolutionResolveResponse } from '../lib/ivucx.js';
 
 function getRouteSegments(req) {
   const raw = req && req.query ? req.query.route : undefined;
@@ -42,6 +44,11 @@ export default async function handler(req, res) {
 
   if (segments.length === 1 && segments[0] === 'bounty-checkout') {
     await sendBountyCheckoutResponse(req, res);
+    return;
+  }
+
+  if (segments.length === 1 && segments[0] === 'conditional-checkout') {
+    await sendConditionalCheckoutResponse(req, res);
     return;
   }
 
@@ -111,6 +118,16 @@ export default async function handler(req, res) {
 
   if (segments.length === 1 && segments[0] === 'persist-check') {
     await sendProblemPersistenceStatusResponse(req, res);
+    return;
+  }
+
+  if (segments.length === 1 && segments[0] === 'resolve-problem') {
+    await sendProblemSolutionResolveResponse(req, res);
+    return;
+  }
+
+  if (segments.length === 1 && segments[0] === 'register-conditional') {
+    await sendProblemConditionalRegisterResponse(req, res);
     return;
   }
 
