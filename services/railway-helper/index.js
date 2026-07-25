@@ -2,6 +2,7 @@ import express from 'express';
 import { createHash, randomUUID, timingSafeEqual } from 'crypto';
 import { readFile } from 'fs/promises';
 import { dirname, isAbsolute, resolve as resolvePath } from 'path';
+import { isIP } from 'node:net';
 import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
 import { fileURLToPath } from 'url';
@@ -13,10 +14,14 @@ const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
 const PORT = Number(process.env.PORT || 3000);
 const MAX_CODE_BYTES = Number(process.env.HELPER_MAX_CODE_BYTES || 200000);
+const MAX_EXECUTION_RESPONSE_BYTES = Math.max(65536, Number(process.env.EXECUTION_RESPONSE_MAX_BYTES || 4 * 1024 * 1024));
+const MAX_CONCURRENT_EXECUTION_JOBS = Math.max(1, Number(process.env.HELPER_MAX_CONCURRENT_JOBS || 2));
+const MAX_QUEUED_EXECUTION_JOBS = Math.max(1, Number(process.env.HELPER_MAX_QUEUED_JOBS || 40));
 const SERVICE_NAME = String(process.env.SERVICE_NAME || 'ivucx-railway-helper').trim() || 'ivucx-railway-helper';
 const SERVICE_VERSION = String(process.env.SERVICE_VERSION || '1.8.1').trim() || '1.8.1';
 
 const HELPER_API_KEY = String(process.env.HELPER_API_KEY || '').trim();
+const IS_PRODUCTION = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
 const EXECUTION_SERVER_BASE_URL = String(
   process.env.EXECUTION_SERVER_BASE_URL
   || process.env.ORACLE_SERVER_BASE_URL
@@ -52,6 +57,12 @@ const HELPER_SCHEMA_SQL_CANDIDATES = Object.freeze([
   '../supabase/proof_helper.sql',
   '../../supabase/proof_helper.sql'
 ]);
+const SECURITY_SCHEMA_SQL_PATH = String(process.env.SECURITY_SCHEMA_SQL_PATH || '').trim();
+const SECURITY_SCHEMA_SQL_CANDIDATES = Object.freeze([
+  './supabase/security_hardening.sql',
+  '../../supabase/migrations/20260719000100_security_hardening.sql'
+]);
+const SECURITY_SCHEMA_VERSION = '20260719000100';
 
 const JOB_STATUS = {
   QUEUED: 'queued',
@@ -72,12 +83,20 @@ const PLAN_STATUS = {
 const REQUIRED_SUPABASE_TABLES = Object.freeze([
   'helper_jobs',
   'helper_conversion_plans',
-  'problems'
+  'problems',
+  'email_verification_challenges',
+  'api_rate_limit_buckets',
+  'stripe_session_claims',
+  'security_migration_markers'
 ]);
 
 const REQUIRED_SUPABASE_COLUMNS = Object.freeze({
   helper_jobs: ['id', 'status', 'operation', 'progress', 'plan_id'],
   helper_conversion_plans: ['id', 'helper_job_id', 'operation', 'execution_payload', 'request_meta'],
+  email_verification_challenges: ['nonce', 'email_hash', 'code_hash', 'expires_at', 'consumed_at'],
+  api_rate_limit_buckets: ['bucket_key', 'route', 'window_started_at', 'request_count'],
+  stripe_session_claims: ['session_id', 'problem_id', 'purpose', 'claimed_at'],
+  security_migration_markers: ['version', 'applied_at'],
   problems: [
     'id',
     'title',
@@ -103,6 +122,8 @@ const ENABLE_MEMORY_SCHEMA_FALLBACK = !['0', 'false', 'no', 'off'].includes(
 
 const jobs = new Map();
 const plans = new Map();
+let activeExecutionJobs = 0;
+const queuedExecutionJobs = [];
 let supabaseClient = null;
 let supabaseSchemaBootstrapPromise = null;
 let supabaseSchemaSqlCache = null;
@@ -139,17 +160,16 @@ app.use((req, res, next) => {
 });
 
 app.get('/', (_req, res) => {
-  res.status(200).json({
-    ok: true,
-    service: SERVICE_NAME,
-    version: SERVICE_VERSION,
-    routes: ['/healthz', '/api/helper/info', '/api/helper/schema-check']
-  });
+  res.status(200).json({ ok: true });
 });
 
 app.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!HELPER_API_KEY) {
+    if (IS_PRODUCTION) {
+      res.status(503).json({ ok: false, error: 'Helper authorization is not configured.' });
+      return;
+    }
     next();
     return;
   }
@@ -255,7 +275,7 @@ app.get('/api/helper/schema-check', async (_req, res) => {
 app.post('/api/helper/check', async (req, res) => {
   try {
     const payload = normalizeProofPayload(req.body || {});
-    const verification = await requestExecutionCheck(payload, req);
+    const verification = await runWithExecutionLimit(() => requestExecutionCheck(payload, req));
     res.status(statusCodeForVerification(verification)).json({ ok: verification.ok, verification });
   } catch (err) {
     res.status(err && err.statusCode ? err.statusCode : 400).json({
@@ -301,7 +321,7 @@ app.get('/api/helper/jobs/:id', async (req, res) => {
     res.status(404).json({ ok: false, error: 'Helper job not found.' });
     return;
   }
-  res.status(200).json({ ok: true, job: publicJob(job) });
+  res.status(200).json({ ok: true, job: publicJob(job, { includeResult: true }) });
 });
 
 app.delete('/api/helper/jobs/:id', async (req, res) => {
@@ -378,7 +398,48 @@ function normalizeRemoteBaseUrl(value) {
   if (!normalized) {
     return '';
   }
-  return normalized.replace(/\/+$/, '');
+  try {
+    const parsed = new URL(normalized);
+    const hostname = parsed.hostname.toLowerCase();
+    const allowPrivate = String(process.env.ALLOW_PRIVATE_EXECUTION_URLS || '').toLowerCase() === 'true';
+    const localDevelopment = !IS_PRODUCTION
+      && ['localhost', '127.0.0.1', '::1'].includes(hostname)
+      && ['http:', 'https:'].includes(parsed.protocol);
+    if (parsed.username || parsed.password || parsed.search || parsed.hash) return '';
+    if (parsed.protocol !== 'https:' && !localDevelopment && !allowPrivate) return '';
+    if (!allowPrivate && isPrivateNetworkHost(hostname)) return '';
+    return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`;
+  } catch (error) {
+    return '';
+  }
+}
+
+function isPrivateNetworkHost(hostname) {
+  const host = String(hostname || '').replace(/^\[|\]$/g, '').toLowerCase();
+  if (!host) return true;
+  if (['localhost', 'metadata.google.internal', 'metadata.google.internal.'].includes(host)) return true;
+  if (host.endsWith('.internal') || host.endsWith('.localhost') || host.endsWith('.local')) return true;
+  const family = isIP(host);
+  if (family === 4) {
+    const parts = host.split('.').map(Number);
+    return parts[0] === 10
+      || parts[0] === 127
+      || (parts[0] === 169 && parts[1] === 254)
+      || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
+      || (parts[0] === 192 && parts[1] === 168)
+      || parts[0] === 0;
+  }
+  if (family === 6) {
+    return host === '::1'
+      || host === '::'
+      || host.startsWith('fc')
+      || host.startsWith('fd')
+      || host.startsWith('fe8')
+      || host.startsWith('fe9')
+      || host.startsWith('fea')
+      || host.startsWith('feb');
+  }
+  return false;
 }
 
 function resolveExecutionBaseUrlFromRequest(req) {
@@ -552,15 +613,8 @@ function resolveSchemaSqlCandidatePath(candidatePath) {
     : resolvePath(MODULE_DIR, candidatePath);
 }
 
-async function loadHelperSchemaSql() {
-  if (supabaseSchemaSqlCache) {
-    return supabaseSchemaSqlCache;
-  }
-
-  const candidates = [
-    HELPER_SCHEMA_SQL_PATH,
-    ...HELPER_SCHEMA_SQL_CANDIDATES
-  ]
+async function loadFirstSchemaSql(paths, label) {
+  const candidates = paths
     .map((candidate) => resolveSchemaSqlCandidatePath(candidate))
     .filter(Boolean);
 
@@ -570,7 +624,6 @@ async function loadHelperSchemaSql() {
       const sql = await readFile(candidate, 'utf8');
       const normalized = String(sql || '').trim();
       if (normalized) {
-        supabaseSchemaSqlCache = normalized;
         return normalized;
       }
     } catch (error) {
@@ -580,9 +633,29 @@ async function loadHelperSchemaSql() {
 
   throw new Error(
     lastError && lastError.message
-      ? `Unable to load proof helper schema SQL. ${lastError.message}`
-      : 'Unable to load proof helper schema SQL.'
+      ? `Unable to load ${label} schema SQL. ${lastError.message}`
+      : `Unable to load ${label} schema SQL.`
   );
+}
+
+async function loadHelperSchemaSql() {
+  if (supabaseSchemaSqlCache) {
+    return supabaseSchemaSqlCache;
+  }
+
+  const [helperSql, securitySql] = await Promise.all([
+    loadFirstSchemaSql([
+      HELPER_SCHEMA_SQL_PATH,
+      ...HELPER_SCHEMA_SQL_CANDIDATES
+    ], 'proof helper'),
+    loadFirstSchemaSql([
+      SECURITY_SCHEMA_SQL_PATH,
+      ...SECURITY_SCHEMA_SQL_CANDIDATES
+    ], 'security hardening')
+  ]);
+
+  supabaseSchemaSqlCache = `begin;\n${helperSql}\n${securitySql}\ncommit;`;
+  return supabaseSchemaSqlCache;
 }
 
 async function ensureSupabaseSchema(reason = 'runtime') {
@@ -742,6 +815,24 @@ async function inspectSupabaseSchema() {
     };
   }
 
+  if (tables.security_migration_markers?.present) {
+    const { data: marker, error: markerError } = await client
+      .from('security_migration_markers')
+      .select('version')
+      .eq('version', SECURITY_SCHEMA_VERSION)
+      .maybeSingle();
+    if (markerError || !marker) {
+      ok = false;
+      tables.security_migration_markers = {
+        present: false,
+        error: markerError
+          ? extractSupabaseErrorMessage(markerError)
+          : `Security migration ${SECURITY_SCHEMA_VERSION} is not applied.`,
+        missingColumn: null
+      };
+    }
+  }
+
   return {
     ok,
     configured: true,
@@ -774,6 +865,154 @@ function tryParseJson(text) {
     return null;
   }
 }
+
+async function readBoundedResponseText(response, limit = MAX_EXECUTION_RESPONSE_BYTES) {
+  const contentLength = Number(response.headers.get('content-length') || 0);
+  if (contentLength > limit) {
+    const error = new Error('Execution server response exceeds the size limit.');
+    error.statusCode = 502;
+    throw error;
+  }
+  if (!response.body || typeof response.body.getReader !== 'function') return response.text();
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel().catch(() => {});
+      const error = new Error('Execution server response exceeds the size limit.');
+      error.statusCode = 502;
+      throw error;
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks, total).toString('utf8');
+}
+
+function createExecutionQueueError() {
+  const error = new Error('Proof execution queue is full. Retry later.');
+  error.statusCode = 429;
+  return error;
+}
+
+function drainExecutionQueue() {
+  while (activeExecutionJobs < MAX_CONCURRENT_EXECUTION_JOBS && queuedExecutionJobs.length > 0) {
+    const task = queuedExecutionJobs.shift();
+    if (!task) return;
+    activeExecutionJobs += 1;
+    Promise.resolve()
+      .then(task.run)
+      .then(task.resolve, task.reject)
+      .finally(() => {
+        activeExecutionJobs = Math.max(0, activeExecutionJobs - 1);
+        drainExecutionQueue();
+      });
+  }
+}
+
+function runWithExecutionLimit(run) {
+  if (queuedExecutionJobs.length >= MAX_QUEUED_EXECUTION_JOBS) {
+    return Promise.reject(createExecutionQueueError());
+  }
+  return new Promise((resolve, reject) => {
+    queuedExecutionJobs.push({ run, resolve, reject });
+    drainExecutionQueue();
+  });
+}
+
+function stripExecutionCommentsAndStrings(language, code) {
+  const source = String(code || '');
+  let output = '';
+  let blockDepth = 0;
+  let inLineComment = false;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const current = source[index];
+    const next = source[index + 1] || '';
+    if (inLineComment) {
+      if (current === '\n') {
+        inLineComment = false;
+        output += '\n';
+      } else {
+        output += ' ';
+      }
+      continue;
+    }
+    if (blockDepth > 0) {
+      const nestedOpen = language === 'Coq'
+        ? current === '(' && next === '*'
+        : current === '/' && next === '-';
+      const nestedClose = language === 'Coq'
+        ? current === '*' && next === ')'
+        : current === '-' && next === '/';
+      if (nestedOpen) {
+        blockDepth += 1;
+        output += '  ';
+        index += 1;
+      } else if (nestedClose) {
+        blockDepth -= 1;
+        output += '  ';
+        index += 1;
+      } else {
+        output += current === '\n' ? '\n' : ' ';
+      }
+      continue;
+    }
+    if (inString) {
+      const doubledCoqQuote = language === 'Coq' && current === '"' && next === '"';
+      if (doubledCoqQuote) {
+        output += '  ';
+        index += 1;
+        continue;
+      }
+      if (!escaped && current === '"') inString = false;
+      escaped = language !== 'Coq' && !escaped && current === '\\';
+      if (current !== '\\') escaped = false;
+      output += current === '\n' ? '\n' : ' ';
+      continue;
+    }
+    const blockOpen = language === 'Coq'
+      ? current === '(' && next === '*'
+      : current === '/' && next === '-';
+    if (blockOpen) {
+      blockDepth = 1;
+      output += '  ';
+      index += 1;
+    } else if (language !== 'Coq' && current === '-' && next === '-') {
+      inLineComment = true;
+      output += '  ';
+      index += 1;
+    } else if (current === '"') {
+      inString = true;
+      escaped = false;
+      output += ' ';
+    } else {
+      output += current;
+    }
+  }
+  return output;
+}
+
+function assertNoDangerousExecutionDirectives(language, code) {
+  const source = stripExecutionCommentsAndStrings(language, code);
+  const dangerous = language === 'Coq'
+    ? /(?:^|[.\n])\s*(?:Declare\s+ML\s+Module|Load|Cd|Add\s+(?:Rec\s+)?LoadPath|Redirect|Extraction|Separate\s+Extraction)\b/i.test(source)
+    : (
+      /#(?:eval|reduce|compile|exit)\b/i.test(source)
+      || /#print(?!\s+axioms\b)\b/i.test(source)
+      || /\b(?:run_cmd|run_tac|elab|elab_rules|macro_rules|initialize|builtin_initialize|include_str|include_bytes|unsafe|partial)\b/i.test(source)
+      || /@\[extern[^\]]*\]/i.test(source)
+    );
+  if (!dangerous) return;
+  const error = new Error('Proof code contains server-side execution directives that are not allowed.');
+  error.statusCode = 422;
+  throw error;
+}
+
 function normalizeProofPayload(body) {
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   const language = resolveLanguage(body.language);
@@ -791,6 +1030,7 @@ function normalizeProofPayload(body) {
   if (Buffer.byteLength(code, 'utf8') > MAX_CODE_BYTES) {
     throw new Error('Proof code exceeds helper size limit.');
   }
+  assertNoDangerousExecutionDirectives(language, code);
 
   return { title, language, fileName, code, format, verify };
 }
@@ -819,7 +1059,7 @@ function createProgress(percent, stage, message) {
   };
 }
 
-function publicJob(job) {
+function publicJob(job, options = {}) {
   return {
     id: job.id,
     status: job.status,
@@ -833,7 +1073,7 @@ function publicJob(job) {
     createdAt: job.createdAt,
     startedAt: job.startedAt,
     completedAt: job.completedAt,
-    result: job.status === JOB_STATUS.SUCCEEDED ? job.result : null,
+    result: options.includeResult && job.status === JOB_STATUS.SUCCEEDED ? job.result : null,
     error: job.status === JOB_STATUS.FAILED ? job.error : null,
     problemId: job.problemId || null
   };
@@ -846,7 +1086,13 @@ async function handlePlannedRequest(req, res, operation) {
 
     if (!wantsAsync) {
       const plan = await createConversionPlan(payload, operation, null, req);
-      const result = await executePlannedOperation(plan, null);
+      let result;
+      try {
+        result = await runWithExecutionLimit(() => executePlannedOperation(plan, null));
+      } catch (error) {
+        await markPlanFailed(plan.id, error.message || 'Execution queue rejected the task.', createProgress(100, 'failed', 'Execution queue full'));
+        throw error;
+      }
       res.status(statusCodeForResult(result)).json({ ok: Boolean(result.ok), result });
       return;
     }
@@ -855,7 +1101,13 @@ async function handlePlannedRequest(req, res, operation) {
     res.status(202).json({ ok: true, job: publicJob(job) });
 
     queueMicrotask(() => {
-      executeJob(job.id).catch((err) => {
+      runWithExecutionLimit(() => executeJob(job.id)).catch(async (err) => {
+        job.status = JOB_STATUS.FAILED;
+        job.completedAt = nowIso();
+        job.error = { message: err && err.message ? err.message : String(err) };
+        job.progress = createProgress(100, 'failed', job.error.message);
+        await persistJob(job).catch(() => {});
+        if (job.planId) await markPlanFailed(job.planId, job.error.message, job.progress).catch(() => {});
         console.error('helper job failed', err);
       });
     });
@@ -1074,21 +1326,13 @@ async function executePlannedOperation(plan, job) {
     return finalResult;
   }
 
-  let problemId = null;
-  if (currentPlan.operation === 'submit') {
-    await updatePlanProgress(currentPlan.id, PLAN_STATUS.RUNNING, createProgress(82, 'saving', 'Saving problem'));
-    if (job) {
-      job.progress = createProgress(82, 'saving', 'Saving problem');
-      await persistJob(job);
-    }
-    const saved = await saveProblemRecord(currentPlan, finalResult, proofState, completedFormat);
-    problemId = saved.id || null;
-    finalResult.problemId = problemId;
-  }
+  // Persistence is intentionally centralized in the Vercel API, where account,
+  // payment, proof-binding, and attachment capabilities are verified together.
+  const problemId = null;
 
   await persistExecutionOutcome(currentPlan.id, {
     status: PLAN_STATUS.SUCCEEDED,
-    progress: createProgress(100, 'saved', problemId ? 'Problem saved' : 'Converted'),
+    progress: createProgress(100, 'converted', 'Converted'),
     result: finalResult,
     error: null,
     proofState,
@@ -1300,7 +1544,7 @@ async function sendExecutionRequest(targetPath, body, executionBaseUrl = EXECUTI
         body: requestBody,
         signal: controller.signal
       });
-      const text = await response.text();
+      const text = await readBoundedResponseText(response);
       clearTimeout(timer);
       const result = {
         ok: response.ok,

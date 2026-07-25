@@ -1116,13 +1116,13 @@
           </label>
           <label class="ai-field full">
             <span class="ai-label">Model</span>
-            <input class="ai-input" id="aiModelInput" type="text" autocomplete="off" spellcheck="false" />
+            <input class="ai-input" id="aiModelInput" type="text" maxlength="160" autocomplete="off" spellcheck="false" />
           </label>
         </div>
         <div class="ai-key-row">
           <label class="ai-field">
             <span class="ai-label">API key</span>
-            <input class="ai-input" id="aiApiKeyInput" type="password" autocomplete="off" spellcheck="false" placeholder="Required if server env is not configured" />
+            <input class="ai-input" id="aiApiKeyInput" type="password" maxlength="4096" autocomplete="off" spellcheck="false" placeholder="Required if server env is not configured" />
           </label>
           <button class="ai-btn" id="aiSaveKeyBtn" type="button">Save</button>
           <button class="ai-btn" id="aiForgetKeyBtn" type="button">Forget</button>
@@ -3259,7 +3259,13 @@
 
       function readAiKeys(){
         try{
-          const raw = localStorage.getItem(AI_KEYS_STORAGE_KEY);
+          let raw = sessionStorage.getItem(AI_KEYS_STORAGE_KEY);
+          const legacyRaw = localStorage.getItem(AI_KEYS_STORAGE_KEY);
+          if(!raw && legacyRaw){
+            raw = legacyRaw;
+            sessionStorage.setItem(AI_KEYS_STORAGE_KEY, legacyRaw);
+          }
+          if(legacyRaw) localStorage.removeItem(AI_KEYS_STORAGE_KEY);
           if(!raw) return {};
           const parsed = JSON.parse(raw);
           return parsed && typeof parsed === 'object' ? parsed : {};
@@ -3305,9 +3311,10 @@
 
       function writeAiKeys(keys){
         try{
-          localStorage.setItem(AI_KEYS_STORAGE_KEY, JSON.stringify(keys || {}));
+          sessionStorage.setItem(AI_KEYS_STORAGE_KEY, JSON.stringify(keys || {}));
+          localStorage.removeItem(AI_KEYS_STORAGE_KEY);
         }catch(err){
-          setAiStatus('Could not save API key in this browser.', true);
+          setAiStatus('Could not keep API key for this tab.', true);
         }
       }
 
@@ -3346,7 +3353,7 @@
         if(aiApiKeyInput){
           aiApiKeyInput.value = keys[provider] ? keys[provider] : '';
           aiApiKeyInput.placeholder = keys[provider]
-            ? defaults.label + ' key saved locally'
+            ? defaults.label + ' key available for this tab'
             : 'Required if server env is not configured';
         }
         const registration = getAiRegistration(provider);
@@ -3365,7 +3372,7 @@
         const defaults = AI_PROVIDER_DEFAULTS[provider] || AI_PROVIDER_DEFAULTS.chatgpt;
         const model = aiModelInput && aiModelInput.value.trim() ? aiModelInput.value.trim() : defaults.model;
         const contextEngine = aiContextSelect && aiContextSelect.value ? aiContextSelect.value : getDefaultAiContextEngine();
-        const keySource = options && options.keySource ? options.keySource : 'browser-local';
+        const keySource = options && options.keySource ? options.keySource : 'browser-session';
         const localRecord = setAiRegistration(provider, {
           approved:true,
           linked:false,
@@ -3393,7 +3400,7 @@
               language:selectedLanguage,
               problemKind:getProblemKindFromInit(),
               keySource,
-              hasLocalKey:keySource === 'browser-local'
+              hasLocalKey:keySource === 'browser-session'
             })
           });
           const data = await response.json().catch(()=>null);
@@ -3435,7 +3442,7 @@
         const keys = readAiKeys();
         keys[provider] = key;
         writeAiKeys(keys);
-        registerAiProvider({ keySource:'browser-local' });
+        registerAiProvider({ keySource:'browser-session' });
       }
 
       function forgetAiProviderKey(){
@@ -3549,7 +3556,7 @@
           const usedEngine = data && data.contextEngine ? data.contextEngine : contextEngine;
           setAiStatus(label + ' / ' + usedModel + ' / ' + usedEngine, false);
           setAiResponse(data && data.answer ? data.answer : '(empty response)', false);
-          registerAiProvider({ keySource:key ? 'browser-local' : 'server-env' });
+          registerAiProvider({ keySource:key ? 'browser-session' : 'server-env' });
         }catch(err){
           setAiStatus(err && err.message ? err.message : 'AI request failed.', true);
           setAiResponse('No response. Check the API key, provider model, and network settings.', true);

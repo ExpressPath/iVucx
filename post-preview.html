@@ -939,32 +939,12 @@
           <button class="bounty-submit" id="bountyCheckoutBtn" type="button">Fund bounty</button>
           <div class="bounty-status" id="bountyStatus" role="status" aria-live="polite"></div>
         </section>
-        <section class="bounty-panel" id="conditionalPanel" aria-label="Conditional bounty" hidden>
+        <section class="bounty-panel" id="conditionalPanel" aria-label="Conditional proof" hidden>
           <div class="bounty-head">
             <div class="bounty-title">Conditional</div>
-            <div class="bounty-state" id="conditionalState">Not funded</div>
+            <div class="bounty-state" id="conditionalState">Free</div>
           </div>
-          <div class="bounty-row">
-            <span class="bounty-prefix">Vx</span>
-            <input class="bounty-input" id="conditionalAmount" type="number" min="1" step="1" inputmode="decimal" value="1" aria-label="Conditional bounty amount" />
-            <span class="bounty-currency">JPY</span>
-          </div>
-          <div class="conditional-split" aria-label="Conditional split">
-            <div class="conditional-split-item">
-              <span class="conditional-split-label">Fee</span>
-              <span class="conditional-split-value" id="conditionalFee">10%</span>
-            </div>
-            <div class="conditional-split-item">
-              <span class="conditional-split-label">Problem</span>
-              <span class="conditional-split-value" id="conditionalProblemShare">45%</span>
-            </div>
-            <div class="conditional-split-item">
-              <span class="conditional-split-label">Creator</span>
-              <span class="conditional-split-value" id="conditionalCreatorShare">45%</span>
-            </div>
-          </div>
-          <button class="bounty-submit" id="conditionalCheckoutBtn" type="button">Fund Conditional</button>
-          <div class="bounty-status" id="conditionalStatus" role="status" aria-live="polite"></div>
+          <div class="bounty-status success" id="conditionalStatus" role="status" aria-live="polite">Conditional proof posts are free.</div>
         </section>
         <div class="stage-layout sidebar-empty" id="stageLayout">
           <aside class="preview-sidebar" id="uploadSidebar" aria-label="Uploaded files" hidden></aside>
@@ -1234,9 +1214,11 @@
           requestedFormat,
           completedFormat: completedFormat || requestedFormat,
           jobId: submitResult && submitResult.jobId ? submitResult.jobId : '',
+          jobToken: submitResult && submitResult.jobToken ? submitResult.jobToken : '',
           proofPayload,
           submitResult: {
             jobId: submitResult && submitResult.jobId ? submitResult.jobId : '',
+            jobToken: submitResult && submitResult.jobToken ? submitResult.jobToken : '',
             result: submitResult && submitResult.result ? submitResult.result : null
           },
           attachmentsExpected: attachments.length
@@ -1672,22 +1654,8 @@
           setConditionalStatus('');
           return;
         }
-        updateConditionalSplitPreview();
-        const bounty = getDraftConditionalBounty(draft);
-        if(bounty && Number(bounty.amountVx) > 0 && conditionalAmountEl){
-          conditionalAmountEl.value = String(Math.max(1, Number(bounty.amountVx) || 1));
-          updateConditionalSplitPreview();
-        }
-        if(isConditionalFunded(bounty)){
-          if(conditionalStateEl) conditionalStateEl.textContent = 'Funded Vx ' + (Number(bounty.amountVx) || 0).toLocaleString('en-US', { maximumFractionDigits:6 });
-          setConditionalStatus('Conditional funding confirmed.', 'success');
-        }else if(bounty && bounty.stripeSessionId){
-          if(conditionalStateEl) conditionalStateEl.textContent = 'Checkout created';
-          setConditionalStatus('Checkout was created. Complete payment to post this Conditional.');
-        }else{
-          if(conditionalStateEl) conditionalStateEl.textContent = 'Required';
-          setConditionalStatus('A paid Conditional bounty of at least Vx 1 is required.', 'error');
-        }
+        if(conditionalStateEl) conditionalStateEl.textContent = 'Free';
+        setConditionalStatus('Conditional proof posts are free.', 'success');
       }
 
       async function patchConditionalBounty(conditionalBounty){
@@ -2288,7 +2256,8 @@
           credentials: 'same-origin',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            ...(submitResult.jobToken ? { 'X-Ivucx-Job-Token':submitResult.jobToken } : {})
           },
           body: JSON.stringify({
             title: proofPayload.title,
@@ -2305,6 +2274,7 @@
             requestedFormat,
             requestedAt,
             jobId: submitResult.jobId || '',
+            jobToken: submitResult.jobToken || '',
             result
           })
         });
@@ -2396,20 +2366,23 @@
         );
       }
 
-      async function fetchHelperJobFromUrl(baseUrl, jobId, sameOrigin){
+      async function fetchHelperJobFromUrl(baseUrl, jobId, sameOrigin, jobToken){
+        const headers = sameOrigin
+          ? (jobToken ? { 'X-Ivucx-Job-Token': jobToken } : {})
+          : buildDirectHelperHeaders();
         const response = await fetch(baseUrl + '/api/helper/jobs/' + encodeURIComponent(jobId), {
           method: 'GET',
           cache: 'no-store',
           credentials: sameOrigin ? 'same-origin' : 'omit',
           mode: sameOrigin ? 'same-origin' : 'cors',
-          headers: sameOrigin ? {} : buildDirectHelperHeaders()
+          headers
         });
         const raw = await response.text();
         const payload = tryParseJson(raw);
         return { response, raw, payload };
       }
 
-      async function fetchHelperJob(jobId){
+      async function fetchHelperJob(jobId, jobToken){
         const info = await fetchHelperInfo();
         const directBaseUrl = resolveDirectHelperBaseUrl(info);
         const attempts = [];
@@ -2430,7 +2403,12 @@
 
         for(const attempt of attempts){
           try{
-            const { response, raw, payload } = await fetchHelperJobFromUrl(attempt.baseUrl, jobId, attempt.sameOrigin);
+            const { response, raw, payload } = await fetchHelperJobFromUrl(
+              attempt.baseUrl,
+              jobId,
+              attempt.sameOrigin,
+              attempt.sameOrigin ? jobToken : ''
+            );
             if(!payload || typeof payload !== 'object'){
               const invalidMessage = raw || 'Invalid job response from helper proxy.';
               if(isTransientHelperJobFailure(response.status, null, raw, invalidMessage)){
@@ -2463,13 +2441,13 @@
 
       const HELPER_JOB_TIMEOUT_MS = 45 * 60 * 1000;
 
-      async function waitForHelperJob(jobId, onUpdate){
+      async function waitForHelperJob(jobId, jobToken, onUpdate){
         const startedAt = Date.now();
         helperPollTicks = 0;
         while(Date.now() - startedAt < HELPER_JOB_TIMEOUT_MS){
           let payload = null;
           try{
-            payload = await fetchHelperJob(jobId);
+            payload = await fetchHelperJob(jobId, jobToken);
           }catch(err){
             const message = err && err.message ? err.message : String(err);
             if(isTransientHelperJobFailure(0, null, '', message)){
@@ -2537,7 +2515,7 @@
           problemKind,
           proofState,
           bounty: problemKind === 'problem' && proofState !== 'YY' ? getDraftBounty(draft) : null,
-          conditionalBounty: conditional ? getDraftConditionalBounty(draft) : null,
+          conditionalBounty: null,
           solveContext
         };
       }
@@ -2679,15 +2657,21 @@
         }
       }
 
-      async function persistProblemAttachmentsOnSupabase(problemId, draft){
+      async function persistProblemAttachmentsOnSupabase(problemId, draft, savedResult){
         const attachments = collectDraftAttachments(draft);
         if(!problemId || attachments.length === 0){
           return { persisted: true, count: 0, attachments: [] };
         }
 
+        const attachmentToken = String(
+          savedResult && savedResult.attachmentToken
+          || savedResult && savedResult.storage && savedResult.storage.attachmentToken
+          || ''
+        ).trim();
         setHelperProgress(96, 'Preparing attachments', 'pending');
         const plan = await postJson('/api/helper/attachments/sign', {
           problemId,
+          attachmentToken,
           attachments
         });
         const uploads = Array.isArray(plan.uploads) ? plan.uploads : [];
@@ -2716,6 +2700,7 @@
 
         const saved = await postJson('/api/helper/attachments/complete', {
           problemId,
+          attachmentToken,
           attachments: completed
         });
         return {
@@ -2747,12 +2732,6 @@
           if(collectDraftAttachments(draft).length === 0){
             window.alert('Conditional投稿には添付ファイルが必要です。資料を追加してからもう一度進めてください。');
             setHelperStatus('At least one attachment is required before posting Conditional.', 'error');
-            return;
-          }
-          if(!isConditionalFunded(proofPayload.conditionalBounty)){
-            syncConditionalPanel(draft);
-            setConditionalStatus('Fund the Conditional before requesting CIC conversion.', 'error');
-            setHelperStatus('A paid Conditional bounty of at least Vx 1 is required.', 'error');
             return;
           }
         }
@@ -2805,6 +2784,7 @@
               setHelperProgress(60, 'Queued', 'pending');
               return {
                 jobId: payload.job.id,
+                jobToken: payload.jobToken || (payload.job && payload.job.token) || '',
                 result: null
               };
             }
@@ -2812,6 +2792,7 @@
             if(response.ok && payload.result){
               return {
                 jobId: null,
+                jobToken: '',
                 result: payload.result
               };
             }
@@ -3296,11 +3277,31 @@
       }
 
       function getDocumentMime(documentInfo){
-        return String(documentInfo && documentInfo.mime || '').toLowerCase();
+        return String(documentInfo && documentInfo.mime || '').split(';')[0].trim().toLowerCase();
+      }
+
+      function sanitizeDocumentPreviewUrl(value){
+        const raw = String(value || '').trim();
+        if(!raw) return '';
+        if(/^data:(?:application\/pdf|image\/(?:png|jpeg|gif|webp|avif|bmp)|audio\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+)(?:;[^,]*)?,/i.test(raw)){
+          return raw;
+        }
+        try{
+          const parsed = new URL(raw, window.location.href);
+          if(parsed.username || parsed.password) return '';
+          if(parsed.protocol === 'https:') return parsed.href;
+          if(parsed.protocol === 'http:' && ['localhost','127.0.0.1','::1'].includes(parsed.hostname)) return parsed.href;
+          if(parsed.protocol === 'blob:' && (parsed.origin === window.location.origin || window.location.origin === 'null')){
+            return parsed.href;
+          }
+        }catch(error){
+          return '';
+        }
+        return '';
       }
 
       function getDocumentUrl(documentInfo){
-        return String(documentInfo && (documentInfo.url || documentInfo.webViewLink) || '').trim();
+        return sanitizeDocumentPreviewUrl(documentInfo && (documentInfo.url || documentInfo.webViewLink));
       }
 
       function applyPdfPreviewOptions(url){
@@ -3318,12 +3319,15 @@
         const explicit = String(documentInfo && documentInfo.kind || '').toLowerCase();
         const ext = getDocumentExt(documentInfo);
         const mime = getDocumentMime(documentInfo);
-        if(mime === 'application/pdf' || ext === 'pdf') return 'pdf';
+        if(mime === 'application/pdf') return 'pdf';
+        if(mime === 'text/html' || mime === 'application/xhtml+xml') return 'html';
         if(mime.startsWith('image/')) return 'image';
         if(mime.startsWith('video/')) return 'video';
         if(mime.startsWith('audio/')) return 'audio';
-        if(mime === 'text/html' || ['html','htm','xhtml'].includes(ext)) return 'html';
-        if(mime.startsWith('text/') || [
+        if(mime.startsWith('text/')) return 'text';
+        if(ext === 'pdf') return 'pdf';
+        if(['html','htm','xhtml'].includes(ext)) return 'html';
+        if([
           'txt','md','markdown','json','jsonl','csv','tsv','xml','yaml','yml','toml','ini','log',
           'lean','v','coq','tex','bib','js','jsx','ts','tsx','css','scss','sass','less','py','rb',
           'rs','go','java','c','cc','cpp','h','hpp','cs','php','swift','kt','kts','r','sql','sh','bash','zsh'
@@ -3373,12 +3377,14 @@
         note.className = 'doc-preview-fallback-note';
         note.textContent = noteText || 'This browser does not provide a native preview for this file type.';
         fallback.appendChild(note);
-        const href = documentInfo && (source && source.url || documentInfo.webViewLink || documentInfo.url);
+        const href = sanitizeDocumentPreviewUrl(
+          documentInfo && (source && source.url || documentInfo.webViewLink || documentInfo.url)
+        );
         if(href){
           const link = document.createElement('a');
           link.className = 'doc-link';
           link.href = href;
-          link.rel = 'noopener';
+          link.rel = 'noopener noreferrer';
           link.target = documentInfo && documentInfo.webViewLink ? '_blank' : '_self';
           link.download = documentInfo && !documentInfo.webViewLink ? getDocumentTitle(documentInfo) : '';
           link.textContent = documentInfo && documentInfo.webViewLink ? 'Open original' : 'Open file';
@@ -3397,6 +3403,7 @@
           frame.className = 'doc-frame';
           frame.src = applyPdfPreviewOptions(url);
           frame.title = 'PDF preview';
+          frame.referrerPolicy = 'no-referrer';
           body.appendChild(frame);
           return;
         }
@@ -3438,6 +3445,7 @@
           frame.className = 'doc-frame';
           frame.title = title;
           frame.setAttribute('sandbox', '');
+          frame.referrerPolicy = 'no-referrer';
           if(documentInfo && documentInfo.text){
             frame.srcdoc = documentInfo.text;
           }else{

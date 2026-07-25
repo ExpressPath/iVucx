@@ -6,6 +6,26 @@ const path = require('node:path');
 const { finished } = require('node:stream/promises');
 
 const DEFAULT_CAPTURE_LIMIT = Math.max(4096, Number(process.env.IVUCX_EXPORT_CAPTURE_CHARS || 32000));
+const ALLOWED_ENV_KEYS = new Set([
+  'PATH', 'Path', 'PATHEXT', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC',
+  'TEMP', 'TMP', 'TMPDIR', 'HOME', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA',
+  'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM'
+]);
+const ALLOWED_ENV_PREFIXES = ['COQ', 'LEAN', 'OPAM', 'OCAML', 'CAML', 'PYTHON', 'XDG_', 'NIX_'];
+
+function buildRestrictedProcessEnv(source) {
+  const env = {};
+  for (const [key, value] of Object.entries(source || {})) {
+    if (
+      typeof value === 'string'
+      && (ALLOWED_ENV_KEYS.has(key) || ALLOWED_ENV_PREFIXES.some((prefix) => key.startsWith(prefix)))
+    ) {
+      env[key] = value;
+    }
+  }
+  env.IVUCX_PROOF_SANDBOX = 'restricted-env-v1';
+  return env;
+}
 
 function parseCliArgs(argv) {
   const flags = {};
@@ -34,7 +54,7 @@ function parseCliArgs(argv) {
 async function runProcess(command, args, options = {}) {
   const timeoutMs = Number.isFinite(Number(options.timeoutMs)) ? Number(options.timeoutMs) : 180000;
   const cwd = options.cwd || process.cwd();
-  const env = options.env || process.env;
+  const env = buildRestrictedProcessEnv(options.env || process.env);
   const captureLimit = Math.max(4096, Number(options.captureLimitChars || DEFAULT_CAPTURE_LIMIT));
 
   return new Promise((resolve, reject) => {

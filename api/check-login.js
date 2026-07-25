@@ -14,6 +14,7 @@ export default async function handler(req, res) {
       loggedIn: false,
       rewards: [],
       notifications: [],
+      transactions: [],
       balance: snapshot.balance,
       provider: 'google',
       reason: 'no_google_session'
@@ -28,12 +29,13 @@ export default async function handler(req, res) {
     name: identity.name,
     rewards: snapshot.rewards || [],
     notifications: snapshot.notifications || [],
+    transactions: snapshot.transactions || [],
     balance: snapshot.balance,
     provider: identity.accountProvider || 'google',
     cookieConsent: 'unknown',
     cookieConsentUpdatedAt: null,
     ivucxUnavailable: !!snapshot.unavailable,
-    ivucxError: snapshot.error || '',
+    ivucxError: snapshot.unavailable ? 'Account data is temporarily unavailable.' : '',
     reason: 'ok'
   });
 }

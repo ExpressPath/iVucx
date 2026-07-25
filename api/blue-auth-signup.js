@@ -1,4 +1,6 @@
 import { getSupabaseAdmin } from '../lib/supabase-admin.js';
+import { assertDistributedRateLimit } from '../lib/distributed-rate-limit.js';
+import { getPublicErrorMessage } from '../lib/http-error.js';
 import {
   SESSION_MAX_AGE_SECONDS,
   buildSessionCookie,
@@ -71,7 +73,21 @@ export default async function handler(req, res) {
 
   const { client: supabase, error: envError } = getSupabaseAdmin();
   if (!supabase) {
-    res.status(503).json({ error: envError || 'Supabase is not configured' });
+    res.status(503).json({
+      error: getPublicErrorMessage({ message: envError }, 'Account creation is temporarily unavailable.', 503)
+    });
+    return;
+  }
+
+  try {
+    await assertDistributedRateLimit(req, {
+      route: 'blue-auth-signup',
+      limit: 5,
+      windowSeconds: 60 * 60
+    });
+  } catch (error) {
+    if (error && error.retryAfter) res.setHeader('Retry-After', String(error.retryAfter));
+    res.status(error.statusCode || 429).json({ error: error.message || 'Too many signup attempts.' });
     return;
   }
 
@@ -118,15 +134,16 @@ export default async function handler(req, res) {
     const isDuplicate =
       insertError.code === '23505' ||
       String(insertError.message || '').toLowerCase().includes('duplicate');
-    res.status(isDuplicate ? 409 : 500).json({
-      error: missingTable
+    const status = isDuplicate ? 409 : 500;
+    const internalMessage = missingTable
         ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
         : isDuplicate
         ? 'Account ID already exists. Generate again.'
         : isMissingColumnError(insertError)
         ? 'BlueMode auth schema is incomplete. Run supabase/blue_mode_auth.sql again.'
-        : 'Could not create account',
-      detail: insertError.message || null
+        : 'Could not create account';
+    res.status(status).json({
+      error: getPublicErrorMessage(insertError && !isDuplicate ? insertError : { message: internalMessage }, 'Account creation is temporarily unavailable.', status)
     });
     return;
   }
@@ -150,14 +167,14 @@ export default async function handler(req, res) {
       .delete()
       .eq('account_id_normalized', normalizedAccount.canonical);
 
-    res.status(500).json({
-      error:
+    const internalMessage =
         isMissingTableError(sessionError)
           ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
           : isMissingColumnError(sessionError)
           ? 'BlueMode session schema is incomplete. Run supabase/blue_mode_auth.sql again.'
-          : 'Could not create login session',
-      detail: sessionError.message || null
+          : 'Could not create login session';
+    res.status(500).json({
+      error: getPublicErrorMessage({ message: internalMessage }, 'Account creation is temporarily unavailable.', 500)
     });
     return;
   }

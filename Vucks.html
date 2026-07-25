@@ -4,6 +4,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>iVucx</title>
+  <script>
+    (function(){
+      var theme = '';
+      try{
+        theme = localStorage.getItem('ivucxVisualThemeV1') || '';
+        if(!theme){
+          var snapshot = JSON.parse(localStorage.getItem('ivucxModeSnapshotV1') || 'null');
+          if(snapshot && (snapshot.visualTheme === 'dark' || snapshot.visualTheme === 'light')){
+            theme = snapshot.visualTheme;
+          }
+        }
+      }catch(err){}
+      var prefersDark = false;
+      try{
+        prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }catch(err){}
+      if(prefersDark || theme === 'dark'){
+        document.documentElement.classList.add('preload-dark');
+        document.documentElement.style.backgroundColor = '#000000';
+        document.documentElement.style.colorScheme = 'dark';
+      }else{
+        document.documentElement.classList.add('preload-light');
+        document.documentElement.style.colorScheme = 'light';
+      }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lexend&display=swap" rel="stylesheet" />
@@ -104,6 +130,26 @@
         --search-prompt-input-text:CanvasText;
         --search-prompt-input-border:color-mix(in srgb, CanvasText 20%, transparent);
       }
+    }
+
+    html.preload-dark{
+      --bg-white:#000000;
+      --bg-black:#000000;
+      --brand-base:#ffffff;
+      --brand-shimmer-base:#ffffff;
+      --search-surface:rgba(255,255,255,0.075);
+      --search-surface-text:#f7f7f7;
+      --search-chat-panel-text:#f3f6ff;
+      --search-prompt-shell-bg:color-mix(in srgb, Canvas 90%, CanvasText 10%);
+      --search-prompt-input-bg:color-mix(in srgb, Canvas 84%, CanvasText 16%);
+      --search-prompt-input-text:CanvasText;
+      --search-prompt-input-border:color-mix(in srgb, CanvasText 20%, transparent);
+      background:#000000;
+      color-scheme:dark;
+    }
+
+    html.preload-dark body{
+      background:#000000;
     }
 
     *,*::before,*::after{box-sizing:border-box}
@@ -434,14 +480,14 @@
     .pose-problem-brand.is-shimmering{
       color:transparent;
       background:
-        linear-gradient(92deg, #f7fbff 0%, #f7fbff 42%, #f58529 52%, #dd2a7b 62%, #8134af 72%, #515bd4 82%, #f7fbff 92%, #f7fbff 100%);
-      background-size:260% 100%;
+        linear-gradient(92deg, #f7fbff 0%, #f7fbff 28%, #f58529 34%, #dd2a7b 46%, #8134af 58%, #515bd4 70%, #f7fbff 78%, #f7fbff 100%);
+      background-size:420% 100%;
       background-position:100% 50%;
       background-repeat:no-repeat;
       -webkit-background-clip:text;
       background-clip:text;
       text-shadow:none;
-      animation:provf-brand-shimmer 4.2s cubic-bezier(.2,.72,.22,1) 1 both;
+      animation:pose-problem-shimmer-pulse 3.4s cubic-bezier(.22,.72,.2,1) 1 both;
     }
 
     .pose-problem-brand.shimmer-finished{
@@ -459,6 +505,13 @@
     @keyframes provf-brand-shimmer{
       0%{ background-position:100% 50%; }
       72%{ background-position:0% 50%; }
+      100%{ background-position:0% 50%; }
+    }
+
+    @keyframes pose-problem-shimmer-pulse{
+      0%{ background-position:100% 50%; }
+      38%{ background-position:50% 50%; }
+      58%{ background-position:50% 50%; }
       100%{ background-position:0% 50%; }
     }
 
@@ -486,6 +539,7 @@
       align-items:center;
       gap:12px;
       width:100%;
+      box-sizing:border-box;
       border-radius:28px;
       padding:8px 15px;
       background:var(--search-surface);
@@ -498,11 +552,10 @@
     }
 
     body.suggestions-open .search-box{
-      border-radius:22px;
+      border-radius:24px;
       border:1px solid var(--search-prompt-input-border);
-      box-shadow:0 10px 30px rgba(15,23,42,0.12);
-      background:#ffffff;
-      background:var(--search-prompt-shell-bg);
+      box-shadow:0 12px 34px rgba(15,23,42,0.11);
+      background:var(--search-prompt-input-bg);
     }
 
     body.mode-q.suggestions-open .search-box{
@@ -519,6 +572,8 @@
       align-items:stretch;
       flex-direction:column-reverse;
       gap:8px;
+      box-sizing:border-box;
+      overflow:visible;
     }
 
     body.mode-q .search-box{ background:#fff; }
@@ -558,6 +613,8 @@
       color:var(--search-surface-text);
       resize:none;
       line-height:1.4;
+      box-sizing:border-box;
+      min-width:0;
       max-height:calc(100vh - 300px);
       max-height:calc(100dvh - 300px);
       overflow:auto;
@@ -581,14 +638,15 @@
 
     body.suggestions-open .search-input{
       flex:0 0 auto;
-      height:100%;
+      height:auto;
       border:0;
-      border-radius:16px;
-      padding:10px 12px;
-      background:var(--search-prompt-input-bg);
+      border-radius:0;
+      padding:8px 2px 8px 10px;
+      background:transparent;
       color:var(--search-prompt-input-text);
       caret-color:var(--search-prompt-input-text);
       box-shadow:none;
+      display:block;
     }
 
     .chat-quote-composer{
@@ -2028,6 +2086,31 @@
       display:none;
       pointer-events:none;
       overflow:hidden;
+      --vx-bg-shift:0px;
+      background-color:#030914;
+      background-image:
+        linear-gradient(90deg, rgba(3,9,20,0.91) 0%, rgba(3,9,20,0.82) 30%, rgba(3,9,20,0.44) 68%, rgba(3,9,20,0.72) 100%),
+        linear-gradient(180deg, rgba(3,9,20,0.04) 0%, rgba(1,4,9,0.22) 54%, rgba(1,4,9,0.86) 100%),
+        url('assets/vx-balance-hero-hq.png');
+      background-repeat:no-repeat;
+      background-size:120% 120%,120% 120%,120% 120%;
+      background-position:
+        center calc(50% + var(--vx-bg-shift)),
+        center calc(50% + var(--vx-bg-shift)),
+        center calc(50% + var(--vx-bg-shift));
+      transition:background-position .28s cubic-bezier(.22,1,.36,1);
+    }
+
+    .blue-mode-shell::after{
+      content:'';
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(circle at 78% 18%, rgba(125,177,255,0.14), transparent 28%),
+        linear-gradient(135deg, transparent 0%, transparent 58%, rgba(92,139,255,0.08) 100%);
+      transform:translate3d(calc(var(--vx-bg-shift) * -0.12), 0, 0) scale(1.06);
+      transition:transform .28s cubic-bezier(.22,1,.36,1);
+      pointer-events:none;
     }
 
     body.login-check .blue-mode-shell{
@@ -2037,135 +2120,469 @@
 
     .blue-mode-panel{
       position:absolute;
-      top:24px;
-      left:24px;
-      width:min(420px, calc(100vw - 40px));
+      z-index:1;
+      --vx-panel-shift:0px;
+      top:clamp(24px, 8vh, 72px);
+      left:max(32px, calc(50% - 630px));
+      width:min(500px, calc(50vw - 84px));
+      padding:10px 0 18px;
       opacity:0;
-      transform:translateY(-10px);
+      transform:translate3d(0,calc(var(--vx-panel-shift) - 10px),0);
       pointer-events:none;
       transition:opacity .3s ease,transform .3s ease;
     }
 
     .blue-mode-panel.is-visible{
       opacity:1;
-      transform:translateY(0);
+      transform:translate3d(0,var(--vx-panel-shift),0);
       pointer-events:auto;
+    }
+
+    .blue-mode-panel::before{
+      content:'';
+      position:absolute;
+      top:-12px;
+      left:0;
+      width:118px;
+      height:2px;
+      border-radius:999px;
+      background:linear-gradient(90deg, #6bb8ff, #8b7bff 62%, transparent);
+      box-shadow:0 0 18px rgba(107,184,255,0.42);
+      pointer-events:none;
+    }
+
+    .vx-balance-kicker{
+      margin-bottom:9px;
+      color:rgba(202,226,249,0.74);
+      font-size:10px;
+      font-weight:760;
+      letter-spacing:.16em;
+      line-height:1;
+      text-transform:uppercase;
+      text-shadow:0 8px 22px rgba(0,0,0,0.44);
     }
 
     .vx-title{
       margin:0;
-      font-size:clamp(32px, 5vw, 52px);
-      line-height:1.05;
-      letter-spacing:.02em;
+      font-size:clamp(34px, 5vw, 48px);
+      line-height:1.08;
+      letter-spacing:.005em;
       color:#fff;
       font-weight:760;
-      text-shadow:0 8px 26px rgba(0,0,0,0.38);
+      text-shadow:0 14px 32px rgba(0,0,0,0.46);
+    }
+
+    .vx-settings-button{
+      position:absolute;
+      z-index:2;
+      top:clamp(22px, 5vh, 42px);
+      right:clamp(18px, 5vw, 72px);
+      width:42px;
+      height:42px;
+      display:grid;
+      place-items:center;
+      border:1px solid rgba(205,226,249,0.28);
+      border-radius:50%;
+      background:rgba(7,19,38,0.58);
+      color:rgba(241,248,255,0.86);
+      box-shadow:0 12px 28px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.1);
+      backdrop-filter:blur(14px) saturate(126%);
+      cursor:pointer;
+      font-size:18px;
+      line-height:1;
+      transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease;
+    }
+
+    .vx-settings-button:hover,
+    .vx-settings-button:focus-visible,
+    .vx-settings-button[aria-expanded="true"]{
+      border-color:rgba(151,205,255,0.7);
+      background:rgba(29,112,214,0.44);
+      color:#fff;
+      transform:translateY(-1px) rotate(18deg);
+      outline:none;
+    }
+
+    .vx-language-menu{
+      position:absolute;
+      z-index:4;
+      top:calc(clamp(22px, 5vh, 42px) + 50px);
+      right:clamp(18px, 5vw, 72px);
+      width:164px;
+      padding:8px;
+      border:1px solid rgba(205,226,249,0.24);
+      border-radius:14px;
+      background:rgba(7,18,35,0.9);
+      box-shadow:0 18px 40px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+      backdrop-filter:blur(18px) saturate(130%);
+    }
+
+    .vx-language-title{
+      padding:6px 9px 8px;
+      color:rgba(190,218,246,0.62);
+      font-size:10px;
+      font-weight:760;
+      letter-spacing:.13em;
+      text-transform:uppercase;
+    }
+
+    .vx-language-menu button:not(.vx-settings-button){
+      width:100%;
+      min-height:34px;
+      border:0;
+      border-radius:8px;
+      background:transparent;
+      color:rgba(238,246,255,0.78);
+      text-align:left;
+      padding:0 9px;
+      font-size:12px;
+      cursor:pointer;
+      transition:background .16s ease,color .16s ease;
+    }
+
+    .vx-language-menu button:not(.vx-settings-button):hover,
+    .vx-language-menu button:not(.vx-settings-button):focus-visible,
+    .vx-language-menu button[aria-checked="true"]{
+      background:rgba(104,166,239,0.18);
+      color:#fff;
+      outline:none;
+    }
+
+    .vx-analytics-panel{
+      position:absolute;
+      z-index:1;
+      top:clamp(24px, 8vh, 72px);
+      left:calc(50% + 112px);
+      right:auto;
+      width:min(500px, calc(50vw - 84px));
+      height:calc(100vh - clamp(48px, 16vh, 144px));
+      min-height:540px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+      pointer-events:auto;
+    }
+
+    .vx-profit-card,
+    .vx-history-card{
+      border:0;
+      border-radius:0;
+      background:transparent;
+      box-shadow:none;
+      backdrop-filter:none;
+    }
+
+    .vx-profit-card{
+      flex:0 0 auto;
+      padding:10px 0 10px;
+    }
+
+    .vx-analytics-heading,
+    .vx-history-heading{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:14px;
+    }
+
+    .vx-analytics-kicker{
+      color:rgba(206,229,252,0.68);
+      font-size:10px;
+      font-weight:760;
+      letter-spacing:.14em;
+      line-height:1.2;
+      text-transform:uppercase;
+      text-shadow:0 8px 22px rgba(0,0,0,0.5);
+    }
+
+    .vx-analytics-heading h2,
+    .vx-history-heading h2{
+      margin:5px 0 0;
+      color:#f3f8ff;
+      font-size:20px;
+      font-weight:720;
+      letter-spacing:.005em;
+      line-height:1.15;
+      text-shadow:0 10px 26px rgba(0,0,0,0.48);
+    }
+
+    .vx-profit-total{
+      color:#8de1c1;
+      font-size:14px;
+      font-weight:760;
+      white-space:nowrap;
+      text-shadow:0 8px 22px rgba(0,0,0,0.42);
+    }
+
+    .vx-profit-chart-wrap{
+      position:relative;
+      height:180px;
+      margin-top:18px;
+      overflow:hidden;
+      border-bottom:1px solid rgba(214,234,255,0.18);
+    }
+
+    .vx-profit-chart{
+      display:block;
+      width:100%;
+      height:100%;
+      overflow:visible;
+    }
+
+    .vx-chart-empty{
+      position:absolute;
+      inset:0;
+      display:grid;
+      place-items:center;
+      color:rgba(220,235,250,0.5);
+      font-size:12px;
+      pointer-events:none;
+    }
+
+    .vx-history-card{
+      min-height:0;
+      flex:1 1 auto;
+      display:flex;
+      flex-direction:column;
+      padding:16px 0 0;
+    }
+
+    .vx-history-count{
+      min-width:28px;
+      height:24px;
+      display:grid;
+      place-items:center;
+      border:0;
+      border-radius:0;
+      color:rgba(202,226,249,0.78);
+      font-size:11px;
+      font-weight:760;
+      text-shadow:0 8px 22px rgba(0,0,0,0.44);
+    }
+
+    .vx-history-list{
+      min-height:0;
+      overflow-y:auto;
+      margin-top:14px;
+      padding-right:2px;
+      scrollbar-width:thin;
+      scrollbar-color:rgba(206,229,252,0.28) transparent;
+    }
+
+    .vx-history-list::-webkit-scrollbar{ width:5px; }
+    .vx-history-list::-webkit-scrollbar-thumb{
+      border-radius:999px;
+      background:rgba(206,229,252,0.28);
+    }
+
+    .vx-history-item{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:10px;
+      padding:12px 0 13px;
+      border-bottom:1px solid rgba(214,234,255,0.14);
+    }
+
+    .vx-history-item:last-child{ border-bottom:0; }
+
+    .vx-history-title{
+      overflow:hidden;
+      color:rgba(241,247,255,0.9);
+      font-size:12px;
+      font-weight:650;
+      line-height:1.35;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      text-shadow:0 7px 18px rgba(0,0,0,0.5);
+    }
+
+    .vx-history-meta{
+      margin-top:4px;
+      overflow:hidden;
+      color:rgba(207,226,247,0.58);
+      font-size:10px;
+      line-height:1.3;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      text-shadow:0 7px 18px rgba(0,0,0,0.45);
+    }
+
+    .vx-history-amount{
+      align-self:center;
+      color:#8de1c1;
+      font-size:12px;
+      font-weight:760;
+      text-align:right;
+      white-space:nowrap;
+      text-shadow:0 7px 18px rgba(0,0,0,0.44);
+    }
+
+    .vx-history-amount.is-debit{ color:#ffb6ae; }
+
+    .vx-history-empty{
+      display:grid;
+      min-height:130px;
+      place-items:center;
+      color:rgba(220,235,250,0.5);
+      font-size:12px;
+      text-align:center;
+      text-shadow:0 7px 18px rgba(0,0,0,0.42);
     }
 
     .vx-auth-row{
-      margin-top:8px;
+      margin-top:16px;
       display:flex;
       align-items:center;
       justify-content:space-between;
       gap:10px;
-      padding:4px 0;
+      min-height:36px;
+      padding:8px 0 8px 10px;
+      border-left:2px solid rgba(98,196,166,0.82);
+      background:linear-gradient(90deg, rgba(98,196,166,0.08), transparent 72%);
     }
 
     .vx-auth-id{
       font-size:11px;
-      color:rgba(226,241,255,0.82);
+      color:rgba(226,241,255,0.76);
       overflow:hidden;
       text-overflow:ellipsis;
       white-space:nowrap;
       flex:1;
       font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;
+      text-shadow:0 7px 18px rgba(0,0,0,0.48);
+    }
+
+    .vx-auth-id::before{
+      content:'Connected';
+      display:block;
+      margin-bottom:2px;
+      color:#8de1c1;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      font-size:10px;
+      font-weight:700;
+      letter-spacing:.04em;
     }
 
     .cash-actions{
-      margin-top:10px;
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
+      margin-top:20px;
+      width:100%;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      align-items:stretch;
+      gap:18px;
+      padding:0;
+      border:0;
+      border-radius:0;
+      background:transparent;
     }
 
     .cash-action-btn{
-      border:none;
+      position:relative;
+      border:0;
+      min-height:34px;
+      border-radius:0;
       background:transparent;
-      color:rgba(255,255,255,0.58);
-      font-size:18px;
-      font-weight:540;
+      color:rgba(235,245,255,0.78);
+      font-size:14px;
+      font-weight:700;
       line-height:1.2;
       cursor:pointer;
-      padding:2px 0;
-      transition:color .2s ease;
+      padding:0;
+      text-align:left;
+      text-shadow:0 8px 22px rgba(0,0,0,0.42);
+      transition:color .2s ease,transform .2s ease;
+    }
+
+    .cash-action-btn::after{
+      content:'';
+      position:absolute;
+      left:0;
+      bottom:2px;
+      width:100%;
+      height:1px;
+      background:linear-gradient(90deg, rgba(107,184,255,0.72), rgba(139,123,255,0.58), transparent);
+      transform:scaleX(.46);
+      transform-origin:left center;
+      opacity:.58;
+      transition:transform .2s ease,opacity .2s ease;
     }
 
     .cash-action-btn:hover,
     .cash-action-btn:focus-visible{
       color:#fff;
+      transform:translateY(-1px);
       outline:none;
     }
 
+    .cash-action-btn:hover::after,
+    .cash-action-btn:focus-visible::after{
+      transform:scaleX(.82);
+      opacity:1;
+    }
+
     .cash-divider{
-      color:rgba(255,255,255,0.45);
-      font-size:17px;
-      user-select:none;
+      display:none;
     }
 
     .rewards-caption{
-      margin-top:14px;
-      font-size:14px;
-      color:rgba(255,255,255,0.5);
-      letter-spacing:.01em;
+      margin-top:26px;
+      padding-bottom:9px;
+      border-bottom:1px solid rgba(214,234,255,0.16);
+      font-size:11px;
+      color:rgba(206,229,252,0.76);
+      font-weight:760;
+      letter-spacing:.15em;
+      text-transform:uppercase;
+      text-shadow:0 7px 18px rgba(0,0,0,0.42);
     }
 
     .rewards-list{
-      margin-top:8px;
+      margin-top:0;
       width:100%;
-      min-height:clamp(120px, 26vh, 200px);
+      min-height:clamp(110px, 22vh, 180px);
       padding:0;
       display:block;
     }
 
     .rewards-login-wrap{
-      min-height:clamp(120px, 24vh, 176px);
+      min-height:clamp(110px, 22vh, 160px);
       display:flex;
       align-items:center;
       justify-content:center;
-      padding:6px 0;
+      padding:18px 0 8px;
     }
 
     .rewards-login-btn{
-      width:min(250px, 92%);
-      min-height:clamp(48px, 7vh, 56px);
-      border-radius:16px;
-      border:1px solid rgba(173,215,255,0.58);
-      background:linear-gradient(145deg, rgba(31,73,132,0.7), rgba(15,36,88,0.78));
-      color:#ecf5ff;
-      font-size:clamp(16px, 3.2vw, 20px);
+      width:min(300px, 100%);
+      min-height:52px;
+      border-radius:11px;
+      border:1px solid rgba(214,231,249,0.86);
+      background:#f7fafc;
+      color:#172b47;
+      font-size:15px;
       font-weight:700;
       letter-spacing:.01em;
       cursor:pointer;
-      box-shadow:0 8px 22px rgba(5,15,44,0.38);
+      box-shadow:0 12px 26px rgba(0,0,0,0.2),0 2px 0 rgba(255,255,255,0.42) inset;
       transition:transform .2s ease,box-shadow .2s ease,background .2s ease;
     }
 
     .rewards-login-btn:hover,
     .rewards-login-btn:focus-visible{
-      background:linear-gradient(145deg, rgba(52,99,166,0.75), rgba(22,47,108,0.82));
+      background:#fff;
       transform:translateY(-1px);
-      box-shadow:0 10px 24px rgba(5,15,44,0.46);
+      box-shadow:0 15px 30px rgba(0,0,0,0.27),0 2px 0 rgba(255,255,255,0.55) inset;
       outline:none;
     }
 
     .stripe-setup-card{
-      margin:8px 0 14px;
-      padding:12px;
-      border-radius:14px;
-      border:1px solid rgba(139,190,255,0.24);
-      background:linear-gradient(145deg, rgba(10,28,70,0.52), rgba(4,12,32,0.52));
-      box-shadow:0 12px 34px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08);
-      backdrop-filter:blur(12px);
+      margin:18px 0 18px;
+      padding:14px;
+      border-radius:13px;
+      border:1px solid rgba(164,203,247,0.22);
+      background:rgba(255,255,255,0.055);
+      box-shadow:0 12px 26px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.06);
+      backdrop-filter:blur(12px) saturate(120%);
     }
 
     .stripe-setup-row{
@@ -2177,14 +2594,14 @@
 
     .stripe-setup-copy{
       min-width:0;
-      color:rgba(235,246,255,0.82);
+      color:rgba(228,240,252,0.72);
       font-size:12px;
       line-height:1.35;
     }
 
     .stripe-setup-copy strong{
       display:block;
-      color:#ffffff;
+      color:#f5f9ff;
       font-size:13px;
       font-weight:760;
       line-height:1.3;
@@ -2193,22 +2610,23 @@
     .stripe-setup-btn{
       flex:0 0 auto;
       min-height:34px;
-      border-radius:10px;
-      border:1px solid rgba(130,174,255,0.45);
-      background:linear-gradient(135deg, rgba(18,55,130,0.88), rgba(95,84,255,0.78));
+      border-radius:9px;
+      border:1px solid rgba(151,205,255,0.52);
+      background:#1d70d6;
       color:#f7fbff;
       font-size:12px;
       font-weight:800;
       padding:0 12px;
       cursor:pointer;
-      box-shadow:0 8px 18px rgba(30,86,210,0.24);
-      transition:transform .18s ease,opacity .18s ease,box-shadow .18s ease;
+      box-shadow:0 8px 18px rgba(30,86,210,0.2),0 1px 0 rgba(255,255,255,0.24) inset;
+      transition:transform .18s ease,opacity .18s ease,box-shadow .18s ease,background .18s ease;
     }
 
     .stripe-setup-btn:hover,
     .stripe-setup-btn:focus-visible{
+      background:#2b83eb;
       transform:translateY(-1px);
-      box-shadow:0 10px 24px rgba(56,104,255,0.32);
+      box-shadow:0 11px 24px rgba(56,104,255,0.32),0 1px 0 rgba(255,255,255,0.3) inset;
       outline:none;
     }
 
@@ -2243,10 +2661,11 @@
 
     .ivucx-notification-card{
       width:100%;
-      border:1px solid rgba(139,190,255,0.2);
-      border-radius:12px;
-      background:linear-gradient(135deg, rgba(9,31,82,0.46), rgba(28,36,102,0.38));
-      box-shadow:0 10px 24px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.08);
+      border:1px solid rgba(164,203,247,0.18);
+      border-left:2px solid #6bb8ff;
+      border-radius:10px;
+      background:rgba(255,255,255,0.045);
+      box-shadow:0 10px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.05);
       color:rgba(238,247,255,0.9);
       text-align:left;
       padding:10px 12px;
@@ -2255,7 +2674,7 @@
 
     .ivucx-notification-title{
       display:block;
-      color:#9fc4ff;
+      color:#b6d8ff;
       font-size:12px;
       font-weight:760;
       line-height:1.25;
@@ -2275,12 +2694,15 @@
       list-style:none;
       display:flex;
       flex-direction:column;
-      gap:14px;
+      gap:8px;
     }
 
     .rewards-item{
       display:block;
-      padding:0;
+      padding:10px 12px;
+      border:1px solid rgba(164,203,247,0.14);
+      border-radius:10px;
+      background:rgba(255,255,255,0.035);
       color:rgba(255,255,255,0.92);
       line-height:1.45;
     }
@@ -2289,46 +2711,50 @@
       display:block;
       font-size:clamp(14px, 2.4vw, 17px);
       font-weight:600;
-      color:#8ec5ff;
+      color:#b5d9ff;
       letter-spacing:.01em;
       margin-bottom:4px;
     }
 
     .rewards-item-amount{
       display:block;
-      color:rgba(255,255,255,0.68);
+      color:rgba(226,239,253,0.66);
       font-size:clamp(12px, 2.1vw, 14px);
     }
 
     .rewards-empty{
-      min-height:clamp(120px, 24vh, 176px);
+      min-height:clamp(110px, 22vh, 160px);
       display:flex;
       align-items:center;
       justify-content:center;
-      color:rgba(255,255,255,0.58);
+      color:rgba(218,233,249,0.54);
       font-size:14px;
       text-align:center;
       padding:18px 0;
     }
 
     .rewards-logout-btn{
-      border:1px solid rgba(255,255,255,0.35);
-      background:rgba(255,255,255,0.12);
-      color:#fff;
-      border-radius:9px;
+      border:1px solid rgba(164,203,247,0.28);
+      background:rgba(255,255,255,0.06);
+      color:rgba(241,247,255,0.84);
+      border-radius:8px;
       height:30px;
       padding:0 10px;
       font-size:12px;
       cursor:pointer;
+      transition:background .18s ease,border-color .18s ease,color .18s ease;
     }
 
     .rewards-logout-btn:hover{
-      background:rgba(255,255,255,0.22);
+      background:rgba(255,255,255,0.13);
+      border-color:rgba(194,220,247,0.48);
+      color:#fff;
     }
 
     .login-popup{
       position:absolute;
       inset:0;
+      z-index:10;
       display:none;
       align-items:center;
       justify-content:center;
@@ -2651,6 +3077,17 @@
 
     .email-login-row .login-popup-input{
       height:46px;
+    }
+
+    .email-code-row{
+      margin-top:8px;
+    }
+
+    .email-code-row .login-popup-input{
+      height:46px;
+      text-align:center;
+      letter-spacing:.18em;
+      font-weight:720;
     }
 
     .email-login-btn{
@@ -3006,6 +3443,20 @@
       transition:transform .2s ease,border-color .2s ease,background-color .2s ease,opacity .2s ease;
     }
 
+    .keep-library-hotzone{
+      position:fixed;
+      top:0;
+      left:0;
+      bottom:0;
+      width:30px;
+      z-index:44;
+      pointer-events:none;
+    }
+
+    body:not(.scrolled):not(.suggestions-open):not(.login-check) .keep-library-hotzone{
+      pointer-events:auto;
+    }
+
     body:not(.scrolled):not(.suggestions-open):not(.login-check) .keep-library-button{
       opacity:1;
       pointer-events:auto;
@@ -3223,41 +3674,32 @@
     }
 
     .flash-read-button{
-      position:fixed;
-      top:20px;
-      right:22px;
-      z-index:47;
-      min-height:42px;
-      display:inline-flex;
+      width:40px;
+      height:40px;
+      min-height:40px;
+      display:flex;
       align-items:center;
-      justify-content:center;
+      justify-content:flex-start;
       gap:9px;
-      padding:0 16px;
-      border:1px solid var(--search-chat-card-border);
+      padding:0 10px;
+      border:1px solid var(--search-chat-item-border);
       border-radius:14px;
-      background:color-mix(in srgb, var(--bg-white) 88%, transparent);
+      background:var(--search-chat-item-bg);
       color:var(--search-chat-card-text);
-      box-shadow:0 18px 46px rgba(15,23,42,0.12);
-      backdrop-filter:blur(18px) saturate(1.25);
       font:inherit;
       font-size:13px;
       font-weight:780;
       cursor:pointer;
-      opacity:0;
-      transform:translateY(-8px);
-      pointer-events:none;
-      transition:opacity .2s ease,transform .22s cubic-bezier(.22,1,.36,1),border-color .2s ease,background-color .2s ease;
+      overflow:hidden;
+      transition:width .26s cubic-bezier(.22,1,.36,1),background-color .18s ease,border-color .18s ease,transform .16s ease,color .18s ease,opacity .18s ease;
     }
 
-    body.suggestions-open .flash-read-button{
-      opacity:1;
-      transform:translateY(0);
-      pointer-events:auto;
+    body.search-sidebar-open .flash-read-button{
+      width:100%;
     }
 
     body.flash-reader-open .flash-read-button{
-      opacity:0;
-      pointer-events:none;
+      opacity:.46;
     }
 
     body.suggestions-open .flash-read-button:disabled{
@@ -3267,9 +3709,7 @@
 
     body.flash-reader-open .flash-read-button,
     body.flash-reader-open .flash-read-button:disabled{
-      display:none;
-      opacity:0;
-      pointer-events:none;
+      opacity:.46;
     }
 
     .flash-read-button:hover,
@@ -3280,8 +3720,9 @@
     }
 
     .flash-read-button svg{
-      width:17px;
-      height:17px;
+      width:18px;
+      min-width:18px;
+      height:18px;
       fill:none;
       stroke:currentColor;
       stroke-width:2;
@@ -3290,10 +3731,24 @@
     }
 
     body.mode-q .flash-read-button{
-      border-color:rgba(255,255,255,0.13);
-      background:rgba(255,255,255,0.05);
-      color:#edf2ff;
-      box-shadow:0 18px 50px rgba(0,0,0,0.32);
+      border-color:rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.055);
+      color:#eef4ff;
+    }
+
+    .flash-read-label{
+      white-space:nowrap;
+      opacity:0;
+      transform:translateX(-6px);
+      font-size:14px;
+      font-weight:720;
+      letter-spacing:0;
+      transition:opacity .18s ease,transform .18s ease;
+    }
+
+    body.search-sidebar-open .flash-read-label{
+      opacity:1;
+      transform:translateX(0);
     }
 
     .flash-reader-sidebar{
@@ -3597,11 +4052,6 @@
       .flash-reader-sidebar.has-syntax .flash-reader-main{
         grid-template-columns:1fr;
         grid-template-rows:minmax(180px, .72fr) minmax(220px, .78fr);
-      }
-
-      .flash-read-button{
-        right:14px;
-        top:14px;
       }
     }
 
@@ -4047,7 +4497,7 @@
     }
 
     body.suggestions-open .search-sidebar-hotzone{
-      pointer-events:auto;
+      pointer-events:none;
     }
 
     .search-chat-sidebar{
@@ -4101,6 +4551,73 @@
       gap:12px;
       padding:10px 8px;
       box-sizing:border-box;
+    }
+
+    .search-sidebar-toggle{
+      width:40px;
+      height:40px;
+      min-height:40px;
+      border:1px solid var(--search-chat-item-border);
+      border-radius:14px;
+      display:flex;
+      align-items:center;
+      justify-content:flex-start;
+      gap:10px;
+      padding:0 10px;
+      background:var(--search-chat-item-bg);
+      color:var(--search-chat-card-text);
+      cursor:pointer;
+      overflow:hidden;
+      transition:width .26s cubic-bezier(.22,1,.36,1),background-color .18s ease,border-color .18s ease,transform .16s ease,color .18s ease;
+    }
+
+    body.search-sidebar-open .search-sidebar-toggle{
+      width:100%;
+    }
+
+    .search-sidebar-toggle:hover,
+    .search-sidebar-toggle:focus-visible{
+      border-color:var(--search-chat-item-hover-border);
+      background:var(--search-chat-item-hover-bg);
+      outline:none;
+    }
+
+    body.mode-q .search-sidebar-toggle{
+      border-color:rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.055);
+      color:#eef4ff;
+    }
+
+    body.mode-q .search-sidebar-toggle:hover,
+    body.mode-q .search-sidebar-toggle:focus-visible{
+      border-color:rgba(143,185,255,0.4);
+      background:rgba(87,132,209,0.16);
+    }
+
+    .search-sidebar-toggle svg{
+      width:18px;
+      min-width:18px;
+      height:18px;
+      stroke:currentColor;
+      stroke-width:2;
+      fill:none;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+
+    .search-sidebar-toggle-label{
+      white-space:nowrap;
+      opacity:0;
+      transform:translateX(-6px);
+      font-size:14px;
+      font-weight:720;
+      letter-spacing:0;
+      transition:opacity .18s ease,transform .18s ease;
+    }
+
+    body.search-sidebar-open .search-sidebar-toggle-label{
+      opacity:1;
+      transform:translateX(0);
     }
 
     .chat-keep-button{
@@ -5407,11 +5924,45 @@
       }
     }
 
+    @media (max-width:900px){
+      .blue-mode-shell{
+        overflow-x:hidden;
+        overflow-y:auto;
+        padding:18px 0 24px;
+      }
+
+      .blue-mode-panel,
+      .vx-analytics-panel{
+        position:relative;
+        top:auto;
+        left:auto;
+        right:auto;
+        width:calc(100% - 32px);
+        margin:0 16px;
+      }
+
+      .vx-analytics-panel{
+        height:430px;
+        min-height:430px;
+        margin-top:16px;
+      }
+
+      .vx-history-card{
+        min-height:210px;
+      }
+
+      .login-popup{
+        position:fixed;
+      }
+    }
+
     @media (max-width:700px){
       .blue-mode-panel{
-        top:18px;
-        left:16px;
+        top:auto;
+        left:auto;
         width:calc(100vw - 32px);
+        margin:0 16px;
+        padding:24px 18px 22px;
       }
 
       .vx-title{
@@ -5509,7 +6060,7 @@
         <textarea
           class="search-input"
           id="searchInput"
-          placeholder="Search..."
+          placeholder="Search    (shift + enter)"
           rows="1"
         ></textarea>
       </div>
@@ -5559,6 +6110,7 @@
     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
   </svg>
 </button>
+<div class="keep-library-hotzone" id="keepLibraryHotzone" aria-hidden="true"></div>
 
 <aside class="keep-library-sidebar" id="keepLibrarySidebar" aria-label="Saved chats" hidden>
   <div class="keep-library-inner">
@@ -5575,13 +6127,6 @@
   <button class="keep-context-action" type="button" data-action="rename">Change name</button>
   <button class="keep-context-action danger" type="button" data-action="delete">Delete</button>
 </div>
-
-<button class="flash-read-button" id="flashReadButton" type="button" aria-label="Open flash reading">
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M13 2L4 14h7l-1 8 10-13h-7z"></path>
-  </svg>
-  <span>フラッシュ読解</span>
-</button>
 
 <aside class="flash-reader-sidebar" id="flashReaderSidebar" aria-label="Flash reading" aria-hidden="true" hidden>
   <div class="flash-reader-inner">
@@ -5661,6 +6206,20 @@
 <div class="search-sidebar-hotzone" id="searchSidebarHotzone" aria-hidden="true" hidden></div>
 <aside class="search-chat-sidebar" id="searchChatSidebar" aria-label="Search chat sidebar" hidden>
   <div class="search-sidebar-inner">
+    <button class="flash-read-button" id="flashReadButton" type="button" aria-label="Open flash reading" title="Flash reading">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M13 2L4 14h7l-1 8 10-13h-7z"></path>
+      </svg>
+      <span class="flash-read-label">Flash</span>
+    </button>
+    <button class="search-sidebar-toggle" id="searchSidebarToggle" type="button" aria-label="Open history navigation" title="History Navigation">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 5h18"></path>
+        <path d="M3 12h14"></path>
+        <path d="M3 19h10"></path>
+      </svg>
+      <span class="search-sidebar-toggle-label">History</span>
+    </button>
     <button class="chat-keep-button" id="chatKeepButton" type="button" aria-label="Keep current search chat" title="Keep">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
@@ -5757,18 +6316,54 @@
 
 <div class="blue-mode-shell" id="blueModeShell">
   <section class="blue-mode-panel" id="blueModePanel" aria-live="polite">
+    <div class="vx-balance-kicker" data-vx-copy="accountBalance">Account balance</div>
     <h1 class="vx-title">Vx -- (¥ --)</h1>
     <div class="vx-auth-row" id="vxAuthRow" hidden></div>
 
     <div class="cash-actions" aria-label="Withdraw and deposit actions">
-      <button class="cash-action-btn" id="withdrawBtn" type="button">Withdrawals</button>
+      <button class="cash-action-btn" id="withdrawBtn" type="button" data-vx-copy="withdrawals">Withdrawals</button>
       <span class="cash-divider">/</span>
-      <button class="cash-action-btn" id="depositBtn" type="button">Deposits</button>
+      <button class="cash-action-btn" id="depositBtn" type="button" data-vx-copy="deposits">Deposits</button>
     </div>
 
-    <div class="rewards-caption">Rewards</div>
+    <div class="rewards-caption" data-vx-copy="rewards">Rewards</div>
     <div class="rewards-list" id="rewardsList"></div>
   </section>
+
+  <button class="vx-settings-button" id="vxSettingsButton" type="button" aria-label="Language settings" aria-expanded="false" aria-controls="vxLanguageMenu" title="Language settings">
+    <span aria-hidden="true">⚙</span>
+  </button>
+  <div class="vx-language-menu" id="vxLanguageMenu" role="menu" hidden>
+    <div class="vx-language-title" data-vx-copy="language">Language</div>
+    <button type="button" role="menuitemradio" data-vx-language="en" aria-checked="true">English</button>
+    <button type="button" role="menuitemradio" data-vx-language="ja" aria-checked="false">日本語</button>
+  </div>
+
+  <aside class="vx-analytics-panel" id="vxAnalyticsPanel" aria-label="Account analytics">
+    <section class="vx-profit-card">
+      <div class="vx-analytics-heading">
+        <div>
+          <div class="vx-analytics-kicker" data-vx-copy="statistics">Statistics</div>
+          <h2 data-vx-copy="profit">Profit</h2>
+        </div>
+        <span class="vx-profit-total" id="vxProfitTotal">Vx 0</span>
+      </div>
+      <div class="vx-profit-chart-wrap">
+        <svg class="vx-profit-chart" id="vxProfitChart" viewBox="0 0 560 190" preserveAspectRatio="none" role="img" aria-label="Profit history chart"></svg>
+        <div class="vx-chart-empty" id="vxChartEmpty" data-vx-copy="noActivity">No activity yet</div>
+      </div>
+    </section>
+    <section class="vx-history-card">
+      <div class="vx-history-heading">
+        <div>
+          <div class="vx-analytics-kicker" data-vx-copy="accountActivity">Account activity</div>
+          <h2 data-vx-copy="recentHistory">Recent history</h2>
+        </div>
+        <span class="vx-history-count" id="vxHistoryCount">0</span>
+      </div>
+      <div class="vx-history-list" id="vxHistoryList" aria-live="polite"></div>
+    </section>
+  </aside>
 
   <div class="login-popup" id="loginPopup" aria-hidden="true">
     <div class="login-popup-card" role="dialog" aria-modal="true" aria-labelledby="loginPopupTitle">
@@ -5797,6 +6392,9 @@
             <div class="email-login-row">
               <input class="login-popup-input" id="loginEmailInput" type="email" autocomplete="email" inputmode="email" placeholder="name@example.com" />
               <button class="email-login-btn" id="emailLoginBtn" type="button">Login</button>
+            </div>
+            <div class="email-code-row" id="emailCodeRow" hidden>
+              <input class="login-popup-input" id="loginEmailCodeInput" type="text" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="6-digit code" />
             </div>
           </form>
         </section>
@@ -5882,11 +6480,13 @@
   const suggestionBody = document.getElementById('suggestionBody');
   const suggestionPanel = suggestionPane ? suggestionPane.querySelector('.suggestion-panel') : null;
   const searchSidebarHotzone = document.getElementById('searchSidebarHotzone');
+  const searchSidebarToggle = document.getElementById('searchSidebarToggle');
   const searchChatSidebar = document.getElementById('searchChatSidebar');
   const chatKeepButton = document.getElementById('chatKeepButton');
   const searchKeepStatus = document.getElementById('searchKeepStatus');
   const searchSidebarTurnList = document.getElementById('searchSidebarTurnList');
   const keepLibraryButton = document.getElementById('keepLibraryButton');
+  const keepLibraryHotzone = document.getElementById('keepLibraryHotzone');
   const keepLibrarySidebar = document.getElementById('keepLibrarySidebar');
   const keepLibraryClose = document.getElementById('keepLibraryClose');
   const keepLibraryStatus = document.getElementById('keepLibraryStatus');
@@ -5968,7 +6568,17 @@
   let selectionReturnScreen = 'gray-compact';
   const selectionModeEl = document.getElementById('selectionMode');
   const selectionCancel = document.getElementById('selectionCancel');
+  const blueModeShell = document.getElementById('blueModeShell');
   const blueModePanel = document.getElementById('blueModePanel');
+  const vxSettingsButton = document.getElementById('vxSettingsButton');
+  const vxLanguageMenu = document.getElementById('vxLanguageMenu');
+  const vxLanguageButtons = Array.from(document.querySelectorAll('[data-vx-language]'));
+  const vxAnalyticsPanel = document.getElementById('vxAnalyticsPanel');
+  const vxProfitChart = document.getElementById('vxProfitChart');
+  const vxProfitTotal = document.getElementById('vxProfitTotal');
+  const vxChartEmpty = document.getElementById('vxChartEmpty');
+  const vxHistoryList = document.getElementById('vxHistoryList');
+  const vxHistoryCount = document.getElementById('vxHistoryCount');
   const rewardsList = document.getElementById('rewardsList');
   const vxTitle = document.querySelector('.vx-title');
   const vxAuthRow = document.getElementById('vxAuthRow');
@@ -5978,6 +6588,8 @@
   const loginPopupSwitch = document.getElementById('loginPopupSwitch');
   const loginPopupViewPanels = Array.from(document.querySelectorAll('[data-auth-panel]'));
   const loginEmailInput = document.getElementById('loginEmailInput');
+  const loginEmailCodeInput = document.getElementById('loginEmailCodeInput');
+  const emailCodeRow = document.getElementById('emailCodeRow');
   const emailLoginBtn = document.getElementById('emailLoginBtn');
   const loginAccountIdInput = document.getElementById('loginAccountIdInput');
   const loginRecoveryInput = document.getElementById('loginRecoveryInput');
@@ -5993,6 +6605,8 @@
   const loginPopupStatus = document.getElementById('loginPopupStatus');
   const loginPopupCopy = document.getElementById('loginPopupCopy');
   const loginLoadingText = document.getElementById('loginLoadingText');
+  let pendingEmailLoginAddress = '';
+  let emailLoginBusy = false;
   const withdrawBtn = document.getElementById('withdrawBtn');
   const depositBtn = document.getElementById('depositBtn');
   const editorReturnContext = readEditorReturnContext();
@@ -6084,7 +6698,18 @@
 
   function getSearchSystemMode(){
     if(bodyEl.classList.contains('mode-q')) return 'dark';
+    if(document.documentElement.classList.contains('preload-dark')) return 'dark';
     return systemDarkMedia && systemDarkMedia.matches ? 'dark' : 'light';
+  }
+
+  function syncPersistedVisualTheme(){
+    const visualTheme = getSearchSystemMode();
+    document.documentElement.classList.toggle('preload-dark', visualTheme === 'dark');
+    document.documentElement.classList.toggle('preload-light', visualTheme !== 'dark');
+    document.documentElement.style.colorScheme = visualTheme;
+    document.documentElement.style.backgroundColor = visualTheme === 'dark' ? '#000000' : '';
+    writeLocalValue(VISUAL_THEME_PERSIST_KEY, visualTheme);
+    return visualTheme;
   }
 
   qBtn.addEventListener('click',e=>{
@@ -7018,6 +7643,23 @@
       e.preventDefault();
       handleEmailLoginSubmit();
     });
+    loginEmailInput.addEventListener('input', ()=>{
+      const currentEmail = normalizeLoginEmail(loginEmailInput.value);
+      if(pendingEmailLoginAddress && currentEmail !== pendingEmailLoginAddress){
+        resetEmailLoginChallenge();
+      }
+    });
+  }
+
+  if(loginEmailCodeInput){
+    loginEmailCodeInput.addEventListener('input', ()=>{
+      loginEmailCodeInput.value = String(loginEmailCodeInput.value || '').replace(/\D/g, '').slice(0, 6);
+    });
+    loginEmailCodeInput.addEventListener('keydown', e=>{
+      if(e.key !== 'Enter') return;
+      e.preventDefault();
+      handleEmailLoginSubmit();
+    });
   }
 
   if(loginPopupSwitch){
@@ -7065,6 +7707,7 @@
         clearLegacyAuth();
         syncLegacyImportVisibility();
 
+        setLoginStateCache(result);
         applyBlueModeAccountPayload(result);
         renderRewards();
         loginPopupDismissed = true;
@@ -7122,6 +7765,7 @@
           loginRecoveryInput.value = recoveryPassword;
         }
 
+        setLoginStateCache(result);
         applyBlueModeAccountPayload(result);
         renderRewards();
         loginPopupDismissed = true;
@@ -7308,6 +7952,7 @@
   }, true);
 
   const BRAND_SHIMMER_FALLBACK_MS = 7000;
+  let poseProblemShimmerPlayed = false;
 
   function finishTextShimmer(element){
     if(!element || !element.classList.contains('is-shimmering')) return;
@@ -7332,6 +7977,13 @@
 
   function schedulePoseProblemShimmer(delay = 120){
     if(!poseProblemBrand) return;
+    if(poseProblemShimmerPlayed) return;
+    if(document.readyState !== 'complete'){
+      window.addEventListener('load', ()=>schedulePoseProblemShimmer(delay), { once:true });
+      return;
+    }
+    if(state !== 1 || !bodyEl.classList.contains('scrolled') || container.classList.contains('expanded')) return;
+    poseProblemShimmerPlayed = true;
     runTextShimmer(poseProblemBrand, delay);
   }
 
@@ -7405,6 +8057,28 @@
     });
   }
 
+  if(vxSettingsButton){
+    vxSettingsButton.addEventListener('click', e=>{
+      e.stopPropagation();
+      const isOpen = vxLanguageMenu && !vxLanguageMenu.hidden;
+      setVxLanguageMenuOpen(!isOpen);
+    });
+  }
+
+  vxLanguageButtons.forEach(button=>{
+    button.addEventListener('click', ()=>{
+      setVxLanguage(button.getAttribute('data-vx-language') || 'en');
+      setVxLanguageMenuOpen(false);
+    });
+  });
+
+  document.addEventListener('click', e=>{
+    if(!vxLanguageMenu || vxLanguageMenu.hidden) return;
+    const target = e.target && typeof e.target.closest === 'function' ? e.target : null;
+    if(target && (target.closest('#vxLanguageMenu') || target.closest('#vxSettingsButton'))) return;
+    setVxLanguageMenuOpen(false);
+  });
+
   let expandedFixedHeight = null;
   let containerHeightCleanupTimer = null;
   let containerHeightAnimationFrame = 0;
@@ -7426,11 +8100,20 @@
   let blueModeRewards = [];
   let blueModeBalance = null;
   let blueModeNotifications = [];
+  let blueModeTransactions = [];
+  let vxScrollResetTimer = null;
+  let loginStateCache = null;
+  let loginStateCacheAt = 0;
+  let loginStateRequestPromise = null;
   let isRestoringPersistedMode = false;
   const MODE_PERSIST_KEY = 'ivucxModeSnapshotV1';
+  const VISUAL_THEME_PERSIST_KEY = 'ivucxVisualThemeV1';
   const COOKIE_HISTORY_CONSENT_KEY = 'ivucxCookieHistoryConsentV1';
   const COOKIE_HISTORY_COOKIE = 'ivucxEditHistoryV1';
   const SEARCH_KEEP_LOCAL_KEY = 'ivucxSearchChatKeepsV1';
+  const LOGIN_STATE_STORAGE_KEY = 'ivucxLoginStateCacheV1';
+  const VX_LANGUAGE_STORAGE_KEY = 'ivucxVxLanguageV1';
+  const LOGIN_STATE_CACHE_MS = 5 * 60 * 1000;
   const COOKIE_HISTORY_LIMIT = 6;
   const COOKIE_HISTORY_MAX_BYTES = 3500;
   const COOKIE_HISTORY_MAX_AGE_DAYS = 30;
@@ -7446,6 +8129,55 @@
   let skipNextModeStatePersist = false;
   let theoremDraftSaveTimer = null;
   let blueModeCheckToken = 0;
+  let vxLanguage = 'en';
+  const VX_COPY = {
+    en: {
+      accountBalance:'Account balance',
+      withdrawals:'Withdrawals',
+      deposits:'Deposits',
+      rewards:'Rewards',
+      language:'Language',
+      statistics:'Statistics',
+      profit:'Profit',
+      accountActivity:'Account activity',
+      recentHistory:'Recent history',
+      noActivity:'No activity yet',
+      signInToView:'Sign in to view account activity.',
+      continueGoogle:'Continue with Google',
+      logout:'Logout',
+      stripeSetup:'Stripe card setup',
+      stripeDescription:'Register a payout or payment card with Stripe.',
+      registerCard:'Register card',
+      opening:'Opening...',
+      noRewards:'No rewards available yet.',
+      credit:'Credit',
+      debit:'Debit',
+      accountActivityReason:'Account activity'
+    },
+    ja: {
+      accountBalance:'アカウント残高',
+      withdrawals:'出金',
+      deposits:'入金',
+      rewards:'報酬',
+      language:'言語',
+      statistics:'統計',
+      profit:'利益',
+      accountActivity:'アカウントの動き',
+      recentHistory:'最近の履歴',
+      noActivity:'まだ取引はありません',
+      signInToView:'ログインすると取引状況を確認できます。',
+      continueGoogle:'Googleで続行',
+      logout:'ログアウト',
+      stripeSetup:'Stripeカード設定',
+      stripeDescription:'Stripeに支払い・受取カードを登録します。',
+      registerCard:'カードを登録',
+      opening:'開いています...',
+      noRewards:'利用できる報酬はまだありません。',
+      credit:'入金',
+      debit:'出金',
+      accountActivityReason:'アカウント取引'
+    }
+  };
   let loginPopupDismissed = false;
   let googleOneTapInitialized = false;
   let stripeSetupBusy = false;
@@ -7467,7 +8199,11 @@
   let searchKeepStatusTimer = 0;
   let keepLibraryOpen = false;
   let keepLibraryBusy = false;
+  let keepLibraryLoaded = false;
+  let keepLibraryPreloadStarted = false;
   let keepLibraryChats = [];
+  let keepLibraryCloseTimer = 0;
+  let keepLibraryHideTimer = 0;
   let keepContextTargetId = '';
   let flashReaderOpen = false;
   let flashReaderPlaying = false;
@@ -7830,12 +8566,15 @@
     return fallback || 'CIC save failed.';
   }
 
-  async function fetchPendingCicJob(jobId){
+  async function fetchPendingCicJob(jobId, jobToken){
     const response = await fetch('/api/helper/jobs/' + encodeURIComponent(jobId), {
       method:'GET',
       cache:'no-store',
       credentials:'same-origin',
-      headers:{ 'Accept':'application/json' }
+      headers:{
+        'Accept':'application/json',
+        ...(jobToken ? { 'X-Ivucx-Job-Token':jobToken } : {})
+      }
     });
     const raw = await response.text();
     const payload = parseCicMonitorJson(raw);
@@ -7891,6 +8630,9 @@
       : null;
     if(directResult) return directResult;
     const jobId = pending && pending.jobId ? pending.jobId : '';
+    const jobToken = pending && (pending.jobToken || (pending.submitResult && pending.submitResult.jobToken))
+      ? (pending.jobToken || pending.submitResult.jobToken)
+      : '';
     if(!jobId){
       throw new Error('CIC request has no job id or result to save.');
     }
@@ -7899,7 +8641,7 @@
     while(Date.now() - startedAt < timeoutMs){
       let payload = null;
       try{
-        payload = await fetchPendingCicJob(jobId);
+        payload = await fetchPendingCicJob(jobId, jobToken);
       }catch(err){
         if(isTransientCicMonitorError(err)){
           await cicMonitorDelay(2600);
@@ -7934,7 +8676,10 @@
       credentials:'same-origin',
       headers:{
         'Content-Type':'application/json',
-        'Accept':'application/json'
+        'Accept':'application/json',
+        ...(pending.jobToken || (pending.submitResult && pending.submitResult.jobToken)
+          ? { 'X-Ivucx-Job-Token':pending.jobToken || pending.submitResult.jobToken }
+          : {})
       },
       body:JSON.stringify({
         title:proofPayload.title,
@@ -7951,6 +8696,7 @@
         requestedFormat:pending.requestedFormat,
         requestedAt:pending.requestedAt,
         jobId:pending.jobId || (pending.submitResult && pending.submitResult.jobId) || '',
+        jobToken:pending.jobToken || (pending.submitResult && pending.submitResult.jobToken) || '',
         result
       })
     });
@@ -8040,7 +8786,6 @@
         originalProblemId:solveContext.problemId,
         conditionalProblemId,
         conditionalTitle:proofPayload.title,
-        conditionalBounty:proofPayload.conditionalBounty || null,
         solveContext
       })
     });
@@ -8175,7 +8920,7 @@
     }
   }
 
-  async function persistPendingCicAttachments(problemId){
+  async function persistPendingCicAttachments(problemId, savedResult){
     if(!problemId || !theoremDraftStore || typeof theoremDraftStore.read !== 'function'){
       return { persisted:true, count:0, attachments:[] };
     }
@@ -8184,8 +8929,14 @@
     if(!attachments.length){
       return { persisted:true, count:0, attachments:[] };
     }
+    const attachmentToken = String(
+      savedResult && savedResult.attachmentToken
+      || savedResult && savedResult.storage && savedResult.storage.attachmentToken
+      || ''
+    ).trim();
     const plan = await postCicMonitorJson('/api/helper/attachments/sign', {
       problemId,
+      attachmentToken,
       attachments
     });
     const uploads = Array.isArray(plan.uploads) ? plan.uploads : [];
@@ -8207,6 +8958,7 @@
     }
     const saved = await postCicMonitorJson('/api/helper/attachments/complete', {
       problemId,
+      attachmentToken,
       attachments:completed
     });
     return {
@@ -8325,7 +9077,7 @@
       }
       const savedResult = await persistPendingCicProblem(pending, result);
       const problemId = getPendingCicProblemId(savedResult);
-      const attachmentResult = await persistPendingCicAttachments(problemId);
+      const attachmentResult = await persistPendingCicAttachments(problemId, savedResult);
       await resolvePendingProblemSolutionIfNeeded(pending, savedResult);
       await registerPendingProblemConditionalIfNeeded(pending, savedResult);
       const finalResult = savedResult && typeof savedResult === 'object'
@@ -8731,6 +9483,13 @@
     return requestAuthJson('/api/stripe-setup', 'POST');
   }
 
+  async function requestEmailVerification(action, payload = {}){
+    return requestAuthJson('/api/email-verification', 'POST', {
+      action,
+      ...payload
+    });
+  }
+
   function consumeStripeSetupReturn(){
     try{
       const url = new URL(window.location.href);
@@ -8813,7 +9572,8 @@
     if(!credential) return;
     try{
       const result = await requestAuthJson('/api/google-one-tap', 'POST', { credential });
-      const loginResult = await checkLogin();
+      clearLoginStateCache();
+      const loginResult = await checkLogin({ force:true });
       applyBlueModeAccountPayload(loginResult && loginResult.loggedIn ? loginResult : { ...result, loggedIn:true });
       if(result && typeof result.accountId === 'string'){
         saveBlueAccountHint(result.accountId);
@@ -9068,17 +9828,82 @@
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
   }
 
-  function handleEmailLoginSubmit(){
+  function resetEmailLoginChallenge(){
+    pendingEmailLoginAddress = '';
+    if(emailCodeRow) emailCodeRow.hidden = true;
+    if(loginEmailCodeInput) loginEmailCodeInput.value = '';
+    if(emailLoginBtn) emailLoginBtn.textContent = 'Login';
+  }
+
+  async function handleEmailLoginSubmit(){
+    if(emailLoginBusy) return;
     const email = normalizeLoginEmail(loginEmailInput ? loginEmailInput.value : '');
     if(!email){
       setPopupStatus('Enter a valid email address.');
       if(loginEmailInput) loginEmailInput.focus();
       return;
     }
+    const isConfirming = pendingEmailLoginAddress === email && emailCodeRow && !emailCodeRow.hidden;
+    const code = String(loginEmailCodeInput ? loginEmailCodeInput.value : '').replace(/\D/g, '');
+    if(isConfirming && code.length !== 6){
+      setPopupStatus('Enter the 6-digit code.');
+      if(loginEmailCodeInput) loginEmailCodeInput.focus();
+      return;
+    }
+
+    emailLoginBusy = true;
     if(emailLoginBtn){
       emailLoginBtn.disabled = true;
+      emailLoginBtn.textContent = isConfirming ? 'Verifying...' : 'Sending...';
     }
-    startBlueGoogleAuth(email);
+    try{
+      if(isConfirming){
+        const result = await requestEmailVerification('confirm', { email, code });
+        clearLoginStateCache();
+        const loginResult = await checkLogin({ force:true });
+        applyBlueModeAccountPayload(loginResult && loginResult.loggedIn ? loginResult : { ...result, loggedIn:true });
+        saveBlueAccountHint(email);
+        setPopupStatus('Email verified.');
+        resetEmailLoginChallenge();
+        if(state === 2){
+          renderRewards();
+          closeLoginPopup(true);
+          hydrateCookieConsentFromServer();
+        }
+        return;
+      }
+
+      const result = await requestEmailVerification('send', { email });
+      pendingEmailLoginAddress = email;
+      if(emailCodeRow) emailCodeRow.hidden = false;
+      if(loginEmailCodeInput){
+        loginEmailCodeInput.value = '';
+        loginEmailCodeInput.focus();
+      }
+      if(emailLoginBtn) emailLoginBtn.textContent = 'Verify';
+      const masked = result && result.email ? result.email : email;
+      const hint = result && typeof result.hint === 'string' && result.hint
+        ? ` ${result.hint}`
+        : '';
+      setPopupStatus(`Code sent to ${masked}.${hint}`);
+    }catch(err){
+      setPopupStatus(err && err.message ? err.message : 'Email verification failed.');
+      if(!isConfirming){
+        resetEmailLoginChallenge();
+      }else if(emailLoginBtn){
+        emailLoginBtn.textContent = 'Verify';
+      }
+    }finally{
+      emailLoginBusy = false;
+      if(emailLoginBtn){
+        emailLoginBtn.disabled = false;
+        if(pendingEmailLoginAddress && emailCodeRow && !emailCodeRow.hidden){
+          emailLoginBtn.textContent = 'Verify';
+        }else{
+          emailLoginBtn.textContent = 'Login';
+        }
+      }
+    }
   }
 
   function startBlueGoogleAuth(loginHint){
@@ -9282,10 +10107,7 @@
   }
 
   function scrollSuggestionPanelToBottom(){
-    if(!suggestionPanel) return;
-    requestAnimationFrame(()=>{
-      suggestionPanel.scrollTop = suggestionPanel.scrollHeight;
-    });
+    // Keep the reading viewport stable while AI text streams in.
   }
 
   function normalizeSuggestionText(item, index, query){
@@ -9441,6 +10263,7 @@
       conditionalTitle:String(rawConditional.conditionalTitle || rawConditional.title || `Conditional ${index + 1}`).trim(),
       postedAt:String(rawConditional.postedAt || rawConditional.createdAt || '').trim(),
       bounty:rawConditional.bounty && typeof rawConditional.bounty === 'object' ? rawConditional.bounty : null,
+      payment:rawConditional.payment && typeof rawConditional.payment === 'object' ? rawConditional.payment : null,
       sourceCode:String(rawConditional.sourceCode || rawConditional.code || '').trim(),
       fileName:String(rawConditional.fileName || '').trim(),
       language:String(rawConditional.language || '').trim(),
@@ -9525,6 +10348,13 @@
     bodyEl.classList.toggle('search-sidebar-open', !!isOpen && hasSuggestionResults);
   }
 
+  function clearSearchSidebarCloseTimer(){
+    if(searchSidebarCloseTimer){
+      window.clearTimeout(searchSidebarCloseTimer);
+      searchSidebarCloseTimer = 0;
+    }
+  }
+
   function scheduleSearchSidebarClose(){
     if(searchSidebarCloseTimer) window.clearTimeout(searchSidebarCloseTimer);
     searchSidebarCloseTimer = window.setTimeout(()=>{
@@ -9567,7 +10397,7 @@
       return;
     }
 
-    turns.slice(-8).reverse().forEach(turn=>{
+    turns.slice(-8).forEach(turn=>{
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'search-sidebar-turn';
@@ -9586,6 +10416,11 @@
 
       item.append(title, meta);
       searchSidebarTurnList.appendChild(item);
+    });
+    requestAnimationFrame(()=>{
+      if(searchSidebarTurnList){
+        searchSidebarTurnList.scrollTop = searchSidebarTurnList.scrollHeight;
+      }
     });
   }
 
@@ -9726,11 +10561,48 @@
     keepLibraryStatus.classList.toggle('is-error', state === 'error');
   }
 
+  function clearKeepLibraryCloseTimer(){
+    if(keepLibraryCloseTimer){
+      clearTimeout(keepLibraryCloseTimer);
+      keepLibraryCloseTimer = 0;
+    }
+  }
+
+  function openKeepLibraryFromHover(){
+    clearKeepLibraryCloseTimer();
+    if(keepLibraryOpen) return;
+    setKeepLibraryOpen(true);
+    ensureKeepLibraryLoaded();
+  }
+
+  function scheduleKeepLibraryClose(){
+    clearKeepLibraryCloseTimer();
+    keepLibraryCloseTimer = setTimeout(()=>{
+      keepLibraryCloseTimer = 0;
+      setKeepLibraryOpen(false);
+    }, 220);
+  }
+
   function setKeepLibraryOpen(isOpen){
+    clearKeepLibraryCloseTimer();
+    if(keepLibraryHideTimer){
+      window.clearTimeout(keepLibraryHideTimer);
+      keepLibraryHideTimer = 0;
+    }
     keepLibraryOpen = !!isOpen;
-    bodyEl.classList.toggle('keep-library-open', keepLibraryOpen);
-    if(keepLibrarySidebar) keepLibrarySidebar.hidden = !keepLibraryOpen;
-    if(!keepLibraryOpen) hideKeepContextMenu();
+    if(keepLibraryOpen){
+      if(keepLibrarySidebar) keepLibrarySidebar.hidden = false;
+      requestAnimationFrame(()=>{
+        bodyEl.classList.add('keep-library-open');
+      });
+      return;
+    }
+    bodyEl.classList.remove('keep-library-open');
+    hideKeepContextMenu();
+    keepLibraryHideTimer = window.setTimeout(()=>{
+      keepLibraryHideTimer = 0;
+      if(keepLibrarySidebar && !keepLibraryOpen) keepLibrarySidebar.hidden = true;
+    }, 280);
   }
 
   function renderKeepLibrary(){
@@ -9795,11 +10667,50 @@
     return data || {};
   }
 
-  async function loadKeepLibrary(){
-    if(keepLibraryBusy) return;
-    keepLibraryBusy = true;
-    setKeepLibraryStatus('Loading saved chats...');
+  function clearKeepLibraryCache(){
+    keepLibraryLoaded = false;
+    keepLibraryPreloadStarted = false;
+    keepLibraryBusy = false;
+    keepLibraryChats = [];
     renderKeepLibrary();
+  }
+
+  function loadLocalKeepLibraryOnly(){
+    const localChats = readLocalKeptChats().map(item=>normalizeKeepLibraryChat({ ...item, local:true }));
+    keepLibraryChats = localChats;
+    keepLibraryLoaded = true;
+    keepLibraryPreloadStarted = false;
+    setKeepLibraryStatus(localChats.length ? 'Local saved chats. Sign in for Supabase Keep.' : 'Sign in to load saved chats.', localChats.length ? '' : 'error');
+    renderKeepLibrary();
+  }
+
+  function ensureKeepLibraryLoaded(){
+    if(keepLibraryLoaded || keepLibraryBusy) return;
+    if(!blueModeLoggedIn){
+      loadLocalKeepLibraryOnly();
+      return;
+    }
+    loadKeepLibrary({ silent:!keepLibraryOpen });
+  }
+
+  function preloadKeepLibrary(){
+    if(!blueModeLoggedIn || keepLibraryLoaded || keepLibraryBusy || keepLibraryPreloadStarted) return;
+    keepLibraryPreloadStarted = true;
+    loadKeepLibrary({ silent:true });
+  }
+
+  async function loadKeepLibrary(options = {}){
+    const force = !!options.force;
+    const silent = !!options.silent;
+    if(keepLibraryBusy) return;
+    if(keepLibraryLoaded && !force) return;
+    if(!blueModeLoggedIn){
+      loadLocalKeepLibraryOnly();
+      return;
+    }
+    keepLibraryBusy = true;
+    if(!silent) setKeepLibraryStatus('Loading saved chats...');
+    if(!silent) renderKeepLibrary();
     const localChats = readLocalKeptChats().map(item=>normalizeKeepLibraryChat({ ...item, local:true }));
     try{
       const data = await requestKeepAction({ keepAction:'list' });
@@ -9810,9 +10721,11 @@
         seen.add(chat.keepId);
         return true;
       });
+      keepLibraryLoaded = true;
       setKeepLibraryStatus(keepLibraryChats.length ? `${keepLibraryChats.length} saved chats` : 'No saved chats yet.');
     }catch(error){
       keepLibraryChats = localChats;
+      keepLibraryLoaded = true;
       if(error && error.message === 'not_logged_in'){
         setKeepLibraryStatus(localChats.length ? 'Local saved chats. Sign in for Supabase Keep.' : 'Sign in to load saved chats.', 'error');
       }else{
@@ -9820,6 +10733,7 @@
       }
     }finally{
       keepLibraryBusy = false;
+      keepLibraryPreloadStarted = false;
       renderKeepLibrary();
     }
   }
@@ -9897,7 +10811,7 @@
       if(chatKeepButton) chatKeepButton.classList.remove('is-saved');
       setSearchKeepStatus('Removed from Keep.');
     }
-    await loadKeepLibrary();
+    await loadKeepLibrary({ force:true, silent:!keepLibraryOpen });
   }
 
   async function renameKeptChat(keepId){
@@ -9912,7 +10826,7 @@
     }else{
       await requestKeepAction({ keepAction:'rename', keepId:chat.keepId, title });
     }
-    await loadKeepLibrary();
+    await loadKeepLibrary({ force:true, silent:!keepLibraryOpen });
   }
 
   async function unkeepCurrentSearchChat(){
@@ -9927,7 +10841,7 @@
     searchKeepSavedId = '';
     if(chatKeepButton) chatKeepButton.classList.remove('is-saved');
     setSearchKeepStatus('Removed from Keep.');
-    if(keepLibraryOpen) await loadKeepLibrary();
+    await loadKeepLibrary({ force:true, silent:!keepLibraryOpen });
   }
 
   function stripFlashReaderMarkdown(value){
@@ -10973,7 +11887,7 @@
           chatKeepButton.classList.add('is-saved');
         }
         setSearchKeepStatus('Saved to Keep.');
-        if(keepLibraryOpen) await loadKeepLibrary();
+        await loadKeepLibrary({ force:true, silent:!keepLibraryOpen });
         return;
       }
 
@@ -10984,7 +11898,7 @@
           chatKeepButton.classList.add('is-saved');
         }
         setSearchKeepStatus('Saved locally. Supabase setup needed.');
-        if(keepLibraryOpen) await loadKeepLibrary();
+        await loadKeepLibrary({ force:true, silent:!keepLibraryOpen });
         return;
       }
 
@@ -11008,7 +11922,7 @@
           chatKeepButton.classList.add('is-saved');
         }
         setSearchKeepStatus('Saved locally. Supabase setup needed.');
-        if(keepLibraryOpen) await loadKeepLibrary();
+        await loadKeepLibrary({ force:true, silent:!keepLibraryOpen });
         return;
       }
       const message = error && error.message === 'not_logged_in'
@@ -11624,7 +12538,7 @@
   }
 
   function getAttachmentMime(attachment){
-    return String(attachment && attachment.mime || '').toLowerCase();
+    return String(attachment && attachment.mime || '').split(';')[0].trim().toLowerCase();
   }
 
   function getAttachmentExt(attachment){
@@ -11639,20 +12553,43 @@
     ).toLowerCase();
   }
 
+  function sanitizeAttachmentPreviewUrl(value){
+    const raw = String(value || '').trim();
+    if(!raw) return '';
+    if(/^data:(?:application\/pdf|image\/(?:png|jpeg|gif|webp|avif|bmp)|audio\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+)(?:;[^,]*)?,/i.test(raw)){
+      return raw;
+    }
+    try{
+      const parsed = new URL(raw, window.location.href);
+      if(parsed.username || parsed.password) return '';
+      if(parsed.protocol === 'https:') return parsed.href;
+      if(parsed.protocol === 'http:' && ['localhost','127.0.0.1','::1'].includes(parsed.hostname)) return parsed.href;
+      if(parsed.protocol === 'blob:' && (parsed.origin === window.location.origin || window.location.origin === 'null')){
+        return parsed.href;
+      }
+    }catch(error){
+      return '';
+    }
+    return '';
+  }
+
   function getAttachmentUrl(attachment){
-    return String(attachment && (attachment.url || attachment.webViewLink) || '').trim();
+    return sanitizeAttachmentPreviewUrl(attachment && (attachment.url || attachment.webViewLink));
   }
 
   function inferAttachmentKind(attachment){
     const explicit = String(attachment && attachment.kind || '').toLowerCase();
     const ext = getAttachmentExt(attachment);
     const mime = getAttachmentMime(attachment);
-    if(mime === 'application/pdf' || ext === 'pdf') return 'pdf';
+    if(mime === 'application/pdf') return 'pdf';
+    if(mime === 'text/html' || mime === 'application/xhtml+xml') return 'html';
     if(mime.startsWith('image/')) return 'image';
     if(mime.startsWith('video/')) return 'video';
     if(mime.startsWith('audio/')) return 'audio';
-    if(mime === 'text/html' || ['html','htm','xhtml'].includes(ext)) return 'html';
-    if(mime.startsWith('text/') || [
+    if(mime.startsWith('text/')) return 'text';
+    if(ext === 'pdf') return 'pdf';
+    if(['html','htm','xhtml'].includes(ext)) return 'html';
+    if([
       'txt','md','markdown','json','jsonl','csv','tsv','xml','yaml','yml','toml','ini','log',
       'lean','v','coq','tex','bib','js','jsx','ts','tsx','css','scss','sass','less','py','rb',
       'rs','go','java','c','cc','cpp','h','hpp','cs','php','swift','kt','kts','r','sql','sh','bash','zsh'
@@ -11686,7 +12623,7 @@
       const link = document.createElement('a');
       link.className = 'problem-preview-doc-link';
       link.href = href;
-      link.rel = 'noopener';
+      link.rel = 'noopener noreferrer';
       link.target = attachment && attachment.webViewLink ? '_blank' : '_self';
       link.download = attachment && !attachment.webViewLink ? (attachment.fileName || attachment.title || '') : '';
       link.textContent = attachment && attachment.webViewLink ? 'Open original' : 'Open file';
@@ -11707,6 +12644,7 @@
       frame.className = 'problem-preview-doc-frame';
       frame.src = applyProblemPdfPreviewOptions(url);
       frame.title = 'PDF preview';
+      frame.referrerPolicy = 'no-referrer';
       body.appendChild(frame);
       return;
     }
@@ -11745,6 +12683,7 @@
       frame.className = 'problem-preview-doc-frame';
       frame.title = title;
       frame.setAttribute('sandbox', '');
+      frame.referrerPolicy = 'no-referrer';
       if(attachment && attachment.text){
         frame.srcdoc = attachment.text;
       }else{
@@ -11883,7 +12822,9 @@
       meta.className = 'problem-preview-conditional-meta';
       const bounty = conditional.bounty && typeof conditional.bounty === 'object' ? conditional.bounty : {};
       const split = bounty.split && typeof bounty.split === 'object' ? bounty.split : {};
+      const isFree = conditional.payment && conditional.payment.required === false;
       [
+        isFree ? 'Free' : '',
         bounty.amountVx ? formatConditionalVx(bounty.amountVx) : '',
         split.problemBountyYen ? 'Problem +' + formatConditionalVx(Number(split.problemBountyYen) / 200) : '',
         split.creatorYen ? 'Creator +' + formatConditionalVx(Number(split.creatorYen) / 200) : '',
@@ -12670,6 +13611,7 @@
     if(chatQuoteComposerText){
       chatQuoteComposerText.textContent = hasQuote ? pendingAssistantQuote.text : '';
     }
+    if(hasSuggestionResults) adjustTextarea();
   }
 
   function isUnsolvedProblemCitation(citation){
@@ -12693,6 +13635,7 @@
       conditionalTitle:String(conditional.conditionalTitle || 'Conditional').trim(),
       postedAt:String(conditional.postedAt || '').trim(),
       bounty:conditional.bounty && typeof conditional.bounty === 'object' ? conditional.bounty : null,
+      payment:conditional.payment && typeof conditional.payment === 'object' ? conditional.payment : null,
       sourceCode:String(conditional.sourceCode || '').trim(),
       fileName:String(conditional.fileName || '').trim(),
       language:String(conditional.language || '').trim(),
@@ -12743,6 +13686,7 @@
         ? meta + (context.quote || context.sourceCode || 'Saved problem reference will be attached to the proof editor.')
         : '';
     }
+    if(hasSuggestionResults) adjustTextarea();
   }
 
   function clearProblemSolveContext(){
@@ -12826,6 +13770,7 @@
       sourceTitle
     };
     renderChatQuoteComposer();
+    adjustTextarea({ immediate:true });
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
     hideChatSelectionQuote();
@@ -12960,17 +13905,22 @@
   });
 
   if(searchSidebarHotzone){
-    searchSidebarHotzone.addEventListener('mouseenter', ()=>{
-      if(hasSuggestionResults) setSearchSidebarOpen(true);
+    searchSidebarHotzone.addEventListener('mouseenter', ()=>{});
+    searchSidebarHotzone.addEventListener('mouseleave', ()=>{});
+  }
+
+  if(searchSidebarToggle){
+    searchSidebarToggle.addEventListener('click', ()=>{
+      if(!hasSuggestionResults) return;
+      setSearchSidebarOpen(!bodyEl.classList.contains('search-sidebar-open'));
     });
-    searchSidebarHotzone.addEventListener('mouseleave', scheduleSearchSidebarClose);
   }
 
   if(searchChatSidebar){
     searchChatSidebar.addEventListener('mouseenter', ()=>{
-      if(hasSuggestionResults) setSearchSidebarOpen(true);
+      if(hasSuggestionResults) clearSearchSidebarCloseTimer();
     });
-    searchChatSidebar.addEventListener('mouseleave', scheduleSearchSidebarClose);
+    searchChatSidebar.addEventListener('mouseleave', ()=>{});
   }
 
   if(chatKeepButton){
@@ -13000,8 +13950,18 @@
     keepLibraryButton.addEventListener('click', ()=>{
       const nextOpen = !keepLibraryOpen;
       setKeepLibraryOpen(nextOpen);
-      if(nextOpen) loadKeepLibrary();
+      if(nextOpen) ensureKeepLibraryLoaded();
     });
+  }
+
+  if(keepLibraryHotzone){
+    keepLibraryHotzone.addEventListener('mouseenter', openKeepLibraryFromHover);
+    keepLibraryHotzone.addEventListener('mouseleave', scheduleKeepLibraryClose);
+  }
+
+  if(keepLibrarySidebar){
+    keepLibrarySidebar.addEventListener('mouseenter', clearKeepLibraryCloseTimer);
+    keepLibrarySidebar.addEventListener('mouseleave', scheduleKeepLibraryClose);
   }
 
   if(keepLibraryClose){
@@ -13280,11 +14240,288 @@
     }).filter(item=>item.title || item.message);
   }
 
+  function parseIvucxTransactions(payload){
+    const source = Array.isArray(payload && payload.transactions) ? payload.transactions : [];
+    return source.slice(0, 120).map((item, index)=>{
+      const record = item && typeof item === 'object' ? item : {};
+      const amountVx = Number(record.amountVx || record.amount_vx || 0);
+      const amountYen = Number(record.amountYen || record.amount_yen || 0);
+      return {
+        id:String(record.id || `transaction-${index + 1}`).trim(),
+        direction:String(record.direction || 'credit').toLowerCase() === 'debit' ? 'debit' : 'credit',
+        amountVx:Number.isFinite(amountVx) ? Math.max(0, amountVx) : 0,
+        amountYen:Number.isFinite(amountYen) ? Math.max(0, Math.round(amountYen)) : 0,
+        currency:String(record.currency || 'jpy').toLowerCase(),
+        reason:String(record.reason || 'account_activity').trim(),
+        title:String(record.title || '').trim(),
+        createdAt:String(record.createdAt || record.created_at || '').trim(),
+        problemId:String(record.problemId || record.problem_id || '').trim(),
+        solutionProblemId:String(record.solutionProblemId || record.solution_problem_id || '').trim()
+      };
+    }).filter(item=>item.id && (item.amountVx > 0 || item.amountYen > 0));
+  }
+
+  function getVxCopy(key){
+    const language = VX_COPY[vxLanguage] ? vxLanguage : 'en';
+    return VX_COPY[language][key] || VX_COPY.en[key] || key;
+  }
+
+  function hydrateVxLanguage(){
+    const saved = readLocalValue(VX_LANGUAGE_STORAGE_KEY);
+    vxLanguage = saved === 'ja' ? 'ja' : 'en';
+  }
+
+  function syncVxLanguageControls(){
+    document.documentElement.lang = vxLanguage === 'ja' ? 'ja' : 'en';
+    document.querySelectorAll('[data-vx-copy]').forEach(element=>{
+      const key = element.getAttribute('data-vx-copy');
+      if(key) element.textContent = getVxCopy(key);
+    });
+    vxLanguageButtons.forEach(button=>{
+      const active = button.getAttribute('data-vx-language') === vxLanguage;
+      button.setAttribute('aria-checked', active ? 'true' : 'false');
+    });
+    if(vxSettingsButton){
+      const label = vxLanguage === 'ja' ? '言語設定' : 'Language settings';
+      vxSettingsButton.setAttribute('aria-label', label);
+      vxSettingsButton.setAttribute('title', label);
+    }
+  }
+
+  function setVxLanguage(language){
+    vxLanguage = language === 'ja' ? 'ja' : 'en';
+    writeLocalValue(VX_LANGUAGE_STORAGE_KEY, vxLanguage);
+    syncVxLanguageControls();
+    renderRewards();
+  }
+
+  function setVxLanguageMenuOpen(open){
+    const isOpen = !!open;
+    if(vxLanguageMenu) vxLanguageMenu.hidden = !isOpen;
+    if(vxSettingsButton) vxSettingsButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  }
+
+  function getTransactionReasonCopy(reason){
+    const key = String(reason || '').trim();
+    const map = {
+      problem_bounty_award:'credit',
+      conditional_creator_share:'credit',
+      conditional_usage_award:'credit',
+      bounty_deposit:'deposits',
+      stripe_deposit:'deposits',
+      withdrawal:'withdrawals',
+      account_activity:'accountActivityReason'
+    };
+    return getVxCopy(map[key] || 'accountActivityReason');
+  }
+
+  function formatVxAmount(value){
+    const numeric = Number(value) || 0;
+    return numeric.toLocaleString(vxLanguage === 'ja' ? 'ja-JP' : 'en-US', { maximumFractionDigits:6 });
+  }
+
+  function formatVxTransactionDate(value){
+    const timestamp = Date.parse(value || '');
+    if(!Number.isFinite(timestamp)) return '';
+    return new Date(timestamp).toLocaleString(vxLanguage === 'ja' ? 'ja-JP' : 'en-US', {
+      month:'short',
+      day:'numeric',
+      hour:'2-digit',
+      minute:'2-digit'
+    });
+  }
+
+  function renderVxProfitChart(transactions){
+    if(!vxProfitChart) return;
+    while(vxProfitChart.firstChild){
+      vxProfitChart.removeChild(vxProfitChart.firstChild);
+    }
+    const records = Array.isArray(transactions) ? transactions.slice().sort((left,right)=>{
+      return (Date.parse(left.createdAt || '') || 0) - (Date.parse(right.createdAt || '') || 0);
+    }) : [];
+    if(!records.length){
+      if(vxChartEmpty){
+        vxChartEmpty.hidden = false;
+        vxChartEmpty.textContent = blueModeLoggedIn ? getVxCopy('noActivity') : getVxCopy('signInToView');
+      }
+      if(vxProfitTotal) vxProfitTotal.textContent = 'Vx 0';
+      return;
+    }
+
+    let cumulative = 0;
+    const values = [0];
+    records.forEach(record=>{
+      const amount = Number(record.amountVx) || 0;
+      cumulative += record.direction === 'debit' ? -amount : amount;
+      values.push(cumulative);
+    });
+    const min = Math.min(0, ...values);
+    const max = Math.max(0, ...values);
+    const range = Math.max(0.000001, max - min);
+    const width = 560;
+    const chartTop = 18;
+    const chartBottom = 174;
+    const yFor = value=>chartBottom - ((value - min) / range) * (chartBottom - chartTop);
+    const xFor = index=>values.length === 1 ? 0 : (index / (values.length - 1)) * width;
+    const makeSvg = (tag, attributes)=>{
+      const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      Object.entries(attributes).forEach(([name,value])=>element.setAttribute(name, String(value)));
+      return element;
+    };
+
+    [0.25,0.5,0.75].forEach(ratio=>{
+      vxProfitChart.appendChild(makeSvg('line', {
+        x1:0, y1:chartTop + (chartBottom - chartTop) * ratio,
+        x2:width, y2:chartTop + (chartBottom - chartTop) * ratio,
+        stroke:'rgba(186,219,249,0.12)', 'stroke-width':1
+      }));
+    });
+    const zeroY = yFor(0);
+    vxProfitChart.appendChild(makeSvg('line', {
+      x1:0, y1:zeroY, x2:width, y2:zeroY,
+      stroke:'rgba(141,225,193,0.26)', 'stroke-width':1, 'stroke-dasharray':'4 6'
+    }));
+
+    const points = values.map((value,index)=>`${xFor(index)},${yFor(value)}`).join(' ');
+    const areaPoints = `0,${chartBottom} ${points} ${width},${chartBottom}`;
+    vxProfitChart.appendChild(makeSvg('polygon', {
+      points:areaPoints,
+      fill:'rgba(102,209,182,0.1)'
+    }));
+    vxProfitChart.appendChild(makeSvg('polyline', {
+      points,
+      fill:'none',
+      stroke:'#8de1c1',
+      'stroke-width':3,
+      'stroke-linecap':'round',
+      'stroke-linejoin':'round'
+    }));
+    const lastX = xFor(values.length - 1);
+    const lastY = yFor(values[values.length - 1]);
+    vxProfitChart.appendChild(makeSvg('circle', {
+      cx:lastX, cy:lastY, r:4.5,
+      fill:'#071528', stroke:'#c4f4df', 'stroke-width':2
+    }));
+    if(vxChartEmpty) vxChartEmpty.hidden = true;
+    if(vxProfitTotal){
+      const sign = cumulative < 0 ? '-' : '';
+      vxProfitTotal.textContent = `${sign}Vx ${formatVxAmount(Math.abs(cumulative))}`;
+      vxProfitTotal.style.color = cumulative < 0 ? '#ffb6ae' : '#8de1c1';
+    }
+  }
+
+  function renderVxHistory(transactions){
+    if(!vxHistoryList) return;
+    vxHistoryList.innerHTML = '';
+    if(vxHistoryCount) vxHistoryCount.textContent = String(Array.isArray(transactions) ? transactions.length : 0);
+    if(!blueModeLoggedIn || !Array.isArray(transactions) || transactions.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'vx-history-empty';
+      empty.textContent = blueModeLoggedIn ? getVxCopy('noActivity') : getVxCopy('signInToView');
+      vxHistoryList.appendChild(empty);
+      return;
+    }
+
+    transactions.slice().sort((left,right)=>{
+      return (Date.parse(right.createdAt || '') || 0) - (Date.parse(left.createdAt || '') || 0);
+    }).forEach(transaction=>{
+      const row = document.createElement('div');
+      row.className = 'vx-history-item';
+      const copy = document.createElement('div');
+      const title = document.createElement('div');
+      title.className = 'vx-history-title';
+      title.textContent = transaction.title || getTransactionReasonCopy(transaction.reason);
+      const meta = document.createElement('div');
+      meta.className = 'vx-history-meta';
+      const date = formatVxTransactionDate(transaction.createdAt);
+      meta.textContent = [getTransactionReasonCopy(transaction.reason), date].filter(Boolean).join(' · ');
+      copy.append(title, meta);
+      const amount = document.createElement('div');
+      amount.className = `vx-history-amount${transaction.direction === 'debit' ? ' is-debit' : ''}`;
+      const sign = transaction.direction === 'debit' ? '-' : '+';
+      amount.textContent = `${sign}Vx ${formatVxAmount(transaction.amountVx)}`;
+      row.append(copy, amount);
+      vxHistoryList.appendChild(row);
+    });
+  }
+
+  function renderVxAnalytics(){
+    const transactions = blueModeLoggedIn ? blueModeTransactions : [];
+    renderVxProfitChart(transactions);
+    renderVxHistory(transactions);
+  }
+
+  function normalizeLoginPayload(payload){
+    const loggedIn = !!(payload && payload.loggedIn);
+    const rewards = Array.isArray(payload && payload.rewards) ? payload.rewards : [];
+    const accountId = payload && typeof payload.accountId === 'string' ? payload.accountId : '';
+    return {
+      loggedIn,
+      accountId,
+      rewards,
+      balance: payload && payload.balance ? payload.balance : null,
+      notifications: Array.isArray(payload && payload.notifications) ? payload.notifications : [],
+      transactions: Array.isArray(payload && payload.transactions) ? payload.transactions : [],
+      reason: payload && typeof payload.reason === 'string'
+        ? payload.reason
+        : (loggedIn ? 'ok' : 'logged_out')
+    };
+  }
+
+  function setLoginStateCache(payload){
+    loginStateCache = normalizeLoginPayload(payload);
+    loginStateCacheAt = Date.now();
+    writeSessionValue(LOGIN_STATE_STORAGE_KEY, JSON.stringify({
+      at: loginStateCacheAt,
+      payload: loginStateCache
+    }));
+    return loginStateCache;
+  }
+
+  function clearLoginStateCache(){
+    loginStateCache = null;
+    loginStateCacheAt = 0;
+    loginStateRequestPromise = null;
+    removeSessionValue(LOGIN_STATE_STORAGE_KEY);
+  }
+
+  function hydrateLoginStateCache(){
+    if(loginStateCache) return loginStateCache;
+    const raw = readSessionValue(LOGIN_STATE_STORAGE_KEY);
+    if(!raw) return null;
+    try{
+      const parsed = JSON.parse(raw);
+      const at = Number(parsed && parsed.at);
+      if(!Number.isFinite(at) || Date.now() - at >= LOGIN_STATE_CACHE_MS){
+        removeSessionValue(LOGIN_STATE_STORAGE_KEY);
+        return null;
+      }
+      loginStateCache = normalizeLoginPayload(parsed.payload);
+      loginStateCacheAt = at;
+      return loginStateCache;
+    }catch(err){
+      removeSessionValue(LOGIN_STATE_STORAGE_KEY);
+      return null;
+    }
+  }
+
+  function hasFreshLoginStateCache(){
+    hydrateLoginStateCache();
+    return !!loginStateCache && Date.now() - loginStateCacheAt < LOGIN_STATE_CACHE_MS;
+  }
+
   function applyBlueModeAccountPayload(payload){
+    const wasLoggedIn = blueModeLoggedIn;
     blueModeLoggedIn = !!(payload && payload.loggedIn);
     blueModeRewards = Array.isArray(payload && payload.rewards) ? payload.rewards : [];
     blueModeBalance = parseIvucxBalance(payload);
     blueModeNotifications = parseIvucxNotifications(payload);
+    blueModeTransactions = parseIvucxTransactions(payload);
+    if(blueModeLoggedIn){
+      preloadKeepLibrary();
+    }else if(wasLoggedIn){
+      clearKeepLibraryCache();
+    }
   }
 
   function updateVxTitle(){
@@ -13298,6 +14535,7 @@
     if(!rewardsList) return;
     rewardsList.innerHTML = '';
     updateVxTitle();
+    renderVxAnalytics();
 
     if(vxAuthRow){
       vxAuthRow.innerHTML = '';
@@ -13311,7 +14549,7 @@
       const loginBtn = document.createElement('button');
       loginBtn.type = 'button';
       loginBtn.className = 'rewards-login-btn';
-      loginBtn.textContent = 'Continue with Google';
+      loginBtn.textContent = getVxCopy('continueGoogle');
       loginBtn.addEventListener('click', ()=>{
         loginPopupDismissed = false;
         showAuthPopup();
@@ -13329,7 +14567,7 @@
     const logoutBtn = document.createElement('button');
     logoutBtn.type = 'button';
     logoutBtn.className = 'rewards-logout-btn';
-    logoutBtn.textContent = 'Logout';
+    logoutBtn.textContent = getVxCopy('logout');
     logoutBtn.addEventListener('click', async ()=>{
       logoutBtn.disabled = true;
       try{
@@ -13338,10 +14576,13 @@
         // ignore logout error and still clear local state
       }
       blueModeLoggedIn = false;
+      clearLoginStateCache();
+      clearKeepLibraryCache();
       clearBlueAccountHint();
       blueModeRewards = [];
       blueModeBalance = null;
       blueModeNotifications = [];
+      blueModeTransactions = [];
       cookieHistoryConsent = '';
       cookieConsentOwnerId = '';
       cookieConsentHydrated = false;
@@ -13366,16 +14607,16 @@
     const stripeCopy = document.createElement('div');
     stripeCopy.className = 'stripe-setup-copy';
     const stripeTitle = document.createElement('strong');
-    stripeTitle.textContent = 'Stripe card setup';
+    stripeTitle.textContent = getVxCopy('stripeSetup');
     const stripeDescription = document.createElement('span');
-    stripeDescription.textContent = 'Register a payout or payment card with Stripe.';
+    stripeDescription.textContent = getVxCopy('stripeDescription');
     stripeCopy.appendChild(stripeTitle);
     stripeCopy.appendChild(stripeDescription);
 
     const stripeBtn = document.createElement('button');
     stripeBtn.type = 'button';
     stripeBtn.className = 'stripe-setup-btn';
-    stripeBtn.textContent = stripeSetupBusy ? 'Opening...' : 'Register card';
+    stripeBtn.textContent = stripeSetupBusy ? getVxCopy('opening') : getVxCopy('registerCard');
     stripeBtn.disabled = stripeSetupBusy;
     stripeBtn.addEventListener('click', ()=>{
       startStripeSetup(stripeBtn);
@@ -13417,7 +14658,7 @@
     if(blueModeRewards.length === 0){
       const empty = document.createElement('div');
       empty.className = 'rewards-empty';
-      empty.textContent = 'No rewards available yet.';
+      empty.textContent = getVxCopy('noRewards');
       rewardsList.appendChild(empty);
       return;
     }
@@ -13445,12 +14686,53 @@
     rewardsList.appendChild(list);
   }
 
+  function clearVxScrollVisual(){
+    if(vxScrollResetTimer){
+      clearTimeout(vxScrollResetTimer);
+      vxScrollResetTimer = null;
+    }
+    if(blueModeShell){
+      blueModeShell.style.setProperty('--vx-bg-shift', '0px');
+    }
+    if(blueModePanel){
+      blueModePanel.style.setProperty('--vx-panel-shift', '0px');
+    }
+  }
+
+  function pulseVxScrollVisual(deltaY){
+    if(state !== 2 || !blueModeShell || !Number.isFinite(Number(deltaY)) || Math.abs(Number(deltaY)) < 1){
+      return;
+    }
+    const delta = Number(deltaY);
+    const backgroundShift = Math.max(-58, Math.min(58, -delta * 0.42));
+    const panelShift = Math.max(-18, Math.min(18, -delta * 0.12));
+    blueModeShell.style.setProperty('--vx-bg-shift', `${backgroundShift}px`);
+    if(blueModePanel){
+      blueModePanel.style.setProperty('--vx-panel-shift', `${panelShift}px`);
+    }
+    if(vxScrollResetTimer){
+      clearTimeout(vxScrollResetTimer);
+    }
+    vxScrollResetTimer = setTimeout(()=>{
+      vxScrollResetTimer = null;
+      if(blueModeShell){
+        blueModeShell.style.setProperty('--vx-bg-shift', '0px');
+      }
+      if(blueModePanel){
+        blueModePanel.style.setProperty('--vx-panel-shift', '0px');
+      }
+    }, 260);
+  }
+
   function exitBlueMode(){
     blueModeCheckToken += 1;
+    clearVxScrollVisual();
+    setVxLanguageMenuOpen(false);
     blueModeLoggedIn = false;
     blueModeRewards = [];
     blueModeBalance = null;
     blueModeNotifications = [];
+    blueModeTransactions = [];
     loginPopupDismissed = false;
     if(loginRecoveryInput){
       loginRecoveryInput.value = '';
@@ -13463,10 +14745,34 @@
     blueModeCheckToken += 1;
     const token = blueModeCheckToken;
 
+    if(hasFreshLoginStateCache()){
+      loginPopupDismissed = false;
+      hideBlueModePanel();
+      closeLoginPopup(false);
+      applyBlueModeAccountPayload(loginStateCache);
+      if(loginStateCache.loggedIn && typeof loginStateCache.accountId === 'string'){
+        saveBlueAccountHint(loginStateCache.accountId);
+      }
+      renderRewards();
+      if(blueModeLoggedIn){
+        hydrateCookieConsentFromServer();
+        closeLoginPopup(true);
+        return;
+      }
+      if(loginPopupDismissed){
+        closeLoginPopup(true);
+        return;
+      }
+      showBlueModePanel();
+      showAuthPopup();
+      return;
+    }
+
     blueModeLoggedIn = false;
     blueModeRewards = [];
     blueModeBalance = null;
     blueModeNotifications = [];
+    blueModeTransactions = [];
     loginPopupDismissed = false;
     hideBlueModePanel();
     closeLoginPopup(false);
@@ -13732,9 +15038,11 @@
   }
 
   function persistModeState(){
+    const visualTheme = syncPersistedVisualTheme();
     writeLocalValue(MODE_PERSIST_KEY, JSON.stringify({
       state,
       qaMode: bodyEl.classList.contains('mode-q') ? 'q' : 'a',
+      visualTheme,
       expanded: !!container.classList.contains('expanded'),
       forceExpandedEditor: !!forceExpandedEditor,
       resumeSavedGrayEditorOnNextEntry: !!resumeSavedGrayEditorOnNextEntry,
@@ -13812,7 +15120,7 @@
         applyState(0);
       }else{
         restoreModeDraft(0);
-        input.placeholder = 'Search...';
+        input.placeholder = 'Search    (shift + enter)';
         adjustTextarea();
       }
       isRestoringPersistedMode = false;
@@ -14089,14 +15397,31 @@
       && window.uploadState
       && window.uploadState.hasContent;
     const isInputEmpty = input.value.length === 0;
-    if(isInputEmpty && !hasExternalContent){
+    const hasComposerContext = !!(
+      (pendingAssistantQuote && pendingAssistantQuote.text)
+      || (pendingProblemSolveContext && pendingProblemSolveContext.title)
+    );
+    if(isInputEmpty && !hasExternalContent && !hasSuggestionResults && !hasComposerContext){
       collapseToInitialSearchBox(contentHeight);
       return;
     }
 
     if(hasSuggestionResults){
       const maxPromptHeight = getInputHeightForLineLimit(13);
-      const promptHeight = Math.min(contentHeight, maxPromptHeight);
+      const visibleComposers = [problemSolveComposer, chatQuoteComposer].filter(el=>{
+        return el && !el.hidden && el.classList.contains('is-visible');
+      });
+      const composerHeight = visibleComposers.reduce((sum, el)=>{
+        const rect = el.getBoundingClientRect();
+        return sum + Math.ceil(rect.height || el.offsetHeight || 0);
+      }, 0);
+      const composerGap = visibleComposers.length > 0 ? visibleComposers.length * 8 : 0;
+      const viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      const maxStackHeight = Math.max(126, Math.floor(viewportH * 0.48));
+      const minPromptHeight = getInputHeightForLineLimit(1);
+      const promptRoom = Math.max(minPromptHeight, maxStackHeight - composerHeight - composerGap);
+      const promptHeight = Math.min(contentHeight, maxPromptHeight, promptRoom);
+      const stackHeight = promptHeight + composerHeight + composerGap;
       clearExpandedUiRevealTimer();
       container.classList.remove('editor-ui-ready');
       container.classList.remove('expanded');
@@ -14108,7 +15433,7 @@
       input.style.height = promptHeight + 'px';
       input.style.minHeight = promptHeight + 'px';
       input.style.maxHeight = promptHeight + 'px';
-      if(inputStack) inputStack.style.height = promptHeight + 'px';
+      if(inputStack) inputStack.style.height = stackHeight + 'px';
       return;
     }
 
@@ -14288,42 +15613,46 @@
 
   });
 
-  async function checkLogin(){
+  async function checkLogin(options = {}){
+    const force = !!options.force;
+    if(!force && hasFreshLoginStateCache()){
+      return loginStateCache;
+    }
+    if(!force && loginStateRequestPromise){
+      return loginStateRequestPromise;
+    }
     const controller = new AbortController();
     const timeoutId = setTimeout(()=>controller.abort(), LOGIN_CHECK_TIMEOUT_MS);
 
-    try{
-      const payload = await requestAuthJson('/api/check-login', 'GET', null, controller.signal);
-      clearTimeout(timeoutId);
+    const requestPromise = (async ()=>{
+      try{
+        const payload = await requestAuthJson('/api/check-login', 'GET', null, controller.signal);
+        clearTimeout(timeoutId);
 
-      const loggedIn = !!(payload && payload.loggedIn);
-      const rewards = Array.isArray(payload && payload.rewards) ? payload.rewards : [];
-      const accountId = payload && typeof payload.accountId === 'string' ? payload.accountId : '';
-      if(loggedIn && accountId){
-        saveBlueAccountHint(accountId);
+        const normalized = setLoginStateCache(payload);
+        if(normalized.loggedIn && normalized.accountId){
+          saveBlueAccountHint(normalized.accountId);
+        }
+        return normalized;
+      }catch(err){
+        clearTimeout(timeoutId);
+        const reason = err && err.name === 'AbortError' ? 'timeout' : 'network';
+        return setLoginStateCache({
+          loggedIn:false,
+          accountId:'',
+          rewards:[],
+          balance:null,
+          notifications:[],
+          reason
+        });
+      }finally{
+        if(loginStateRequestPromise === requestPromise){
+          loginStateRequestPromise = null;
+        }
       }
-      return {
-        loggedIn,
-        accountId,
-        rewards,
-        balance: payload && payload.balance ? payload.balance : null,
-        notifications: Array.isArray(payload && payload.notifications) ? payload.notifications : [],
-        reason: payload && typeof payload.reason === 'string'
-          ? payload.reason
-          : (loggedIn ? 'ok' : 'logged_out')
-      };
-    }catch(err){
-      clearTimeout(timeoutId);
-      const reason = err && err.name === 'AbortError' ? 'timeout' : 'network';
-      return {
-        loggedIn:false,
-        accountId:'',
-        rewards:[],
-        balance:null,
-        notifications:[],
-        reason
-      };
-    }
+    })();
+    loginStateRequestPromise = requestPromise;
+    return requestPromise;
   }
 
   const THRESHOLD = 72;
@@ -14392,7 +15721,7 @@
     bodyEl.classList.remove('scrolled','login-check');
 
     if(next === 0){
-      input.placeholder = 'Search...';
+      input.placeholder = 'Search    (shift + enter)';
       restoreModeDraft(0, previousState === 2 ? blueModeDraft : previousInputValue, previousFiles);
     }
 
@@ -14425,7 +15754,7 @@
       lastInputValue = '';
       renderAttachments();
       bodyEl.classList.add('login-check');
-      input.placeholder = 'Search...';
+      input.placeholder = 'Search    (shift + enter)';
       enterBlueMode();
     }
 
@@ -14648,6 +15977,7 @@
     if(modeScrollGestureLocked){
       queueModeScrollGestureUnlock();
     }
+    pulseVxScrollVisual(e.deltaY);
     const shouldTrapLockedScroll = modeScrollGestureLocked && (!isExpandedEditorActive() || e.shiftKey);
 
     if(shouldSkipScrollDetection(e.target, e.deltaY)){
@@ -14677,6 +16007,8 @@
     const currentY = e.touches[0].clientY;
     const deltaY = touchLastY - currentY;
     touchLastY = currentY;
+
+    pulseVxScrollVisual(deltaY);
 
     if(shouldSkipScrollDetection(e.target, deltaY)){
       wheelAccum = 0;
@@ -14731,7 +16063,10 @@
   }
 
   (async ()=>{
+    hydrateVxLanguage();
+    syncVxLanguageControls();
     restorePersistedModeState();
+    schedulePoseProblemShimmer();
     await restoreTheoremDraftTitle();
     persistModeState();
     hydrateCookieConsentFromServer();

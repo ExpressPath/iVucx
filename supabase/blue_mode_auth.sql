@@ -66,6 +66,7 @@ create table if not exists public.ivucx_transactions (
   account_provider text not null default 'google',
   account_id text not null,
   account_id_hash text not null,
+  email text,
   direction text not null check (direction in ('credit', 'debit')),
   amount_vx numeric(18,6) not null default 0,
   amount_yen integer not null default 0,
@@ -79,6 +80,9 @@ create table if not exists public.ivucx_transactions (
   created_at timestamptz not null default now(),
   unique(idempotency_key)
 );
+
+alter table public.ivucx_transactions
+  add column if not exists email text;
 
 create table if not exists public.ivucx_notifications (
   id uuid primary key default gen_random_uuid(),
@@ -102,6 +106,9 @@ create index if not exists idx_ivucx_accounts_account
 
 create index if not exists idx_ivucx_transactions_account_created
   on public.ivucx_transactions(account_provider, account_id_hash, created_at desc);
+
+create index if not exists idx_ivucx_transactions_email_created
+  on public.ivucx_transactions(email, created_at desc);
 
 create index if not exists idx_ivucx_notifications_account_created
   on public.ivucx_notifications(account_provider, account_id_hash, created_at desc);

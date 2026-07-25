@@ -2,12 +2,18 @@
   "name": "ivucx",
   "version": "1.0.0",
   "description": "iVucx - Interactive Proof Assistant Editor",
-  "main": "index.js",
+  "main": "desktop/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "node index.js",
-    "build": "echo 'No build step required'",
-    "start": "node index.js"
+    "desktop": "electron .",
+    "dist:win": "npm run dist:win:installer && npm run dist:win:portable",
+    "dist:win:installer": "electron-builder --win nsis --x64 -c.artifactName=\"${productName}-${version}-${arch}-setup.${ext}\"",
+    "dist:win:portable": "electron-builder --win portable --x64 -c.artifactName=\"${productName}-${version}-${arch}-portable.${ext}\"",
+    "dist:store": "electron-builder --win appx --x64",
+    "build": "node build-vercel-static.mjs",
+    "start": "node index.js",
+    "test": "node --test tests/*.test.js"
   },
   "keywords": [
     "proof-assistant",
@@ -21,7 +27,53 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.50.2",
     "express": "^4.19.2",
+    "nodemailer": "^9.0.3",
     "stripe": "^22.3.0"
+  },
+  "devDependencies": {
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "provf.provf",
+    "productName": "iVucx",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "directories": {
+      "buildResources": "desktop/build",
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [],
+    "npmRebuild": false,
+    "win": {
+      "icon": "desktop/build/icon.ico",
+      "target": [
+        "nsis",
+        "portable",
+        "appx"
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "appx": {
+      "applicationId": "provf",
+      "identityName": "provf.provf",
+      "publisher": "CN=C332A039-5915-4CF2-9C1F-CD1EB95E35CF",
+      "publisherDisplayName": "provf",
+      "displayName": "provf",
+      "backgroundColor": "transparent"
+    }
   },
   "engines": {
     "node": "22.x"

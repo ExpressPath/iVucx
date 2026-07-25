@@ -13,6 +13,7 @@ import { sendAttachmentCompleteResponse, sendAttachmentUploadPlanResponse } from
 import { sendPersistedProblemResponse, sendProblemPersistenceStatusResponse } from '../lib/problem-store.js';
 import { sendProofAiResponse } from '../lib/proof-ai.js';
 import { sendProblemConditionalRegisterResponse, sendProblemSolutionResolveResponse } from '../lib/ivucx.js';
+import { verifyJobCapability } from '../lib/job-access.js';
 
 function getRouteSegments(req) {
   const raw = req && req.query ? req.query.route : undefined;
@@ -37,6 +38,18 @@ function getQuerySuffix(req, excludedKeys = ['route']) {
 
 function sendNotFound(res) {
   res.status(404).json({ error: 'Not found' });
+}
+
+function readJobToken(req) {
+  const header = req && req.headers ? req.headers['x-ivucx-job-token'] : '';
+  const query = req && req.query ? req.query.jobToken : '';
+  return String((Array.isArray(header) ? header[0] : header) || (Array.isArray(query) ? query[0] : query) || '').trim();
+}
+
+function assertJobAccess(req, res, jobId) {
+  if (verifyJobCapability(jobId, readJobToken(req))) return true;
+  res.status(403).json({ ok: false, error: 'Helper job access is not authorized.' });
+  return false;
 }
 
 export default async function handler(req, res) {
@@ -74,6 +87,10 @@ export default async function handler(req, res) {
   if (segments.length === 1 && segments[0] === 'schema-check') {
     if (req.method !== 'GET') {
       sendMethodNotAllowed(res, ['GET']);
+      return;
+    }
+    if (process.env.NODE_ENV === 'production') {
+      sendNotFound(res);
       return;
     }
     await proxyHelperRequest(req, res, '/api/helper/schema-check');
@@ -117,6 +134,10 @@ export default async function handler(req, res) {
   }
 
   if (segments.length === 1 && segments[0] === 'persist-check') {
+    if (process.env.NODE_ENV === 'production') {
+      sendNotFound(res);
+      return;
+    }
     await sendProblemPersistenceStatusResponse(req, res);
     return;
   }
@@ -150,21 +171,25 @@ export default async function handler(req, res) {
   }
 
   if (segments.length === 1 && segments[0] === 'jobs') {
-    if (req.method !== 'GET' && req.method !== 'POST') {
-      sendMethodNotAllowed(res, ['GET', 'POST']);
+    if (req.method === 'GET') {
+      sendNotFound(res);
       return;
     }
-    const suffix = req.method === 'GET' ? getQuerySuffix(req) : '';
-    await proxyHelperRequest(req, res, '/api/helper/jobs' + suffix);
+    if (req.method !== 'POST') {
+      sendMethodNotAllowed(res, ['POST']);
+      return;
+    }
+    await proxyHelperRequest(req, res, '/api/helper/jobs');
     return;
   }
 
   if (segments.length === 2 && segments[0] === 'jobs') {
-    if (req.method !== 'GET' && req.method !== 'DELETE') {
-      sendMethodNotAllowed(res, ['GET', 'DELETE']);
+    if (req.method !== 'GET') {
+      sendMethodNotAllowed(res, ['GET']);
       return;
     }
-    const suffix = req.method === 'GET' ? getQuerySuffix(req) : '';
+    if (!assertJobAccess(req, res, segments[1])) return;
+    const suffix = getQuerySuffix(req, ['route', 'jobToken']);
     await proxyHelperRequest(req, res, '/api/helper/jobs/' + encodeURIComponent(segments[1]) + suffix);
     return;
   }
@@ -174,7 +199,8 @@ export default async function handler(req, res) {
       sendMethodNotAllowed(res, ['GET']);
       return;
     }
-    const suffix = getQuerySuffix(req);
+    if (!assertJobAccess(req, res, segments[1])) return;
+    const suffix = getQuerySuffix(req, ['route', 'jobToken']);
     await proxyHelperRequest(req, res, '/api/helper/jobs/' + encodeURIComponent(segments[1]) + '/result' + suffix);
     return;
   }

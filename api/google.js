@@ -6,12 +6,14 @@ import {
   googleOneTapHandler,
   googleStatusHandler
 } from '../lib/google-oauth.js';
+import { sendEmailVerificationResponse } from '../lib/email-verification.js';
 
 const ROUTES = {
   'auth-start': googleAuthStartHandler,
   'auth-callback': googleAuthCallbackHandler,
   files: googleFilesHandler,
   import: googleImportHandler,
+  'email-verification': sendEmailVerificationResponse,
   'one-tap': googleOneTapHandler,
   status: googleStatusHandler
 };

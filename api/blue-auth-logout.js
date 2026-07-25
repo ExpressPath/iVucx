@@ -4,6 +4,7 @@ import {
   hashSessionToken,
   readSessionFromRequest
 } from '../lib/blue-auth.js';
+import { clearEmailIdentityCookie } from '../lib/email-verification.js';
 import { clearGoogleTokenCookie } from '../lib/google-oauth.js';
 
 export default async function handler(req, res) {
@@ -27,5 +28,6 @@ export default async function handler(req, res) {
 
   res.setHeader('Set-Cookie', buildClearSessionCookie());
   clearGoogleTokenCookie(res);
+  clearEmailIdentityCookie(res);
   res.status(200).json({ ok: true });
 }

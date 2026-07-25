@@ -1,18 +1,22 @@
 import { getSupabaseAdmin } from '../lib/supabase-admin.js';
+import { assertDistributedRateLimit } from '../lib/distributed-rate-limit.js';
+import { getHttpErrorStatus, getPublicErrorMessage } from '../lib/http-error.js';
 import {
   LOCKOUT_MINUTES,
   MAX_LOGIN_FAILURES,
   SESSION_MAX_AGE_SECONDS,
   buildSessionCookie,
   hashSessionToken,
+  hashRecoverySecret,
   issueSessionToken,
-  minutesFromNowIso,
   normalizeAccountId,
   normalizeRecoveryPassword,
   normalizeRewards,
   secondsFromNowIso,
   verifyRecoverySecret
 } from '../lib/blue-auth.js';
+
+const DUMMY_RECOVERY_HASH = hashRecoverySecret(`RCV${'A'.repeat(48)}`);
 
 function readBody(req) {
   if (!req || typeof req !== 'object') return {};
@@ -106,6 +110,25 @@ async function insertBlueSession(supabase, session) {
   });
 }
 
+async function recordLoginFailure(supabase, normalizedAccountId) {
+  const { data, error } = await supabase.rpc('record_blue_login_failure', {
+    p_account_id_normalized: normalizedAccountId,
+    p_max_failures: MAX_LOGIN_FAILURES,
+    p_lock_minutes: LOCKOUT_MINUTES
+  });
+  if (error) {
+    const unavailable = new Error(
+      /record_blue_login_failure|schema cache|function/i.test(String(error.message || error.details || ''))
+        ? 'Secure login attempt tracking is not ready. Apply the latest Supabase migration.'
+        : (error.message || 'Could not record the login attempt.')
+    );
+    unavailable.statusCode = /record_blue_login_failure|schema cache|function/i.test(String(error.message || error.details || '')) ? 503 : 502;
+    throw unavailable;
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  return row && typeof row === 'object' ? row : {};
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
@@ -115,7 +138,9 @@ export default async function handler(req, res) {
 
   const { client: supabase, error: envError } = getSupabaseAdmin();
   if (!supabase) {
-    res.status(503).json({ error: envError || 'Supabase is not configured' });
+    res.status(503).json({
+      error: getPublicErrorMessage({ message: envError }, 'Login is temporarily unavailable.', 503)
+    });
     return;
   }
 
@@ -139,25 +164,48 @@ export default async function handler(req, res) {
     return;
   }
 
+  try {
+    await assertDistributedRateLimit(req, {
+      route: 'blue-auth-login-ip',
+      limit: 30,
+      windowSeconds: LOCKOUT_MINUTES * 60
+    });
+    await assertDistributedRateLimit(req, {
+      route: 'blue-auth-login-account',
+      discriminator: normalizedAccount.canonical,
+      includeClientAddress: false,
+      limit: MAX_LOGIN_FAILURES * 2,
+      windowSeconds: LOCKOUT_MINUTES * 60
+    });
+  } catch (error) {
+    if (error && error.retryAfter) res.setHeader('Retry-After', String(error.retryAfter));
+    res.status(error.statusCode || 429).json({
+      error: error.message || 'Too many login attempts. Please retry later.',
+      reason: 'rate_limited'
+    });
+    return;
+  }
+
   const { data: account, error: accountError } = await readBlueAccountForLogin(
     supabase,
     normalizedAccount.canonical
   );
 
   if (accountError) {
-    res.status(500).json({
-      error:
+    const internalMessage =
         isMissingTableError(accountError)
           ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
           : isMissingColumnError(accountError)
           ? 'BlueMode auth schema is incomplete. Run supabase/blue_mode_auth.sql again.'
-          : 'Could not read account',
-      detail: accountError.message || null
+          : 'Could not read account';
+    res.status(500).json({
+      error: getPublicErrorMessage({ message: internalMessage }, 'Login is temporarily unavailable.', 500)
     });
     return;
   }
 
   if (!account || account.status !== 'active') {
+    verifyRecoverySecret(normalizedRecovery.canonical, DUMMY_RECOVERY_HASH);
     res.status(401).json({
       error: 'Account ID or Recovery Password is not correct'
     });
@@ -179,22 +227,15 @@ export default async function handler(req, res) {
   );
 
   if (!valid) {
-    const failures = Number(account.failed_attempts || 0) + 1;
-    const shouldLock = failures >= MAX_LOGIN_FAILURES;
-    const lockUntil = shouldLock ? minutesFromNowIso(LOCKOUT_MINUTES) : null;
-
-    await bestEffortUpdateAccount(
-      supabase,
-      normalizedAccount.canonical,
-      {
-        failed_attempts: shouldLock ? 0 : failures,
-        locked_until: lockUntil,
-        updated_at: now.toISOString()
-      },
-      {
-        rewards: Array.isArray(account.rewards) ? account.rewards : []
-      }
-    );
+    try {
+      await recordLoginFailure(supabase, normalizedAccount.canonical);
+    } catch (error) {
+      const status = getHttpErrorStatus(error, 502);
+      res.status(status).json({
+        error: getPublicErrorMessage(error, 'Login is temporarily unavailable.', status)
+      });
+      return;
+    }
 
     res.status(401).json({
       error: 'Account ID or Recovery Password is not correct',
@@ -219,7 +260,11 @@ export default async function handler(req, res) {
     }
   );
 
-  await bestEffortRevokeSessions(supabase, account.account_id, nowIso);
+  const revoked = await bestEffortRevokeSessions(supabase, account.account_id, nowIso);
+  if (revoked.error) {
+    res.status(503).json({ error: 'Login is temporarily unavailable.' });
+    return;
+  }
 
   const sessionToken = issueSessionToken();
   const sessionHash = hashSessionToken(sessionToken);
@@ -235,14 +280,14 @@ export default async function handler(req, res) {
   });
 
   if (sessionError) {
+    const internalMessage =
+      isMissingTableError(sessionError)
+        ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
+        : isMissingColumnError(sessionError)
+        ? 'BlueMode session schema is incomplete. Run supabase/blue_mode_auth.sql again.'
+        : 'Could not create login session';
     res.status(500).json({
-      error:
-        isMissingTableError(sessionError)
-          ? 'Auth tables are missing. Run supabase/blue_mode_auth.sql first.'
-          : isMissingColumnError(sessionError)
-          ? 'BlueMode session schema is incomplete. Run supabase/blue_mode_auth.sql again.'
-          : 'Could not create login session',
-      detail: sessionError.message || null
+      error: getPublicErrorMessage({ message: internalMessage }, 'Login is temporarily unavailable.', 500)
     });
     return;
   }
