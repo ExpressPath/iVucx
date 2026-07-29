@@ -300,11 +300,12 @@ async function runMetaRocqExporter(sourceText, sourcePath, outPath) {
   const templateSource = await fs.readFile(templatePath, 'utf8');
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ivucx-coq-cic-'));
   const exportPath = path.join(tempDir, path.basename(sourcePath));
-  const redirectPath = path.join(tempDir, 'coq-cic-export.json');
+  const redirectBasePath = path.join(tempDir, 'coq-cic-export');
+  const redirectOutputPath = `${redirectBasePath}.out`;
 
   const exporterBlock = templateSource
     .replaceAll('__IVUCX_TARGET_QUALID__', toCoqStringLiteral(target.fullName))
-    .replaceAll('__IVUCX_OUTPUT_PATH__', toCoqStringLiteral(redirectPath));
+    .replaceAll('__IVUCX_OUTPUT_PATH__', toCoqStringLiteral(redirectBasePath));
 
   const exportSource = [
     sourceText,
@@ -332,7 +333,7 @@ async function runMetaRocqExporter(sourceText, sourcePath, outPath) {
       throw buildError('Built-in MetaRocq Coq CIC exporter failed', result);
     }
 
-    const rawJson = (await readTextIfExists(redirectPath)).trim() || String(result.stdout || '').trim();
+    const rawJson = (await readTextIfExists(redirectOutputPath)).trim() || String(result.stdout || '').trim();
     if (!rawJson) {
       throw buildError('Built-in MetaRocq Coq CIC exporter did not emit JSON', result);
     }

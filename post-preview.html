@@ -942,9 +942,29 @@
         <section class="bounty-panel" id="conditionalPanel" aria-label="Conditional proof" hidden>
           <div class="bounty-head">
             <div class="bounty-title">Conditional</div>
-            <div class="bounty-state" id="conditionalState">Free</div>
+            <div class="bounty-state" id="conditionalState">Optional funding</div>
           </div>
-          <div class="bounty-status success" id="conditionalStatus" role="status" aria-live="polite">Conditional proof posts are free.</div>
+          <div class="bounty-row">
+            <span class="bounty-prefix">Vx</span>
+            <input class="bounty-input" id="conditionalAmount" type="number" min="1" step="1" inputmode="decimal" value="10" aria-label="Conditional bounty amount" />
+            <span class="bounty-currency">Vx</span>
+          </div>
+          <div class="conditional-split" aria-label="Conditional funding allocation">
+            <div class="conditional-split-item">
+              <span class="conditional-split-label">Fee</span>
+              <span class="conditional-split-value" id="conditionalFee">¥0</span>
+            </div>
+            <div class="conditional-split-item">
+              <span class="conditional-split-label">To bounty</span>
+              <span class="conditional-split-value" id="conditionalProblemShare">¥2,000</span>
+            </div>
+            <div class="conditional-split-item">
+              <span class="conditional-split-label">Upfront return</span>
+              <span class="conditional-split-value" id="conditionalCreatorShare">¥0</span>
+            </div>
+          </div>
+          <button class="bounty-submit" id="conditionalCheckoutBtn" type="button">Fund Conditional</button>
+          <div class="bounty-status" id="conditionalStatus" role="status" aria-live="polite">Posting is free. Funding is optional.</div>
         </section>
         <div class="stage-layout sidebar-empty" id="stageLayout">
           <aside class="preview-sidebar" id="uploadSidebar" aria-label="Uploaded files" hidden></aside>
@@ -1604,10 +1624,12 @@
 
       function splitConditionalYen(amountYen){
         const total = Math.max(0, Math.round(Number(amountYen) || 0));
-        const feeYen = Math.round(total * 0.10);
-        const problemBountyYen = Math.round(total * 0.45);
-        const creatorYen = Math.max(0, total - feeYen - problemBountyYen);
-        return { feeYen, problemBountyYen, creatorYen };
+        return {
+          feeYen:0,
+          problemBountyYen:total,
+          creatorYen:0,
+          fundingModel:'final-total-fixed-ratio-v1'
+        };
       }
 
       function formatYen(value){
@@ -1654,8 +1676,31 @@
           setConditionalStatus('');
           return;
         }
-        if(conditionalStateEl) conditionalStateEl.textContent = 'Free';
-        setConditionalStatus('Conditional proof posts are free.', 'success');
+        const bounty = getDraftConditionalBounty(draft);
+        const funded = isConditionalFunded(bounty);
+        if(funded){
+          const amountVx = Number(bounty.amountVx);
+          if(conditionalAmountEl && Number.isFinite(amountVx) && amountVx > 0){
+            conditionalAmountEl.value = String(amountVx);
+          }
+          if(conditionalStateEl) conditionalStateEl.textContent = 'Funded';
+          if(conditionalAmountEl) conditionalAmountEl.disabled = true;
+          if(conditionalCheckoutBtn){
+            conditionalCheckoutBtn.disabled = true;
+            conditionalCheckoutBtn.textContent = 'Conditional funded';
+          }
+          updateConditionalSplitPreview();
+          setConditionalStatus('Funding confirmed. The full amount will be added to the final bounty.', 'success');
+          return;
+        }
+        if(conditionalStateEl) conditionalStateEl.textContent = 'Optional funding';
+        if(conditionalAmountEl) conditionalAmountEl.disabled = false;
+        if(conditionalCheckoutBtn){
+          conditionalCheckoutBtn.disabled = conditionalBusy;
+          conditionalCheckoutBtn.textContent = conditionalBusy ? 'Opening checkout...' : 'Fund Conditional';
+        }
+        updateConditionalSplitPreview();
+        setConditionalStatus('Posting is free. Optional funding is added in full to the final bounty.');
       }
 
       async function patchConditionalBounty(conditionalBounty){
@@ -1889,6 +1934,9 @@
             status:payload.paid ? 'paid' : (payload.status || 'open'),
             paymentStatus:payload.paymentStatus || '',
             stripeSessionId:payload.sessionId || sessionId,
+            fundingModel:(payload.split && payload.split.fundingModel)
+              || (payload.metadata && payload.metadata.fundingModel)
+              || 'final-total-fixed-ratio-v1',
             split:payload.split || splitConditionalYen(amountYen)
           };
           await patchConditionalBounty(nextBounty);
@@ -1992,6 +2040,10 @@
         const draft = store && typeof store.read === 'function'
           ? await store.read()
           : null;
+        if(isConditionalFunded(getDraftConditionalBounty(draft))){
+          setConditionalStatus('This Conditional is already funded.', 'success');
+          return;
+        }
         const proofPayload = getProofPayload(draft);
         if(!proofPayload || !proofPayload.solveContext || !proofPayload.solveContext.problemId){
           setConditionalStatus('Conditional is available only while answering a saved problem.', 'error');
@@ -2046,6 +2098,8 @@
             status:'checkout_created',
             paymentStatus:'',
             stripeSessionId:payload.sessionId || '',
+            fundingModel:(payload.split && payload.split.fundingModel)
+              || 'final-total-fixed-ratio-v1',
             split:payload.split || splitConditionalYen(payload.amountYen || amountYen)
           });
           window.location.href = payload.url;
@@ -2515,7 +2569,7 @@
           problemKind,
           proofState,
           bounty: problemKind === 'problem' && proofState !== 'YY' ? getDraftBounty(draft) : null,
-          conditionalBounty: null,
+          conditionalBounty: problemKind === 'conditional' ? getDraftConditionalBounty(draft) : null,
           solveContext
         };
       }

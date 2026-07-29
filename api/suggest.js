@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { createAsyncLimiter, mapWithConcurrency } from '../lib/async-utils.js';
 import { readBoundedResponseText } from '../lib/bounded-response.js';
 import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 import { assertDistributedRateLimit } from '../lib/distributed-rate-limit.js';
@@ -16,6 +17,9 @@ const MAX_HISTORY_CHARS = 700;
 const MIN_ANSWER_CHARS = 900;
 const MIN_ANSWER_LINES = 30;
 const MAX_CITATION_ATTACHMENTS = 24;
+const ATTACHMENT_URL_CONCURRENCY = 4;
+const CITATION_BUILD_CONCURRENCY = 4;
+const attachmentUrlLimiter = createAsyncLimiter(8);
 const ATTACHMENT_SIGNED_URL_SECONDS = 60 * 60;
 const VERTEX_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -267,14 +271,16 @@ function replaceSourceIdMarkersWithTitleCitations(answer, citations) {
 
 async function createAttachmentPreviewUrl(client, bucket, storagePath) {
   if (!client || !bucket || !storagePath) return '';
-  try {
-    const signed = await client.storage
-      .from(bucket)
-      .createSignedUrl(storagePath, ATTACHMENT_SIGNED_URL_SECONDS);
-    return safeString(signed && signed.data && signed.data.signedUrl);
-  } catch (error) {
-    return '';
-  }
+  return attachmentUrlLimiter(async () => {
+    try {
+      const signed = await client.storage
+        .from(bucket)
+        .createSignedUrl(storagePath, ATTACHMENT_SIGNED_URL_SECONDS);
+      return safeString(signed && signed.data && signed.data.signedUrl);
+    } catch (error) {
+      return '';
+    }
+  });
 }
 
 async function extractAttachmentRecords(requestMeta, client) {
@@ -286,12 +292,12 @@ async function extractAttachmentRecords(requestMeta, client) {
       && requestMeta.attachmentStorage
       && requestMeta.attachmentStorage.bucket
   );
-  const records = [];
-  for (let index = 0; index < attachments.length && records.length < MAX_CITATION_ATTACHMENTS; index += 1) {
+  const candidates = [];
+  for (let index = 0; index < attachments.length && candidates.length < MAX_CITATION_ATTACHMENTS; index += 1) {
     const item = attachments[index];
     if (typeof item === 'string') {
       const title = safeString(item);
-      if (title) records.push({ title, fileName: title, relativePath: title, kind: 'file' });
+      if (title) candidates.push({ kind: 'ready', record: { title, fileName: title, relativePath: title, kind: 'file' } });
       continue;
     }
     if (!isPlainObject(item)) continue;
@@ -304,25 +310,37 @@ async function extractAttachmentRecords(requestMeta, client) {
     const bucket = safeString(item.bucket, defaultBucket);
     const storagePath = safeString(item.storagePath);
     const explicitUrl = safeStoredPreviewUrl(item.url || item.previewUrl || item.downloadUrl || item.webContentLink);
-    const signedUrl = explicitUrl || await createAttachmentPreviewUrl(client, bucket, storagePath);
-
-    records.push({
-      id: safeString(item.id || item.clientId || item.blobId, `attachment-${index + 1}`),
-      title,
-      fileName,
-      relativePath,
-      kind: safeString(item.kind, 'file'),
-      ext,
-      mime,
-      size: Math.max(0, Number(item.size) || 0),
-      source: safeString(item.source),
-      url: signedUrl,
-      webViewLink: safeStoredPreviewUrl(item.webViewLink),
-      savedAt: safeString(item.savedAt),
-      storagePath: storagePath ? storagePath : ''
+    candidates.push({
+      kind: 'stored',
+      bucket,
+      storagePath,
+      explicitUrl,
+      record: {
+        id: safeString(item.id || item.clientId || item.blobId, `attachment-${index + 1}`),
+        title,
+        fileName,
+        relativePath,
+        kind: safeString(item.kind, 'file'),
+        ext,
+        mime,
+        size: Math.max(0, Number(item.size) || 0),
+        source: safeString(item.source),
+        url: '',
+        webViewLink: safeStoredPreviewUrl(item.webViewLink),
+        savedAt: safeString(item.savedAt),
+        storagePath: storagePath ? storagePath : ''
+      }
     });
   }
-  return records;
+  return mapWithConcurrency(candidates, ATTACHMENT_URL_CONCURRENCY, async (candidate) => {
+    if (candidate.kind === 'ready') return candidate.record;
+    const signedUrl = candidate.explicitUrl || await createAttachmentPreviewUrl(
+      client,
+      candidate.bucket,
+      candidate.storagePath
+    );
+    return { ...candidate.record, url: signedUrl };
+  });
 }
 
 async function normalizeSolutionPreview(requestMeta, client) {
@@ -335,12 +353,14 @@ async function normalizeSolutionPreview(requestMeta, client) {
   if (!solution && !solutionOf) return null;
 
   const problem = solution && isPlainObject(solution.problem) ? solution.problem : {};
-  const solutionAttachments = solution
-    ? await extractAttachmentRecords({ attachments: Array.isArray(solution.attachments) ? solution.attachments : [] }, client)
-    : [];
-  const problemAttachments = await extractAttachmentRecords({
-    attachments: Array.isArray(problem.attachments) ? problem.attachments : []
-  }, client);
+  const [solutionAttachments, problemAttachments] = await Promise.all([
+    solution
+      ? extractAttachmentRecords({ attachments: Array.isArray(solution.attachments) ? solution.attachments : [] }, client)
+      : Promise.resolve([]),
+    extractAttachmentRecords({
+      attachments: Array.isArray(problem.attachments) ? problem.attachments : []
+    }, client)
+  ]);
 
   return {
     status: safeString(solution && solution.status, solutionOf ? 'solution' : ''),
@@ -373,13 +393,14 @@ async function normalizeConditionalPreviews(requestMeta, client) {
   const conditionals = requestMeta && Array.isArray(requestMeta.conditionals)
     ? requestMeta.conditionals
     : [];
-  const previews = [];
-  for (const item of conditionals) {
-    if (!isPlainObject(item)) continue;
+  const previews = await mapWithConcurrency(
+    conditionals.filter(isPlainObject),
+    ATTACHMENT_URL_CONCURRENCY,
+    async (item) => {
     const attachments = await extractAttachmentRecords({
       attachments: Array.isArray(item.attachments) ? item.attachments : []
     }, client);
-    previews.push({
+    return {
       status: safeString(item.status, 'conditional'),
       originalProblemId: safeString(item.originalProblemId),
       conditionalProblemId: safeString(item.conditionalProblemId),
@@ -391,8 +412,9 @@ async function normalizeConditionalPreviews(requestMeta, client) {
       fileName: safeString(item.fileName),
       language: safeString(item.language),
       attachments
-    });
-  }
+    };
+    }
+  );
   return previews.sort((a, b) => String(b.postedAt || '').localeCompare(String(a.postedAt || '')));
 }
 
@@ -499,9 +521,11 @@ async function buildCitation(row, index, client) {
   const sourcePreview = truncateText(row.source_code, MAX_SOURCE_CHARS);
   const cicPreview = stringifyPreview(row.normalized_term, MAX_CIC_CHARS);
   const quote = sourcePreview || cicPreview || title;
-  const attachments = await extractAttachmentRecords(requestMeta, client);
-  const solution = await normalizeSolutionPreview(requestMeta, client);
-  const conditionals = await normalizeConditionalPreviews(requestMeta, client);
+  const [attachments, solution, conditionals] = await Promise.all([
+    extractAttachmentRecords(requestMeta, client),
+    normalizeSolutionPreview(requestMeta, client),
+    normalizeConditionalPreviews(requestMeta, client)
+  ]);
   const attachmentNames = [
     ...attachments,
     ...(solution && Array.isArray(solution.attachments) ? solution.attachments : []),
@@ -570,10 +594,11 @@ async function searchSavedProblems({ query, limit, offset }) {
   }
 
   const pageRows = deduped.slice(offset, offset + limit);
-  const citations = [];
-  for (let index = 0; index < pageRows.length; index += 1) {
-    citations.push(await buildCitation(pageRows[index].row, offset + index, client));
-  }
+  const citations = await mapWithConcurrency(
+    pageRows,
+    CITATION_BUILD_CONCURRENCY,
+    (entry, index) => buildCitation(entry.row, offset + index, client)
+  );
 
   return {
     total: ranked.length,

@@ -60,6 +60,8 @@ select
   proof_state,
   jsonb_typeof(normalized_term) as normalized_term_type,
   normalized_term->>'kind' as normalized_term_kind,
+  request_meta #>> '{cicTarget,source}' as cic_target_source,
+  request_meta #>> '{cicTarget,sha256}' as cic_target_sha256,
   jsonb_typeof(adapter_meta->'context') as context_type,
   jsonb_typeof(adapter_meta->'metadata') as metadata_type,
   request_meta->'attachmentStorage' as attachment_storage,

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { generateKeyPairSync } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -7,9 +8,18 @@ import { getTrustedClientAddress } from '../lib/distributed-rate-limit.js';
 import { getPublicErrorMessage } from '../lib/http-error.js';
 import { issueProblemCapability, verifyProblemCapability } from '../lib/problem-access.js';
 import { issueJobCapability, verifyJobCapability } from '../lib/job-access.js';
-import { assertProblemProofBinding } from '../lib/problem-proof-binding.js';
+import { assertProblemProofBinding, hashCicTarget } from '../lib/problem-proof-binding.js';
 import { buildProofProcessEnv } from '../lib/proof-process-env.js';
-import { isolatedProcessOptions } from '../lib/child-process-tree.js';
+import {
+  isolatedProcessOptions,
+  prepareProofProcessCommand
+} from '../lib/child-process-tree.js';
+import {
+  assertExecutionRequestAuthorized,
+  attachExecutionRequestAuthHeaders,
+  verifyExecutionRequestSignature
+} from '../lib/execution-auth.js';
+import { normalizeRemoteServiceBaseUrl } from '../lib/remote-url-policy.js';
 import { assertProofRequestAllowed } from '../lib/request-guard.js';
 
 test('problem attachment capabilities are purpose- and problem-bound', () => {
@@ -42,23 +52,44 @@ test('helper job capabilities are job-bound and expire', () => {
 });
 
 test('problem solutions must prove the exact stored CIC target', () => {
+  const target = { kind: 'const', name: 'True' };
+  const solutionTarget = { kind: 'const', name: 'provf_problem_target' };
   const original = {
     id: '11111111-1111-4111-8111-111111111111',
     proof_state: 'NY',
-    normalized_term: { kind: 'const', name: 'True' },
-    request_meta: { conditionals: [] }
+    verification_status: 'verified',
+    normalized_format: 'cic-v1',
+    normalized_term: target,
+    adapter_meta: { context: { type: target } },
+    request_meta: {
+      conditionals: [],
+      cicTarget: {
+        version: 1,
+        source: 'server-recomputed-context.type',
+        sha256: hashCicTarget(target)
+      }
+    }
   };
   const solution = {
     language: 'coq',
+    verification_status: 'verified',
+    normalized_format: 'cic-v1',
+    normalized_term: solutionTarget,
+    adapter_meta: { context: { type: solutionTarget } },
     source_code: [
       'Definition provf_problem_target : Prop := True.',
       'Theorem provf_solution : provf_problem_target.',
       'Proof. exact I. Qed.'
     ].join('\n'),
     request_meta: {
+      cicTarget: {
+        version: 1,
+        source: 'server-recomputed-context.type',
+        sha256: hashCicTarget(solutionTarget)
+      },
       solveContext: {
         problemId: original.id,
-        normalizedTerm: { kind: 'const', name: 'True' },
+        normalizedTerm: target,
         selectedConditionals: []
       }
     }
@@ -121,15 +152,20 @@ test('proof request guard catches same-line execution directives', () => {
 
 test('proof child processes do not inherit application secrets', () => {
   const previous = process.env.STRIPE_SECRET_KEY;
+  const previousElanHome = process.env.ELAN_HOME;
   process.env.STRIPE_SECRET_KEY = 'must-not-reach-proof-process';
+  process.env.ELAN_HOME = '/opt/elan';
   try {
     const env = buildProofProcessEnv({ PATH: process.env.PATH || '' });
     assert.equal(env.STRIPE_SECRET_KEY, undefined);
-    assert.equal(env.IVUCX_PROOF_SANDBOX, 'restricted-env-v1');
+    assert.equal(env.ELAN_HOME, '/opt/elan');
+    assert.equal(env.IVUCX_PROOF_SANDBOX, 'restricted-env-v2');
     assert.equal(typeof env.PATH, 'string');
   } finally {
     if (previous === undefined) delete process.env.STRIPE_SECRET_KEY;
     else process.env.STRIPE_SECRET_KEY = previous;
+    if (previousElanHome === undefined) delete process.env.ELAN_HOME;
+    else process.env.ELAN_HOME = previousElanHome;
   }
 });
 
@@ -140,6 +176,182 @@ test('proof child processes use an isolated process group where supported', () =
   } else {
     assert.equal(options.detached, true);
   }
+});
+
+test('execution request signatures bind method, path, body, timestamp, and one-time nonce', async () => {
+  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' });
+  const nowMs = Date.parse('2026-07-29T12:00:00.000Z');
+  const bodyText = JSON.stringify({ language: 'Lean', code: 'theorem ok : True := by trivial' });
+  const headers = await attachExecutionRequestAuthHeaders({
+    bodyText,
+    keyId: 'security-test-key',
+    method: 'POST',
+    nonce: 'security-test-nonce-0001',
+    privateKeyPem,
+    targetPath: '/api/lean-check',
+    timestamp: new Date(nowMs).toISOString()
+  });
+  const publicKeys = new Map([['security-test-key', publicKeyPem]]);
+  const replayStore = new Map();
+
+  assert.equal(
+    verifyExecutionRequestSignature({
+      bodyText,
+      headers,
+      method: 'POST',
+      nowMs,
+      publicKeys,
+      replayStore,
+      targetPath: '/api/lean-check'
+    }).keyId,
+    'security-test-key'
+  );
+  assert.throws(
+    () => verifyExecutionRequestSignature({
+      bodyText,
+      headers,
+      method: 'POST',
+      nowMs,
+      publicKeys,
+      replayStore,
+      targetPath: '/api/lean-check'
+    }),
+    /already used/
+  );
+  assert.throws(
+    () => verifyExecutionRequestSignature({
+      bodyText: `${bodyText} `,
+      headers,
+      method: 'POST',
+      nowMs,
+      publicKeys,
+      replayStore: new Map(),
+      targetPath: '/api/lean-check'
+    }),
+    /does not match/
+  );
+  assert.throws(
+    () => verifyExecutionRequestSignature({
+      bodyText,
+      headers,
+      method: 'POST',
+      nowMs: nowMs + (3 * 60 * 1000),
+      publicKeys,
+      replayStore: new Map(),
+      targetPath: '/api/lean-check'
+    }),
+    /expired/
+  );
+});
+
+test('execution receiver requires both bearer auth and a valid signature when configured', async () => {
+  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' });
+  const nowMs = Date.parse('2026-07-29T12:00:00.000Z');
+  const rawBody = Buffer.from(JSON.stringify({ code: 'Theorem ok : True. Proof. exact I. Qed.' }));
+  const signedHeaders = await attachExecutionRequestAuthHeaders({
+    bodyText: rawBody.toString('utf8'),
+    keyId: 'receiver-test-key',
+    method: 'POST',
+    nonce: 'receiver-test-nonce-0001',
+    privateKeyPem,
+    targetPath: '/api/coq-check',
+    timestamp: new Date(nowMs).toISOString()
+  });
+  const req = {
+    body: JSON.parse(rawBody.toString('utf8')),
+    headers: {
+      ...signedHeaders,
+      authorization: 'Bearer receiver-test-secret'
+    },
+    method: 'POST',
+    originalUrl: '/api/coq-check',
+    rawBody
+  };
+
+  const result = await assertExecutionRequestAuthorized(req, {
+    authRequired: true,
+    apiKey: 'receiver-test-secret',
+    nowMs,
+    publicKeys: new Map([['receiver-test-key', publicKeyPem]]),
+    replayStore: new Map(),
+    requireBearer: true,
+    requireSignature: true
+  });
+  assert.equal(result.mode, 'signature+bearer');
+  await assert.rejects(
+    () => assertExecutionRequestAuthorized({
+      ...req,
+      headers: { ...req.headers, authorization: 'Bearer wrong-secret' }
+    }, {
+      authRequired: true,
+      apiKey: 'receiver-test-secret',
+      nowMs,
+      publicKeys: new Map([['receiver-test-key', publicKeyPem]]),
+      replayStore: new Map(),
+      requireBearer: true,
+      requireSignature: true
+    }),
+    /bearer authentication failed/
+  );
+});
+
+test('production remote proof services require HTTPS', () => {
+  assert.equal(
+    normalizeRemoteServiceBaseUrl('https://proof.example.test/', { production: true }),
+    'https://proof.example.test'
+  );
+  assert.throws(
+    () => normalizeRemoteServiceBaseUrl('http://203.0.113.10:3000', { production: true }),
+    /must use HTTPS/
+  );
+  assert.throws(
+    () => normalizeRemoteServiceBaseUrl('https://user:pass@proof.example.test', { production: true }),
+    /must not contain credentials/
+  );
+  assert.equal(
+    normalizeRemoteServiceBaseUrl('http://127.0.0.1:3000', { production: false }),
+    'http://127.0.0.1:3000'
+  );
+});
+
+test('production proof commands are wrapped in a network-isolated bubblewrap sandbox', () => {
+  const prepared = prepareProofProcessCommand('/opt/elan/bin/lean', ['/tmp/ivucx/Main.lean'], {
+    cwd: '/tmp/ivucx',
+    pathExists: () => true,
+    platform: 'linux',
+    production: true,
+    limitCommand: '/usr/bin/prlimit',
+    runtimeRoots: ['/usr', '/opt/elan'],
+    sandboxCommand: '/usr/bin/bwrap',
+    sandboxRequired: true,
+    tempRoot: '/tmp'
+  });
+
+  assert.equal(prepared.command, '/usr/bin/prlimit');
+  assert.equal(prepared.sandboxed, true);
+  assert.ok(prepared.args.includes('--unshare-all'));
+  assert.ok(prepared.args.includes('--cap-drop'));
+  assert.ok(prepared.args.includes('--ro-bind'));
+  assert.ok(prepared.args.includes('--bind'));
+  assert.ok(prepared.args.includes('--nproc=64'));
+  assert.ok(prepared.args.includes('--as=2147483648'));
+  assert.ok(prepared.args.includes('/usr/bin/bwrap'));
+  assert.deepEqual(prepared.args.slice(-3), ['--', '/opt/elan/bin/lean', '/tmp/ivucx/Main.lean']);
+  assert.throws(
+    () => prepareProofProcessCommand('lean', [], {
+      cwd: '/app/lean',
+      pathExists: () => true,
+      platform: 'linux',
+      production: true,
+      sandboxRequired: true,
+      tempRoot: '/tmp'
+    }),
+    /temporary directory/
+  );
 });
 
 test('direct deployments ignore spoofed forwarding headers for proof limits', () => {
@@ -242,4 +454,11 @@ test('problem attachment quotas are consumed only after authorization', async ()
 
   assert.ok(signAccess >= 0 && signLimit > signAccess);
   assert.ok(completeAccess > signLimit && completeLimit > completeAccess);
+});
+
+test('Lean CIC conversion pins its toolchain and rejects rolling release aliases', async () => {
+  const source = await readFile(new URL('../server-tools/convert-lean-cic.cjs', import.meta.url), 'utf8');
+  assert.match(source, /LEAN_TOOLCHAIN \|\| 'leanprover\/lean4:v4\.30\.0'/);
+  assert.match(source, /LEAN_TOOLCHAIN must be pinned to an exact Lean release/);
+  assert.doesNotMatch(source, /leanprover\/lean4:(?:stable|nightly|latest)/);
 });

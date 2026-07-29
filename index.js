@@ -31,12 +31,17 @@ import { sendProofConversionResponse } from './lib/proof-convert.js';
 import { sendProofCheckResponse } from './lib/proof-check.js';
 import { sendSearchChatKeepResponse } from './lib/search-chat-keep.js';
 import { verifyJobCapability } from './lib/job-access.js';
+import { assertExecutionRequestAuthorized } from './lib/execution-auth.js';
+import { assertProofSandboxRuntimeAvailable } from './lib/child-process-tree.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const EXECUTION_RECEIVER_MODE = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.EXECUTION_RECEIVER_MODE || '').trim().toLowerCase()
+);
 
 app.disable('x-powered-by');
 app.use((_req, res, next) => {
@@ -50,7 +55,12 @@ app.use((_req, res, next) => {
   res.setHeader('Origin-Agent-Cluster', '?1');
   next();
 });
-app.use(express.json({ limit: '512kb' }));
+app.use(express.json({
+  limit: '512kb',
+  verify: (req, _res, buffer) => {
+    req.rawBody = Buffer.from(buffer);
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '128kb' }));
 
 function wrap(handler) {
@@ -86,7 +96,7 @@ function googleRoute(route) {
 }
 
 app.post('/api/lean-check', wrap(async (req, res) => {
-  if (isRemoteExecutionConfigured()) {
+  if (!EXECUTION_RECEIVER_MODE && isRemoteExecutionConfigured()) {
     await proxyExecutionApiRequest(req, res, '/api/lean-check');
     return;
   }
@@ -94,11 +104,12 @@ app.post('/api/lean-check', wrap(async (req, res) => {
     sendRemoteConfigurationError(res, 'execution');
     return;
   }
+  await assertExecutionRequestAuthorized(req);
   await sendProofCheckResponse('lean', req, res);
 }));
 
 app.post('/api/coq-check', wrap(async (req, res) => {
-  if (isRemoteExecutionConfigured()) {
+  if (!EXECUTION_RECEIVER_MODE && isRemoteExecutionConfigured()) {
     await proxyExecutionApiRequest(req, res, '/api/coq-check');
     return;
   }
@@ -106,11 +117,12 @@ app.post('/api/coq-check', wrap(async (req, res) => {
     sendRemoteConfigurationError(res, 'execution');
     return;
   }
+  await assertExecutionRequestAuthorized(req);
   await sendProofCheckResponse('coq', req, res);
 }));
 
 app.post('/api/proof-convert', wrap(async (req, res) => {
-  if (isRemoteExecutionConfigured()) {
+  if (!EXECUTION_RECEIVER_MODE && isRemoteExecutionConfigured()) {
     await proxyExecutionApiRequest(req, res, '/api/proof-convert');
     return;
   }
@@ -118,6 +130,7 @@ app.post('/api/proof-convert', wrap(async (req, res) => {
     sendRemoteConfigurationError(res, 'execution');
     return;
   }
+  await assertExecutionRequestAuthorized(req);
   await sendProofConversionResponse(req, res);
 }));
 
@@ -206,6 +219,9 @@ app.get('/', (req, res) => {
 });
 
 const HOST = process.env.HOST || '0.0.0.0';
+if (EXECUTION_RECEIVER_MODE) {
+  await assertProofSandboxRuntimeAvailable();
+}
 const server = app.listen(PORT, HOST, () => {
   const address = server.address();
   const host = address && typeof address === 'object' ? address.address : HOST;

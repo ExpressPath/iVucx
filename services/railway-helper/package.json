@@ -9,11 +9,11 @@
   },
   "description": "Railway planner/orchestrator for Supabase-backed proof conversion jobs.",
   "dependencies": {
-    "@supabase/supabase-js": "^2.50.2",
-    "express": "^4.19.2",
-    "pg": "^8.16.3"
+    "@supabase/supabase-js": "2.110.7",
+    "express": "4.22.2",
+    "pg": "8.22.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22 <25"
   }
 }

@@ -50,6 +50,21 @@ alter table public.problems add column if not exists request_meta jsonb not null
 alter table public.problems add column if not exists created_at timestamptz not null default now();
 alter table public.problems add column if not exists updated_at timestamptz not null default now();
 
+alter table public.problems
+  drop constraint if exists problems_trusted_cic_target_check;
+alter table public.problems
+  add constraint problems_trusted_cic_target_check
+  check (
+    lower(coalesce(normalized_format, '')) <> 'cic-v1'
+    or (
+      jsonb_typeof(normalized_term) = 'object'
+      and adapter_meta #> '{context,type}' = normalized_term
+      and request_meta #>> '{cicTarget,source}' = 'server-recomputed-context.type'
+      and request_meta #>> '{cicTarget,version}' = '1'
+      and request_meta #>> '{cicTarget,sha256}' ~ '^[0-9a-f]{64}$'
+    )
+  ) not valid;
+
 create table if not exists public.helper_jobs (
   id text primary key,
   status text not null check (status in ('queued', 'running', 'succeeded', 'failed')),

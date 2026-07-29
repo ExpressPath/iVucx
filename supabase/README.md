@@ -93,8 +93,8 @@ public.problems
 Important columns:
 
 - `normalized_format`: should be `cic-v1` for a CIC save.
-- `normalized_term`: CIC term JSON.
-- `adapter_meta`: context, declarations, metadata, requested/completed format.
+- `normalized_term`: server-recomputed CIC theorem proposition (`context.type`), never the proof body.
+- `adapter_meta`: context, proof term for audit, declarations, metadata, requested/completed format.
 - `request_meta`: request metadata such as requested/completed format.
 
 Run this file in Supabase SQL Editor, either local or deployed:

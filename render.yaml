@@ -11,12 +11,8 @@ services:
         value: production
       - key: PORT
         value: 10000
-      - key: LEAN_WORKDIR
-        value: /app/lean
       - key: LEAN_CMD
-        value: lake
-      - key: LEAN_ARGS
-        value: env lean
+        value: /opt/elan/bin/lean
       - key: IVUCX_LEAN_CMD
         value: /opt/elan/bin/lean
       - key: OPAM_SWITCH_PREFIX
@@ -27,3 +23,25 @@ services:
         value: /home/opam/.opam/ivucx/bin/coqc
       - key: IVUCX_COQ_CMD
         value: /home/opam/.opam/ivucx/bin/coqc
+      - key: ALLOW_LOCAL_EXECUTION_FALLBACK
+        value: "true"
+      - key: EXECUTION_RECEIVER_MODE
+        value: "true"
+      - key: EXECUTION_RECEIVER_AUTH_REQUIRED
+        value: "true"
+      - key: EXECUTION_SIGNATURE_REQUIRED
+        value: "true"
+      - key: EXECUTION_BEARER_REQUIRED
+        value: "true"
+      - key: EXECUTION_API_KEY
+        sync: false
+      - key: EXECUTION_API_PUBLIC_KEY
+        sync: false
+      - key: EXECUTION_API_KEY_ID
+        sync: false
+      - key: IVUCX_PROOF_SANDBOX_REQUIRED
+        value: "true"
+      - key: IVUCX_PROOF_SANDBOX_CMD
+        value: /usr/bin/bwrap
+      - key: IVUCX_PROOF_LIMIT_CMD
+        value: /usr/bin/prlimit

@@ -8,7 +8,7 @@ workers.
 Production env:
 
 ```text
-HELPER_API_BASE_URLS=http://136.117.215.204:3000
+HELPER_API_BASE_URLS=https://proof-worker-1.example.com
 ```
 
 `HELPER_API_BASE_URL` remains supported for single-worker deployments. When
@@ -19,8 +19,38 @@ For burst verification, start the two stopped workers and temporarily set the
 pool to:
 
 ```text
-HELPER_API_BASE_URLS=http://34.19.92.107:3000,http://136.117.232.34:3000,http://136.117.215.204:3000
+HELPER_API_BASE_URLS=https://proof-worker-1.example.com,https://proof-worker-2.example.com,https://proof-worker-3.example.com
 ```
+
+Do not put a public raw-IP HTTP endpoint in a production pool. Terminate TLS at
+the worker or a private load balancer, restrict the worker firewall to the
+control plane, and keep port 3000 off the public Internet.
+
+Execution requests use two independent server-to-server checks:
+
+- `Authorization: Bearer ...` using `EXECUTION_API_KEY`
+- RSA-SHA256 over the exact method, path, body digest, timestamp, and random
+  nonce
+
+Configure `EXECUTION_API_PRIVATE_KEY` and `EXECUTION_API_KEY_ID` only on the
+control plane/helper. Configure the corresponding `EXECUTION_API_PUBLIC_KEY`,
+the same key id, and the independent bearer key on each execution worker.
+Production workers reject unsigned, stale, replayed, or bearer-mismatched
+requests. Keep `EXECUTION_RECEIVER_AUTH_REQUIRED`,
+`EXECUTION_SIGNATURE_REQUIRED`, and `EXECUTION_BEARER_REQUIRED` enabled.
+Set `EXECUTION_RECEIVER_MODE=true` only on execution workers so a stale helper
+URL cannot accidentally turn a worker back into a proxy.
+
+Execution workers run as a non-root container user. Every Lean, Coq, and
+MetaRocq command is wrapped by `prlimit` and `bubblewrap`: the job receives no
+network namespace, no Linux capabilities, read-only runtime mounts, and only
+its temporary job directory is writable. Process count, address space, file
+size, file descriptor, CPU-time, wall-time, output-size, queue, and concurrency
+limits are all enforced. A receiver runs a sandbox self-test before listening
+and exits instead of accepting proof traffic when the host disallows
+unprivileged user namespaces. Use a dedicated execution VM/runtime that passes
+this startup test; do not disable `IVUCX_PROOF_SANDBOX_REQUIRED` to make an
+incompatible PaaS start.
 
 Local helper commands:
 
@@ -46,7 +76,7 @@ HELPER_AUTOSCALE_CODE_BYTES=10000
 HELPER_AUTOSCALE_INFLIGHT=2
 HELPER_AUTOSCALE_WARMUP_MS=90000
 HELPER_AUTOSCALE_ACTIVE_MS=600000
-HELPER_STANDBY_BASE_URLS=http://34.19.92.107:3000,http://136.117.232.34:3000
+HELPER_STANDBY_BASE_URLS=https://proof-worker-2.example.com,https://proof-worker-3.example.com
 ```
 
 The first heavy request still runs on the always-on worker. The standby workers

@@ -1,10 +1,11 @@
-import { createHash, createPrivateKey, sign as signWithKey } from 'crypto';
+import { createHash, createPrivateKey, createPublicKey, randomBytes, sign as signWithKey } from 'node:crypto';
 import { readFile } from 'fs/promises';
 import { isAbsolute, resolve as resolvePath } from 'path';
 
 export const EXECUTION_SIGNATURE_HEADERS = Object.freeze({
   algorithm: 'x-ivucx-execution-signature-algorithm',
   keyId: 'x-ivucx-execution-key-id',
+  nonce: 'x-ivucx-execution-nonce',
   signature: 'x-ivucx-execution-signature',
   timestamp: 'x-ivucx-execution-timestamp'
 });
@@ -126,9 +127,10 @@ function buildBodyDigest(bodyText) {
   return createHash('sha256').update(String(bodyText || ''), 'utf8').digest('hex');
 }
 
-function buildSigningMessage({ bodyText, method, targetPath, timestamp }) {
+function buildSigningMessage({ bodyText, method, nonce, targetPath, timestamp }) {
   return [
     String(timestamp || '').trim(),
+    String(nonce || '').trim(),
     String(method || 'GET').trim().toUpperCase(),
     normalizeTargetPath(targetPath),
     buildBodyDigest(bodyText)
@@ -146,7 +148,7 @@ function deriveKeyId(privateKeyPem) {
   }
 
   try {
-    const keyObject = createPrivateKey(privateKeyPem);
+    const keyObject = createPublicKey(createPrivateKey(privateKeyPem));
     const publicKeyDer = keyObject.export({ format: 'der', type: 'spki' });
     return createHash('sha256').update(publicKeyDer).digest('hex').slice(0, 24);
   } catch (_error) {
@@ -188,9 +190,11 @@ export async function attachExecutionRequestAuthHeaders({ bodyText = '', headers
   }
 
   const timestamp = new Date().toISOString();
+  const nonce = randomBytes(24).toString('base64url');
   const message = buildSigningMessage({
     bodyText,
     method,
+    nonce,
     targetPath,
     timestamp
   });
@@ -200,6 +204,7 @@ export async function attachExecutionRequestAuthHeaders({ bodyText = '', headers
     ...headers,
     [EXECUTION_SIGNATURE_HEADERS.algorithm]: 'rsa-sha256',
     [EXECUTION_SIGNATURE_HEADERS.keyId]: signing.keyId,
+    [EXECUTION_SIGNATURE_HEADERS.nonce]: nonce,
     [EXECUTION_SIGNATURE_HEADERS.signature]: signature,
     [EXECUTION_SIGNATURE_HEADERS.timestamp]: timestamp
   };

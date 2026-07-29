@@ -4,9 +4,16 @@ yarn.lock
 pnpm-lock.yaml
 .git
 .gitignore
+.vercel
 *.log
 *.md
 .env
 .env.*
+desktop
+docs
+lean
+release
+scripts
 supabase
+tests
 jscoq

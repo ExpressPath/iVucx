@@ -458,6 +458,9 @@ async function runLean4Export(sourcePath, moduleName) {
   const lakefileTomlPath = path.join(dir, 'lakefile.toml');
   const toolchainPath = path.join(dir, 'lean-toolchain');
   const stdoutPath = path.join(dir, 'lean4export.ndjson');
+  const oleanPath = path.join(dir, `${moduleName}.olean`);
+  const leanToolchain = String(process.env.LEAN_TOOLCHAIN || 'leanprover/lean4:v4.30.0').trim();
+  const leanCommand = String(process.env.IVUCX_LEAN_CMD || process.env.LEAN_CMD || '/opt/elan/bin/lean').trim();
   const command = String(process.env.IVUCX_LEAN_EXPORTER_CMD || process.env.LEAN4EXPORT_CMD || 'lake').trim();
   const exportBin = String(process.env.IVUCX_LEAN_EXPORTER_BIN || process.env.LEAN4EXPORT_BIN || 'lean4export').trim();
   const rawArgs = String(process.env.IVUCX_LEAN_EXPORTER_ARGS || process.env.LEAN4EXPORT_ARGS || 'env {bin} {module}').trim();
@@ -467,13 +470,31 @@ async function runLean4Export(sourcePath, moduleName) {
     .replaceAll('{file}', sourcePath)
     .replaceAll('{dir}', dir));
 
+  if (!/^leanprover\/lean4:v\d+\.\d+\.\d+$/.test(leanToolchain)) {
+    throw buildError('LEAN_TOOLCHAIN must be pinned to an exact Lean release such as leanprover/lean4:v4.30.0');
+  }
+
   await fs.writeFile(lakefileTomlPath, 'name = "ivucx_tmp"\n', 'utf8');
-  await fs.writeFile(toolchainPath, `${process.env.LEAN_TOOLCHAIN || 'leanprover/lean4:stable'}\n`, 'utf8');
+  await fs.writeFile(toolchainPath, `${leanToolchain}\n`, 'utf8');
 
   const env = {
     ...process.env,
     LEAN_PATH: [dir, process.env.LEAN_PATH || ''].filter(Boolean).join(path.delimiter)
   };
+
+  const compileResult = await runProcess(leanCommand, ['-o', oleanPath, sourcePath], {
+    cwd: dir,
+    env,
+    timeoutMs: Number(process.env.IVUCX_CONVERTER_TIMEOUT_MS || 180000),
+    captureLimitChars: 8192
+  });
+
+  if (compileResult.timedOut) {
+    throw buildError('Lean CIC source compilation timed out', compileResult);
+  }
+  if (compileResult.exitCode !== 0) {
+    throw buildError('Lean CIC source compilation failed', compileResult);
+  }
 
   const result = await runProcess(command, args, {
     cwd: dir,

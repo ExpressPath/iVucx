@@ -406,7 +406,7 @@ function normalizeRemoteBaseUrl(value) {
       && ['localhost', '127.0.0.1', '::1'].includes(hostname)
       && ['http:', 'https:'].includes(parsed.protocol);
     if (parsed.username || parsed.password || parsed.search || parsed.hash) return '';
-    if (parsed.protocol !== 'https:' && !localDevelopment && !allowPrivate) return '';
+    if (parsed.protocol !== 'https:' && !localDevelopment) return '';
     if (!allowPrivate && isPrivateNetworkHost(hostname)) return '';
     return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`;
   } catch (error) {
@@ -1520,12 +1520,6 @@ async function sendExecutionRequest(targetPath, body, executionBaseUrl = EXECUTI
   }
 
   const requestBody = JSON.stringify(body || {});
-  headers = await attachExecutionRequestAuthHeaders({
-    headers,
-    method: 'POST',
-    targetPath,
-    bodyText: requestBody
-  });
   let lastError = null;
 
   for (let attemptIndex = 0; attemptIndex < EXECUTION_REQUEST_RETRY_DELAYS_MS.length; attemptIndex += 1) {
@@ -1538,9 +1532,15 @@ async function sendExecutionRequest(targetPath, body, executionBaseUrl = EXECUTI
     const timer = setTimeout(() => controller.abort(), EXECUTION_SERVER_TIMEOUT_MS);
 
     try {
+      const requestHeaders = await attachExecutionRequestAuthHeaders({
+        headers,
+        method: 'POST',
+        targetPath,
+        bodyText: requestBody
+      });
       const response = await fetch(normalizedBaseUrl + targetPath, {
         method: 'POST',
-        headers,
+        headers: requestHeaders,
         body: requestBody,
         signal: controller.signal
       });

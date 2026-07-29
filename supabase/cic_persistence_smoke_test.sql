@@ -29,20 +29,27 @@ insert into public.problems (
   'verified',
   '{"proofCheck":{"ok":true},"planning":null,"helperStorage":null}'::jsonb,
   'cic-v1',
-  '{"kind":"const","name":"True.intro","universes":[]}'::jsonb,
+  '{"kind":"const","name":"True","universes":[]}'::jsonb,
   'local-smoke-test',
   '{
     "targetFamily":"cic",
     "requestedFormat":"cic-v1",
     "completedFormat":"cic-v1",
-    "context":{"type":{"kind":"sort","level":{"kind":"param","name":"Prop"}}},
+    "context":{"type":{"kind":"const","name":"True","universes":[]}},
+    "proofTerm":{"kind":"const","name":"True.intro","universes":[]},
     "metadata":{"diagnostic":true}
   }'::jsonb,
   null,
   '{
     "createdBy":"local-smoke-test",
     "requestedFormat":"cic-v1",
-    "completedFormat":"cic-v1"
+    "completedFormat":"cic-v1",
+    "cicTarget":{
+      "version":1,
+      "source":"server-recomputed-context.type",
+      "sha256":"ae286cc2684e8365b2e08cdf4f814ce9747567674468850be2883eb2916426ec",
+      "format":"cic-v1"
+    }
   }'::jsonb
 )
 returning

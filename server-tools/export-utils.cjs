@@ -9,7 +9,7 @@ const DEFAULT_CAPTURE_LIMIT = Math.max(4096, Number(process.env.IVUCX_EXPORT_CAP
 const ALLOWED_ENV_KEYS = new Set([
   'PATH', 'Path', 'PATHEXT', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC',
   'TEMP', 'TMP', 'TMPDIR', 'HOME', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA',
-  'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM'
+  'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'ELAN_HOME'
 ]);
 const ALLOWED_ENV_PREFIXES = ['COQ', 'LEAN', 'OPAM', 'OCAML', 'CAML', 'PYTHON', 'XDG_', 'NIX_'];
 
@@ -23,7 +23,7 @@ function buildRestrictedProcessEnv(source) {
       env[key] = value;
     }
   }
-  env.IVUCX_PROOF_SANDBOX = 'restricted-env-v1';
+  env.IVUCX_PROOF_SANDBOX = 'restricted-env-v2';
   return env;
 }
 

@@ -6,3 +6,5 @@ node_modules/
 .vercel-static/
 supabase/.branches/
 supabase/.temp/
+promotion/.env
+promotion/.promotion-state.json
